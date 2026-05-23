@@ -91,14 +91,20 @@ _CMB_LOG_CONVENTION = {
 def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
               spectra: tuple[str, ...] = ("tt", "te", "ee"),
               ell_factor: bool = True) -> dict:
-    """CMB angular power spectra. Returns a dict with ``'ell'`` and the
-    requested spectra ``'tt','te','ee'`` (each a 1-d ``np.ndarray``).
+    """CMB angular power spectra.
 
-    Output is **dimensionless and pre-multiplied by ell(ell+1)/(2π)**
-    (i.e. D_ell-like, normalized by Tcmb²) — same convention as
-    classy_szfast.classy_sz.get_cmb_cls. To get D_ell in μK²,
-    multiply by ``(2.7255e6)²``. To get raw C_ell (in same units),
-    pass ``ell_factor=False`` (divides by ell(ell+1)/(2π)).
+    Returns a dict with keys ``'ell'`` and the requested spectra
+    (``'tt','te','ee'``). Values are **dimensionless** — multiply by
+    ``Tcmb_uK² = (2.7255e6)²`` to convert to μK².
+
+    Per-cosmo_model normalisation (mirrors classy_szfast.classy_szfast.py:522):
+      * lcdm emulator output: ``log10[ ell(ell+1) Cl / (2π) ]``
+        → recover Cl via × ``2π / [ell(ell+1)]``
+      * ede-v2 emulator output: ``log10[ ell² Cl ]``
+        → recover Cl via × ``1/ell²``
+
+    ``ell_factor`` (default ``True``) — return ``D_ell = ell(ell+1) × Cl / (2π)``;
+    ``False`` returns raw Cl.
     """
     full = dict(DEFAULT_COSMO[cosmo_model])
     full.update(cosmo_to_dict(cosmo))
@@ -117,11 +123,23 @@ def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
         out[spec] = pred
         if ell is None:
             ell = np.asarray(em.modes)
+
+    # Per-cosmo_model factor that recovers raw Cl from the emulator output.
+    # Same convention as classy_szfast.classy_szfast.py:522-527.
+    if cosmo_model == 'ede-v2':
+        factor_to_Cl = 1.0 / (ell ** 2)
+    else:
+        factor_to_Cl = 1.0 / (ell * (ell + 1) / (2.0 * np.pi))
+
+    for s in spectra:
+        out[s] = out[s] * factor_to_Cl                     # now raw Cl (dimensionless)
+
     out["ell"] = ell
-    if not ell_factor:
-        fac = 1.0 / (ell * (ell + 1) / (2.0 * np.pi))
+    if ell_factor:
+        # convert to D_ell = ell(ell+1) Cl / (2π)
+        fac_dl = ell * (ell + 1) / (2.0 * np.pi)
         for s in spectra:
-            out[s] = out[s] * fac
+            out[s] = out[s] * fac_dl
     return out
 
 

@@ -117,8 +117,7 @@ bit-identical raw NN output to `classy_szfast.cosmopower_jax`. End-to-end:
 | Distances (`Hz, chi, Da`) | identical |
 | Derived (`σ8, Ω_m, S8`) | identical to ~0.01% |
 | `Cl^yy` (halo-model) | ~1–2% (within default n_z/n_m differences) |
-| **CMB Cls — lcdm** | identical (D_ell × Tcmb² convention) |
-| **CMB Cls — ede-v2** | ⚠️ experimental: ede-v2 TT_v2 emulator output convention differs from TT_v1 in a way that's not documented; classy_szfast's `get_cmb_cls` itself crashes on ede-v2 (shape mismatch). Use lcdm CMB for now. |
+| **CMB Cls — lcdm and ede-v2** | identical to ~0.1%: D_ell^TT @ ell=220 = 5766 μK² for both. The per-cosmo_model normalisation factor (lcdm: 1/[ell(ell+1)/(2π)]; ede-v2: 1/ell²) is applied internally so the user always gets D_ell or Cl in the standard convention. |
 
 ## Relationship to `classy_szfast`
 
