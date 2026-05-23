@@ -172,14 +172,15 @@ def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10,
           z_grid: jax.Array | None = None,
           n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
           n_m: int = 200, delta_crit: float = 500.0):
-    """Halo-model tSZ angular power spectrum.
+    """Halo-model tSZ angular power spectrum (full pipeline per call).
 
     Returns ``(cl_1h, cl_2h)`` — dimensionless C_ell. Multiply by
-    ``ell*(ell+1)/(2π)*1e12`` to get the conventional ``D_ell × 1e12`` form
-    that matches Planck / ACT tSZ bandpower data.
+    ``ell*(ell+1)/(2π)*1e12`` to get ``D_ell × 1e12`` (the convention
+    matching Planck / ACT tSZ bandpower data).
 
-    ``profile`` is :class:`~classy_szlite.params.ProfileParamsA10` (Arnaud 10
-    gNFW + ``B`` = hydrostatic mass bias). Battaglia 12 not yet wired.
+    For MCMC sampling **only** profile parameters at fixed cosmology, use
+    :func:`cl_yy_factory` instead — it precomputes the cosmo + halo grids
+    once and returns a ~10× faster eval closure for the per-step call.
     """
     if z_grid is None:
         z_grid = jnp.geomspace(0.005, 3.0, n_z)
@@ -191,3 +192,54 @@ def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10,
     cl_1h, cl_2h = cl_yy_1h_2h(jnp.asarray(ell), cg, hg, cosmo_dict,
                                 profile='arnaud10', profile_params=pp_dict)
     return cl_1h, cl_2h
+
+
+def cl_yy_factory(cosmo: CosmoParams, ell,
+                  cosmo_model: str = DEFAULT_COSMO_MODEL,
+                  z_grid: jax.Array | None = None,
+                  n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
+                  n_m: int = 200, delta_crit: float = 500.0):
+    """Fixed-cosmology fast-path: precompute the heavy bits, get a closure.
+
+    Builds the ``CosmoGrids`` (emulators → P_lin, distances, σ(R)) and
+    ``HaloGrids`` (Tinker 08 HMF, bias) **once**, then returns:
+
+        ev(profile) -> (cl_1h, cl_2h)
+
+    A subsequent ``ev(profile)`` call only runs the ``cl_yy_1h_2h``
+    halo-model integration — typically ~1–2 ms / call (vs ~15 ms for the
+    full :func:`cl_yy` pipeline, which re-runs the emulators + σ(R)
+    every time).
+
+    Intended use case: MCMC over profile / nuisance parameters with the
+    cosmology held fixed (e.g. the may26 ACT-DR6 Cl^yy bandpower fit).
+    Just call :func:`cl_yy_factory` once at ``Theory.initialize`` time,
+    then call the returned function in each ``logp`` evaluation.
+
+    Example
+    -------
+    >>> ev = csl.cl_yy_factory(csl.CosmoParams(), ell=jnp.geomspace(2, 9000, 80))
+    >>> # MCMC loop: only profile sampled
+    >>> cl_1h, cl_2h = ev(csl.ProfileParamsA10(P0=8.0, beta=5.5, B=1.25))
+
+    The returned function is JAX-traceable; you can ``jax.jit`` it if the
+    profile is fed as concrete values or a NamedTuple of tracers.
+    """
+    if z_grid is None:
+        z_grid = jnp.geomspace(0.005, 3.0, n_z)
+    cosmo_dict = cosmo_to_dict(cosmo)
+    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid, cosmo_model=cosmo_model)
+    hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
+                          m_min=m_min, m_max=m_max, n_m=n_m)
+    ell_jax = jnp.asarray(ell)
+
+    # Capture the cosmo_dict and grids in the closure. The closure runs ONLY
+    # cl_yy_1h_2h per call — no emulator, no σ(R), no HMF rebuild.
+    def evaluate(profile: ProfileParamsA10):
+        cl_1h, cl_2h = cl_yy_1h_2h(
+            ell_jax, cg, hg, cosmo_dict,
+            profile='arnaud10', profile_params=profile._asdict(),
+        )
+        return cl_1h, cl_2h
+
+    return evaluate

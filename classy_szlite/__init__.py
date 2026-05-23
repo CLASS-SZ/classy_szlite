@@ -31,6 +31,7 @@ from .api import (
     Pk, Pnl,
     distances,
     cl_yy,
+    cl_yy_factory,
     cosmo_to_dict,
 )
 from ._registry import (
@@ -43,7 +44,7 @@ __all__ = [
     # params
     "CosmoParams", "ProfileParamsA10",
     # observables
-    "derived", "cl_TTTEEE", "Pk", "Pnl", "distances", "cl_yy",
+    "derived", "cl_TTTEEE", "Pk", "Pnl", "distances", "cl_yy", "cl_yy_factory",
     # utility
     "cosmo_to_dict",
     "SUPPORTED_COSMO_MODELS", "DEFAULT_COSMO_MODEL",
