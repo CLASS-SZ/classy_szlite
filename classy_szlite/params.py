@@ -1,14 +1,14 @@
 """Parameter containers (JAX pytrees via NamedTuple).
 
-A single ``CosmoParams`` covers both lcdm and ede-v2 — EDE-specific fields
-(``fEDE``, ``log10z_c``, ``thetai_scf``, ``r``) default to the ede-v2
-LCDM-equivalent point (``fEDE=0.001`` etc.). When ``cosmo_model='lcdm'``
-those fields are silently ignored. Neutrino fields (``m_ncdm``, ``N_ur``)
-default to the ede-v2 training convention (3 degenerate ν × 0.02 eV =
-0.06 eV); pass ``m_ncdm=0.06, N_ur=2.0328`` for the lcdm convention.
+A single :class:`CosmoParams` covers the full parameter space supported by
+the ede-v2 emulator suite — the standard 6 cosmological parameters plus the
+EDE-specific fields (``fEDE``, ``log10z_c``, ``thetai_scf``, ``r``) and the
+neutrino fields (``m_ncdm``, ``N_ur``). LCDM-equivalent runs use the
+default ``fEDE = 0.001``; users typically don't need to touch the EDE or
+neutrino fields at all.
 
-Profile params (Arnaud 2010) include ``B`` = hydrostatic mass bias =
-M_true / M_HSE. Default 1.0 (no bias).
+:class:`ProfileParamsA10` carries the Arnaud 2010 GNFW pressure-profile
+parameters plus the hydrostatic mass bias ``B`` = M_true / M_HSE.
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ import jax
 
 
 class CosmoParams(NamedTuple):
-    """Cosmological parameters covering lcdm + ede-v2.
+    """Cosmological parameters for the ede-v2 emulator suite.
 
-    Defaults: ede-v2 emulator's "LCDM-equivalent" point (Planck 18 + tiny EDE).
+    Defaults give the LCDM-equivalent point (Planck 18 + ``fEDE = 0.001``).
     """
     # Standard six
     omega_b:      float | jax.Array = 0.02242
@@ -30,20 +30,15 @@ class CosmoParams(NamedTuple):
     ln10_10_As:   float | jax.Array = 3.047
     n_s:          float | jax.Array = 0.9665
 
-    # EDE (ignored when cosmo_model='lcdm')
+    # EDE (silently used; default = LCDM-equivalent point)
     fEDE:         float | jax.Array = 0.001
     log10z_c:     float | jax.Array = 3.562
     thetai_scf:   float | jax.Array = 2.83
     r:            float | jax.Array = 0.0
 
-    # Neutrinos. Default = ede-v2 convention (3 deg. ν of 0.02 eV).
-    # For lcdm convention pass m_ncdm=0.06, N_ur=2.0328.
+    # ν convention (matches ede-v2 emulator training: 3 deg. ν × 0.02 eV)
     m_ncdm:       float | jax.Array = 0.02
     N_ur:         float | jax.Array = 0.00441
-
-    def for_lcdm(self, m_ncdm: float = 0.06, N_ur: float = 2.0328) -> "CosmoParams":
-        """Return a copy with ν fields set to the lcdm convention."""
-        return self._replace(m_ncdm=m_ncdm, N_ur=N_ur)
 
 
 class ProfileParamsA10(NamedTuple):

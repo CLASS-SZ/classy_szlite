@@ -1,7 +1,5 @@
-"""High-level public API: derived params, CMB Cls, tSZ Cl^yy.
-
-All functions take a :class:`classy_szlite.params.CosmoParams` and an
-optional ``cosmo_model`` (default ``'ede-v2'``).
+"""High-level public API: derived params, CMB Cls, matter Pk, distances,
+tSZ Cl^yy. All functions take a :class:`classy_szlite.params.CosmoParams`.
 """
 from __future__ import annotations
 
@@ -9,7 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from ._registry import get_emulator, DEFAULT_COSMO_MODEL, DEFAULT_COSMO
+from ._registry import get_emulator, DEFAULT_COSMO
 from .params import CosmoParams, ProfileParamsA10
 from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances
 from .hmf import build_halo_grids
@@ -18,16 +16,11 @@ from .power_spectrum import cl_yy_1h_2h
 jax.config.update("jax_enable_x64", True)
 
 
-# ---------------------------------------------------------------------------
-# CosmoParams ↔ dict
-# ---------------------------------------------------------------------------
-
 def cosmo_to_dict(cosmo: CosmoParams) -> dict:
     """Convert ``CosmoParams`` to the emulator-style dict (with curly-brace key).
 
-    Values are passed through as-is (float or jax.Array) so the returned
-    dict is JAX-traceable — keep cosmo a NamedTuple of tracers when you
-    want gradients via ``jax.grad``.
+    Values pass through as-is (float or jax.Array) so the returned dict is
+    JAX-traceable — pass a ``CosmoParams`` of tracers to ``jax.grad``.
     """
     return {
         "omega_b":       cosmo.omega_b,
@@ -46,54 +39,41 @@ def cosmo_to_dict(cosmo: CosmoParams) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Derived params (σ8, Ω_m, S8, plus the full DER vector)
+# Derived parameters (σ8, Ω_m, S8)
 # ---------------------------------------------------------------------------
 
-def derived(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL) -> dict:
-    """Return derived parameters: ``sigma_8``, ``Omega_m``, ``S8`` (and the
-    full DER emulator output for the curious).
+def derived(cosmo: CosmoParams) -> dict:
+    """Derived parameters: ``sigma_8``, ``Omega_m``, ``S8``.
 
-    The DER emulator outputs an array of derived params; index [1] is σ8
-    in both lcdm and ede-v2 (matches classy_szfast.classy_sz.py:436).
-    Ω_m is computed analytically from omega_b, omega_cdm, m_ncdm, H0.
+    Also returns the full 17-element DER emulator output as ``'der_full'``
+    (σ8 is at index 1; consult the CosmoPower DER training script for the
+    full list).
     """
-    em = get_emulator(cosmo_model, 'der')
-    full = dict(DEFAULT_COSMO[cosmo_model])
-    full.update(cosmo_to_dict(cosmo))
+    em = get_emulator('der')
+    full = dict(DEFAULT_COSMO); full.update(cosmo_to_dict(cosmo))
     p_in = {k: [full[k]] for k in em.parameters}
-    # DER emulator outputs log10(derived); recover physical values via 10^.
-    # (Matches classy_szfast.classy_sz.py:436 which uses ten_to_predictions_np.)
     der = 10.0 ** np.asarray(em.predict(p_in)).flatten()
 
     sigma_8 = float(der[1])
     h = float(cosmo.H0) / 100.0
-    # Σmν depends on neutrino convention
-    sum_mnu = float(cosmo.m_ncdm) * (3.0 if float(cosmo.N_ur) < 0.5 else 1.0)
+    # Σmν = 3 × m_ncdm for ede-v2 ν convention (3 degenerate ν)
+    sum_mnu = 3.0 * float(cosmo.m_ncdm)
     Omega_m = (float(cosmo.omega_b) + float(cosmo.omega_cdm)
                + sum_mnu / 93.14) / h ** 2
     S8 = sigma_8 * (Omega_m / 0.3) ** 0.5
-    return {
-        "sigma_8": sigma_8,
-        "Omega_m": Omega_m,
-        "S8":      S8,
-        "der_full": der,    # full 14 (lcdm) or 17 (ede-v2) elements
-    }
+    return {"sigma_8": sigma_8, "Omega_m": Omega_m, "S8": S8, "der_full": der}
 
 
 # ---------------------------------------------------------------------------
-# CMB angular power spectra: TT, TE, EE, PP
+# CMB angular power spectra
 # ---------------------------------------------------------------------------
 
-# Output conventions: TT, EE, PP emulators were trained on log10[ Cl ]; TE
-# was trained on Cl directly (since it can be negative). Convention mirrors
-# classy_szfast/classy_szfast.py:509, 533, 536, 539.
-_CMB_LOG_CONVENTION = {
-    "tt": True, "ee": True, "pp": True,
-    "te": False,
-}
+# TT, EE, PP emulators output log10(prefactored Cl); TE outputs Cl directly
+# (it can be negative). Recovery factor: ede-v2 uses 1/ell² to get raw Cl.
+_CMB_LOG_CONVENTION = {"tt": True, "ee": True, "pp": True, "te": False}
 
 
-def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
+def cl_TTTEEE(cosmo: CosmoParams,
               spectra: tuple[str, ...] = ("tt", "te", "ee"),
               ell_factor: bool = True) -> dict:
     """CMB angular power spectra.
@@ -102,25 +82,17 @@ def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
     (``'tt','te','ee'``). Values are **dimensionless** — multiply by
     ``Tcmb_uK² = (2.7255e6)²`` to convert to μK².
 
-    Per-cosmo_model normalisation (mirrors classy_szfast.classy_szfast.py:522):
-      * lcdm emulator output: ``log10[ ell(ell+1) Cl / (2π) ]``
-        → recover Cl via × ``2π / [ell(ell+1)]``
-      * ede-v2 emulator output: ``log10[ ell² Cl ]``
-        → recover Cl via × ``1/ell²``
-
-    ``ell_factor`` (default ``True``) — return ``D_ell = ell(ell+1) × Cl / (2π)``;
+    ``ell_factor`` (default ``True``) — return ``D_ell = ell(ell+1) Cl / (2π)``;
     ``False`` returns raw Cl.
     """
-    full = dict(DEFAULT_COSMO[cosmo_model])
-    full.update(cosmo_to_dict(cosmo))
+    full = dict(DEFAULT_COSMO); full.update(cosmo_to_dict(cosmo))
 
     out = {}
     ell = None
     for spec in spectra:
         if spec not in _CMB_LOG_CONVENTION:
-            raise ValueError(f"Unknown spectrum {spec!r}. Pick from "
-                             f"{tuple(_CMB_LOG_CONVENTION)}.")
-        em = get_emulator(cosmo_model, spec)
+            raise ValueError(f"Unknown spectrum {spec!r}. Pick from {tuple(_CMB_LOG_CONVENTION)}.")
+        em = get_emulator(spec)
         p_in = {k: [full[k]] for k in em.parameters}
         pred = np.asarray(em.predict(p_in)).flatten()
         if _CMB_LOG_CONVENTION[spec]:
@@ -129,19 +101,13 @@ def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
         if ell is None:
             ell = np.asarray(em.modes)
 
-    # Per-cosmo_model factor that recovers raw Cl from the emulator output.
-    # Same convention as classy_szfast.classy_szfast.py:522-527.
-    if cosmo_model == 'ede-v2':
-        factor_to_Cl = 1.0 / (ell ** 2)
-    else:
-        factor_to_Cl = 1.0 / (ell * (ell + 1) / (2.0 * np.pi))
-
+    # ede-v2 recovery factor: raw → Cl
+    factor_to_Cl = 1.0 / (ell ** 2)
     for s in spectra:
-        out[s] = out[s] * factor_to_Cl                     # now raw Cl (dimensionless)
+        out[s] = out[s] * factor_to_Cl
 
     out["ell"] = ell
     if ell_factor:
-        # convert to D_ell = ell(ell+1) Cl / (2π)
         fac_dl = ell * (ell + 1) / (2.0 * np.pi)
         for s in spectra:
             out[s] = out[s] * fac_dl
@@ -149,48 +115,44 @@ def cl_TTTEEE(cosmo: CosmoParams, cosmo_model: str = DEFAULT_COSMO_MODEL,
 
 
 # ---------------------------------------------------------------------------
-# Pk, Pnl, distances (forward to cosmology module with proper defaults)
+# Pk, Pnl, distances
 # ---------------------------------------------------------------------------
 
-def Pk(cosmo: CosmoParams, z_arr, cosmo_model: str = DEFAULT_COSMO_MODEL):
+def Pk(cosmo: CosmoParams, z_arr):
     """Linear P(k, z) — returns ``(k, pk(z, k))``."""
-    return get_pk(cosmo_to_dict(cosmo), z_arr, cosmo_model)
+    return get_pk(cosmo_to_dict(cosmo), z_arr)
 
 
-def Pnl(cosmo: CosmoParams, z_arr, cosmo_model: str = DEFAULT_COSMO_MODEL):
+def Pnl(cosmo: CosmoParams, z_arr):
     """Non-linear P(k, z) (HMcode) — returns ``(k, pk(z, k))``."""
-    return get_pknl(cosmo_to_dict(cosmo), z_arr, cosmo_model)
+    return get_pknl(cosmo_to_dict(cosmo), z_arr)
 
 
-def distances(cosmo: CosmoParams, z_arr,
-              cosmo_model: str = DEFAULT_COSMO_MODEL):
+def distances(cosmo: CosmoParams, z_arr):
     """Returns ``(Hz, chi, Da)``. ``Hz`` is H(z)/c in 1/Mpc; distances in Mpc."""
-    return get_distances(cosmo_to_dict(cosmo), z_arr, cosmo_model)
+    return get_distances(cosmo_to_dict(cosmo), z_arr)
 
 
 # ---------------------------------------------------------------------------
 # tSZ Cl^yy (halo-model, Arnaud 2010 profile)
 # ---------------------------------------------------------------------------
 
-def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10,
-          ell, cosmo_model: str = DEFAULT_COSMO_MODEL,
+def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
           z_grid: jax.Array | None = None,
           n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
           n_m: int = 200, delta_crit: float = 500.0):
     """Halo-model tSZ angular power spectrum (full pipeline per call).
 
     Returns ``(cl_1h, cl_2h)`` — dimensionless C_ell. Multiply by
-    ``ell*(ell+1)/(2π)*1e12`` to get ``D_ell × 1e12`` (the convention
-    matching Planck / ACT tSZ bandpower data).
+    ``ell*(ell+1)/(2π)*1e12`` to get ``D_ell × 1e12``.
 
-    For MCMC sampling **only** profile parameters at fixed cosmology, use
-    :func:`cl_yy_factory` instead — it precomputes the cosmo + halo grids
-    once and returns a ~10× faster eval closure for the per-step call.
+    For MCMC sampling only profile parameters at fixed cosmology, use
+    :func:`cl_yy_factory` instead — ~3× faster.
     """
     if z_grid is None:
         z_grid = jnp.geomspace(0.005, 3.0, n_z)
     cosmo_dict = cosmo_to_dict(cosmo)
-    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid, cosmo_model=cosmo_model)
+    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid)
     hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
                           m_min=m_min, m_max=m_max, n_m=n_m)
     pp_dict = profile._asdict()
@@ -200,46 +162,28 @@ def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10,
 
 
 def cl_yy_factory(cosmo: CosmoParams, ell,
-                  cosmo_model: str = DEFAULT_COSMO_MODEL,
                   z_grid: jax.Array | None = None,
                   n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
                   n_m: int = 200, delta_crit: float = 500.0):
     """Fixed-cosmology fast-path: precompute the heavy bits, get a closure.
 
-    Builds the ``CosmoGrids`` (emulators → P_lin, distances, σ(R)) and
+    Builds ``CosmoGrids`` (emulators → P_lin, distances, σ(R)) and
     ``HaloGrids`` (Tinker 08 HMF, bias) **once**, then returns:
 
         ev(profile) -> (cl_1h, cl_2h)
 
     A subsequent ``ev(profile)`` call only runs the ``cl_yy_1h_2h``
-    halo-model integration — typically ~1–2 ms / call (vs ~15 ms for the
-    full :func:`cl_yy` pipeline, which re-runs the emulators + σ(R)
-    every time).
-
-    Intended use case: MCMC over profile / nuisance parameters with the
-    cosmology held fixed (e.g. the may26 ACT-DR6 Cl^yy bandpower fit).
-    Just call :func:`cl_yy_factory` once at ``Theory.initialize`` time,
-    then call the returned function in each ``logp`` evaluation.
-
-    Example
-    -------
-    >>> ev = csl.cl_yy_factory(csl.CosmoParams(), ell=jnp.geomspace(2, 9000, 80))
-    >>> # MCMC loop: only profile sampled
-    >>> cl_1h, cl_2h = ev(csl.ProfileParamsA10(P0=8.0, beta=5.5, B=1.25))
-
-    The returned function is JAX-traceable; you can ``jax.jit`` it if the
-    profile is fed as concrete values or a NamedTuple of tracers.
+    halo-model integration — typically ~5 ms per call. Intended for MCMC
+    over profile / nuisance parameters with fixed cosmology.
     """
     if z_grid is None:
         z_grid = jnp.geomspace(0.005, 3.0, n_z)
     cosmo_dict = cosmo_to_dict(cosmo)
-    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid, cosmo_model=cosmo_model)
+    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid)
     hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
                           m_min=m_min, m_max=m_max, n_m=n_m)
     ell_jax = jnp.asarray(ell)
 
-    # Capture the cosmo_dict and grids in the closure. The closure runs ONLY
-    # cl_yy_1h_2h per call — no emulator, no σ(R), no HMF rebuild.
     def evaluate(profile: ProfileParamsA10):
         cl_1h, cl_2h = cl_yy_1h_2h(
             ell_jax, cg, hg, cosmo_dict,
