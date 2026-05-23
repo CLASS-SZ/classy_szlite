@@ -6,5 +6,6 @@ build/
 dist/
 .DS_Store
 *.png
+!docs/_static/*.png
 .venv/
 .env

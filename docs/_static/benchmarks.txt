@@ -1,0 +1,9 @@
+Function                       mean ± std (ms/call)   throughput (calls/s)
+================================================================================
+  derived (σ8, Ω_m, S8)            0.54 ±  0.04 ms           1848 ± 148
+  cl_TTTEEE (TT, TE, EE)           2.52 ±  0.14 ms            397 ±  23
+  Pk (linear, 4 z)                 1.49 ±  0.12 ms            669 ±  56
+  distances (4 z)                  1.29 ±  0.09 ms            774 ±  57
+  cl_yy (full pipeline)           17.84 ±  0.58 ms             56 ±   2
+  cl_yy_factory (fast)             5.38 ±  0.42 ms            186 ±  15
+  factory + jax.grad              17.12 ±  1.01 ms             58 ±   3
