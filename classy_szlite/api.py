@@ -23,20 +23,25 @@ jax.config.update("jax_enable_x64", True)
 # ---------------------------------------------------------------------------
 
 def cosmo_to_dict(cosmo: CosmoParams) -> dict:
-    """Convert ``CosmoParams`` to the emulator-style dict (with curly-brace key)."""
+    """Convert ``CosmoParams`` to the emulator-style dict (with curly-brace key).
+
+    Values are passed through as-is (float or jax.Array) so the returned
+    dict is JAX-traceable — keep cosmo a NamedTuple of tracers when you
+    want gradients via ``jax.grad``.
+    """
     return {
-        "omega_b":       float(cosmo.omega_b),
-        "omega_cdm":     float(cosmo.omega_cdm),
-        "H0":            float(cosmo.H0),
-        "tau_reio":      float(cosmo.tau_reio),
-        "ln10^{10}A_s":  float(cosmo.ln10_10_As),
-        "n_s":           float(cosmo.n_s),
-        "m_ncdm":        float(cosmo.m_ncdm),
-        "N_ur":          float(cosmo.N_ur),
-        "fEDE":          float(cosmo.fEDE),
-        "log10z_c":      float(cosmo.log10z_c),
-        "thetai_scf":    float(cosmo.thetai_scf),
-        "r":             float(cosmo.r),
+        "omega_b":       cosmo.omega_b,
+        "omega_cdm":     cosmo.omega_cdm,
+        "H0":            cosmo.H0,
+        "tau_reio":      cosmo.tau_reio,
+        "ln10^{10}A_s":  cosmo.ln10_10_As,
+        "n_s":           cosmo.n_s,
+        "m_ncdm":        cosmo.m_ncdm,
+        "N_ur":          cosmo.N_ur,
+        "fEDE":          cosmo.fEDE,
+        "log10z_c":      cosmo.log10z_c,
+        "thetai_scf":    cosmo.thetai_scf,
+        "r":             cosmo.r,
     }
 
 
