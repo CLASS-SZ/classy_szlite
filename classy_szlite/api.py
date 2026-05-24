@@ -184,6 +184,7 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
                           m_min=m_min, m_max=m_max, n_m=n_m)
     ell_jax = jnp.asarray(ell)
 
+    @jax.jit
     def evaluate(profile: ProfileParamsA10):
         cl_1h, cl_2h = cl_yy_1h_2h(
             ell_jax, cg, hg, cosmo_dict,

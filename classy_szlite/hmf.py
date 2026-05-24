@@ -65,6 +65,17 @@ _c_SI    = 2.99792458e8          # m s⁻¹
 _Msun_kg = 1.98855e30            # kg  (matching CLASS value)
 _Mpc_m   = 3.085677581282e22     # m / Mpc
 
+# --- Precomputed composite constants -------------------------------------
+# TPU v6e silently caps f64 dynamic range at f32 max (~3.4e38), so chains
+# like (Hz_si² × Mpc_m³) overflow even though both inputs are tiny.
+# Combine the constants in Python (true f64) so each intermediate that
+# touches JAX stays within f32 range.
+
+# Used in ρ_crit(z) = 3/(8πG) × H_si² × (Mpc³/M_sun)
+import math as _math
+_3_OVER_8PI_G    = 3.0 / (8.0 * _math.pi * _G_SI)   # ≈ 1.79e9  [kg s²/m³]
+_MPC3_OVER_MSUN  = _Mpc_m ** 3 / _Msun_kg            # ≈ 1.48e37 [M_sun⁻¹ m³ per Mpc⁻³ Msun ratio]
+
 
 # ===================================================================
 # Public data container
@@ -213,17 +224,15 @@ def build_halo_grids(cg: CosmoGrids,
 
     # -- Critical density at z = 0  [M_sun / Mpc³] -----------------------
     H0_si = params['H0'] * 1e3 / _Mpc_m          # H₀ in 1/s
-    rho_crit_0 = (3.0 * H0_si ** 2
-                  / (8.0 * jnp.pi * _G_SI)
-                  * _Mpc_m ** 3 / _Msun_kg)       # M_sun / Mpc³
+    # ρ_crit = (3 H²/(8πG)) × Mpc³/M_sun. Grouped to keep every JAX
+    # intermediate in f32 range (TPU "f64" silently clips at ~3.4e38).
+    rho_crit_0 = (H0_si ** 2 * _3_OVER_8PI_G) * _MPC3_OVER_MSUN   # M_sun / Mpc³
     rho_m0 = Omega_m * rho_crit_0                  # M_sun / Mpc³
 
     # -- Critical density at z  [M_sun / Mpc³] ----------------------------
     #    H(z) in 1/s:  Hz [1/Mpc] × c [m/s] / Mpc [m]  (see cosmology.py)
     Hz_si = cg.Hz * _c_SI / _Mpc_m                # (n_z,) [1/s]
-    rho_crit_z = (3.0 * Hz_si ** 2
-                  / (8.0 * jnp.pi * _G_SI)
-                  * _Mpc_m ** 3 / _Msun_kg)        # (n_z,) M_sun / Mpc³
+    rho_crit_z = (Hz_si ** 2 * _3_OVER_8PI_G) * _MPC3_OVER_MSUN    # (n_z,) M_sun / Mpc³
 
     # -- Omega_m(z) -------------------------------------------------------
     Omega_m_z = rho_m0 * (1.0 + cg.z) ** 3 / rho_crit_z   # (n_z,)
