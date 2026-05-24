@@ -57,6 +57,25 @@ git clone https://github.com/cosmopower-organization/ede ~/cosmopower-ede
 export CLASSY_SZLITE_DATA_DIR=~/cosmopower-ede
 ```
 
+### `_v2.npz` vs `_v2_plain.npz`
+
+Each emulator is available in two on-disk formats with **identical
+weights**:
+
+- **`<name>_v2.npz`** — original CosmoPower output. Loading requires
+  `cosmopower` to be importable, which transitively imports
+  `tensorflow`. Use this if you already have the CosmoPower stack
+  installed.
+
+- **`<name>_v2_plain.npz`** — pickle-free re-saved form
+  (`np.savez_compressed` with flat keys, ~8 % smaller). Loads with
+  `allow_pickle=False`, **no TensorFlow / cosmopower needed**. Use
+  this for slim deploy targets, CI, or anyone who doesn't want a TF
+  install on their critical path.
+
+`classy_szlite` **prefers `_v2_plain.npz` automatically** when present
+and falls back to `_v2.npz` otherwise — no configuration needed.
+
 ### Why the v2 emulators
 
 The `v2` emulators are the emulators used in

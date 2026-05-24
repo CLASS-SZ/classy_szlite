@@ -37,6 +37,64 @@ def _sigmoid(x):
     return 1.0 / (1.0 + jnp.exp(-x))
 
 
+# ---------------------------------------------------------------------------
+# .npz loading: support both the legacy pickled cosmopower format AND the
+# new "plain" format (np.savez with flattened keys, no pickle / no tf).
+# ---------------------------------------------------------------------------
+
+_PLAIN_SEP = "."     # cosmopower field names contain `_` but never `.`
+
+
+def _load_emulator_dict(path: str) -> dict:
+    """Return the cosmopower-style dict for an emulator file.
+
+    Tries the plain (no-pickle) format first; falls back to the legacy
+    pickled format if needed.  Raises ``ModuleNotFoundError`` from the
+    legacy path if tensorflow is not importable — migrate to the plain
+    format to avoid that.
+    """
+    plain = np.load(path, allow_pickle=False)
+    # Heuristic: plain format always has "weights_.n" sentinel
+    if "weights_.n" in plain.files:
+        return _unflatten_plain(plain)
+    plain.close()
+
+    # Fall through: assume legacy pickled object array.
+    raw = np.load(path, allow_pickle=True)
+    if "arr_0" not in raw.files:
+        raise ValueError(
+            f"classy_szlite: {path} is not a recognised emulator file."
+        )
+    return raw["arr_0"].item()                                       # may raise ModuleNotFoundError
+
+
+def _unflatten_plain(saved: np.lib.npyio.NpzFile) -> dict:
+    """Inverse of the converter's flatten step.
+
+    ``foo.0, foo.1, ...`` + ``foo.n`` (count) become ``foo: [...]``.
+    0-D numeric arrays become Python scalars; 0-D Unicode arrays become str.
+    """
+    out: dict = {}
+    list_groups: dict = {}
+    for k in saved.files:
+        if _PLAIN_SEP in k:
+            base, idx = k.rsplit(_PLAIN_SEP, 1)
+            if idx == "n":
+                continue
+            list_groups.setdefault(base, {})[int(idx)] = saved[k]
+        else:
+            v = saved[k]
+            if v.ndim == 0 and v.dtype.kind in "iuf":
+                out[k] = v.item()
+            elif v.ndim == 0 and v.dtype.kind == "U":
+                out[k] = str(v)
+            else:
+                out[k] = v
+    for base, idx_map in list_groups.items():
+        out[base] = [idx_map[i] for i in sorted(idx_map)]
+    return out
+
+
 @dataclass(frozen=True)
 class Emulator:
     """JAX-traceable CosmoPower emulator.
@@ -77,10 +135,23 @@ class Emulator:
 
     @classmethod
     def from_npz(cls, path: str) -> "Emulator":
-        """Load an emulator from a CosmoPower-style ``.npz`` file."""
-        raw = np.load(path, allow_pickle=True)
-        # CosmoPower saves a single object array containing a dict-like
-        d = raw["arr_0"].item()
+        """Load an emulator from a CosmoPower-style ``.npz`` file.
+
+        Supports two on-disk layouts:
+
+        * **plain** (no pickle): produced by ``np.savez(**flat_dict)`` with the
+          list-valued fields (weights/biases/alphas/betas) flattened to keys
+          like ``weights___0, weights___1, ...`` plus ``weights___n``.  Loads
+          with ``allow_pickle=False`` — no tensorflow / cosmopower import
+          required.  This is the recommended distribution format.
+
+        * **legacy / pickled**: produced by ``np.save(obj, allow_pickle=True)``
+          where ``obj`` is a CosmoPower model instance.  Unpickling references
+          ``tensorflow.python.trackable.data_structures.ListWrapper``, so
+          tensorflow must be importable.  Kept for backward compatibility
+          with existing ``cosmopower-organization/ede`` files.
+        """
+        d = _load_emulator_dict(path)
 
         # weights_ and biases_ are SEPARATE lists (one entry per layer);
         # pair them up so the forward pass can iterate over (W, b) tuples.
@@ -105,7 +176,7 @@ class Emulator:
         pca_mean   = jnp.asarray(d["pca_mean"],   dtype=jnp.float64) if has_pca else None
         pca_std    = jnp.asarray(d["pca_std"],    dtype=jnp.float64) if has_pca else None
 
-        parameters = tuple(d["parameters"])
+        parameters = tuple(str(p) for p in d["parameters"])
         modes      = np.asarray(d["modes"])
 
         return cls(

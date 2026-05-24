@@ -77,17 +77,32 @@ DEFAULT_COSMO = {
 # Lazy emulator loading + cache
 # ---------------------------------------------------------------------------
 
+def _plain_variant(rel: str) -> str:
+    """foo/TT_v2.npz -> foo/TT_v2_plain.npz."""
+    return rel[:-len(".npz")] + "_plain.npz"
+
+
 @lru_cache(maxsize=16)
 def get_emulator(name: str) -> Emulator:
-    """Load (and cache) the named emulator."""
+    """Load (and cache) the named emulator.
+
+    Prefers the **pickle-free** ``_plain.npz`` variant if present, so users
+    don't need tensorflow installed to deserialise the file.  Falls back to
+    the original pickled ``v2.npz`` for backwards compatibility.
+    """
     if name not in _EMULATOR_FILES:
         raise ValueError(f"Unknown emulator name {name!r}. "
                          f"Supported: {list(_EMULATOR_FILES)}")
     root = default_data_dir()
-    path = os.path.join(root, _DATA_SUBDIR, _EMULATOR_FILES[name])
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"classy_szlite: emulator file not found: {path}")
-    return Emulator.from_npz(path)
+    base = os.path.join(root, _DATA_SUBDIR, _EMULATOR_FILES[name])
+    plain = os.path.join(root, _DATA_SUBDIR, _plain_variant(_EMULATOR_FILES[name]))
+    if os.path.isfile(plain):
+        return Emulator.from_npz(plain)
+    if os.path.isfile(base):
+        return Emulator.from_npz(base)
+    raise FileNotFoundError(
+        f"classy_szlite: emulator file not found.  Looked for:\n  {plain}\n  {base}"
+    )
 
 
 def output_is_log10(name: str) -> bool:
