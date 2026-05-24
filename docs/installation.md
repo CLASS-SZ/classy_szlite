@@ -83,6 +83,16 @@ Coverage:
 `classy_szlite` exposes these emulators through a single pure-JAX pipeline
 suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP, SBI).
 
+### Default cosmology and EDE
+
+The `v2` emulator suite is trained on an EDE parameter range that
+includes the LCDM-equivalent point. `classy_szlite` exploits this:
+``CosmoParams()`` defaults to ``fEDE = 0.001`` so the very first call
+gives standard $\Lambda$CDM to emulator precision — you don't have to
+think about EDE at all. If you do want to explore EDE, set ``fEDE``,
+``log10z_c`` and ``thetai_scf`` to non-default values and the same
+pipeline handles it.
+
 ## Verification
 
 ```python

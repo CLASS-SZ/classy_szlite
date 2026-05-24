@@ -17,10 +17,15 @@
 - **Derived parameters** — σ8, Ω_m, S8
 - **Halo-model tSZ Cl^yy** — Arnaud 2010 GNFW pressure profile
 
-Backed by the high-accuracy **ede-v2 CosmoPower emulators**. LCDM-equivalent
-cosmology is the default — `fEDE = 0.001` (the package's default) reproduces
-standard ΛCDM to emulator precision, and the same emulator covers the full
-early-dark-energy parameter space if you want to explore it.
+Backed by the high-accuracy **`v2` CosmoPower emulators** — the same
+emulators used in the [ACT DR6 extended-cosmology
+analysis](https://arxiv.org/abs/2503.14454) (2025) and the
+[ACT DR6 + DESI DR2 analysis](https://arxiv.org/abs/2505.08051) by
+Poulin et al. (2025), matching the CAMB-based
+[Jense et al. (2024) emulators](https://github.com/cosmopower-organization/jense_2024_emulators)
+to well under 0.1 σ in ΛCDM. See
+[Installation](https://classy-szlite.readthedocs.io/en/latest/installation.html)
+for the emulator-coverage details.
 
 Runtime dependencies: `jax`, `numpy`, `mcfit`.
 
@@ -48,7 +53,7 @@ You also need the CosmoPower emulator `.npz` files at `~/class_sz_data/`
 import jax.numpy as jnp
 import classy_szlite as csl
 
-cosmo = csl.CosmoParams()                      # Planck-18 + ede-v2 LCDM-equivalent defaults
+cosmo = csl.CosmoParams()                      # Planck-18 ΛCDM defaults
 
 # Derived parameters
 csl.derived(cosmo)
