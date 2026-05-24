@@ -113,72 +113,104 @@ plt.grid(True, alpha=0.3, which="both"); plt.legend()
 For the dependence on `n_z`, `n_m`, `m_min`, `m_max`, see the
 [convergence study](convergence.md).
 
-## NUTS sampling of profile parameters
+## Bestfit + NUTS sampling on Cl^yy bandpowers (σ8 sweep)
 
-The factory closure makes Hamiltonian-style samplers — NUTS, HMC, NeuTra
-— a natural fit: each leapfrog step is one ~5 ms forward pass, gradients
-are exact via `jax.grad`, and there is no proposal-covariance tuning.
-Here we reproduce the cobaya RW-MH baseline from the `Cl^yy` paper
-(P₀ and β only, ACT-DR6 bandpowers) with NumPyro NUTS in a few seconds.
+The factory closure makes both gradient-based optimisation (L-BFGS,
+Adam, …) and Hamiltonian-style samplers (NUTS, HMC) a natural fit:
+each forward pass is one ~5 ms `ev(profile)` call, gradients are
+exact via `jax.grad`, and there is no proposal-covariance tuning.
+
+The example below loads a tSZ Cl^yy bandpower dataset and, for each of
+**three fitting cosmologies that differ only in σ8** (`ln10_10_As`),
+does two things:
+
+1. **L-BFGS bestfit** of (P₀, β) using `scipy.optimize.minimize` with
+   `jax.grad` gradients — converges in ~20–40 function evaluations.
+2. **NumPyro NUTS** for the full posterior, initialised at the bestfit
+   for fast warmup (~40 s for 8000 samples × 4 chains).
+
+This is a clean demonstration of the well-known **σ8 ↔ P₀ degeneracy**:
+lowering σ8 in the fitting cosmology means fewer / lighter clusters, so
+the bestfit pressure normalisation has to move up to match the same
+bandpower amplitude.
 
 ```python
 import jax, jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-import numpy as np, numpyro, numpyro.distributions as dist
+import numpy as np, scipy.optimize as so
+import numpyro, numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 import classy_szlite as csl
 
-# Bandpowers, covariance, ell grid
-ell, y, cov = load_act_dr6_bandpowers()              # (8,) (8,) (8,8)
+# --- load bandpowers + covariance ---
+ell, y, cov = load_bandpowers()                       # (N,) (N,) (N, N)
 inv_cov     = jnp.asarray(np.linalg.inv(cov))
 
-# Factory closure: one-shot CosmoGrids + HaloGrids
-cosmo     = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118, H0=68.22,
-                            tau_reio=0.0561, ln10_10_As=3.06, n_s=0.9743)
-ev        = csl.cl_yy_factory(cosmo, jnp.asarray(ell))
-dl_factor = jnp.asarray(ell * (ell + 1) / (2 * np.pi) * 1e12)
+# --- per-σ8 fit ---
+def build_forward(cosmo, ell_np):
+    ell = jnp.asarray(ell_np)
+    ev  = csl.cl_yy_factory(cosmo, ell)
+    dl_factor = jnp.asarray(ell * (ell + 1) / (2 * np.pi) * 1e12)
+    def forward(P0, beta):
+        prof = csl.ProfileParamsA10(P0=P0, c500=1.156, gamma=0.3292,
+                                     alpha=1.062, beta=beta, B=1.25)
+        c1, c2 = ev(prof)
+        return dl_factor * (c1 + c2)
+    return forward
 
-def model():
-    P0   = numpyro.sample("P0",   dist.Uniform(0.0, 20.0))
-    beta = numpyro.sample("beta", dist.Uniform(0.0, 10.0))
-    prof = csl.ProfileParamsA10(
-        P0=P0, c500=1.156, gamma=0.3292, alpha=1.062, beta=beta, B=1.25,
-    )
-    cl_1h, cl_2h = ev(prof)
-    mu = dl_factor * (cl_1h + cl_2h)
-    resid = jnp.asarray(y) - mu
-    numpyro.factor("loglike", -0.5 * (resid @ inv_cov @ resid))
+for As in [3.060, 2.950, 2.850]:                     # high / med / low σ8
+    cosmo   = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118, H0=68.22,
+                              tau_reio=0.0561, ln10_10_As=As, n_s=0.9743)
+    s8      = csl.derived(cosmo)["sigma_8"]
+    forward = build_forward(cosmo, ell)
 
-mcmc = MCMC(NUTS(model, target_accept_prob=0.85, dense_mass=True),
-            num_warmup=500, num_samples=2000, num_chains=4)
-mcmc.run(jax.random.PRNGKey(0))
-mcmc.print_summary()
+    # ---- L-BFGS bestfit with JAX gradients ----
+    def neg_log_like(x):
+        r = jnp.asarray(y) - forward(x[0], x[1])
+        return 0.5 * r @ inv_cov @ r
+    nll, gnll = jax.jit(neg_log_like), jax.jit(jax.grad(neg_log_like))
+    bf = so.minimize(lambda x: float(nll(x)), [8.13, 5.48],
+                     jac=lambda x: np.asarray(gnll(x)),
+                     method="L-BFGS-B", bounds=[(0.1, 20), (0.5, 10)])
+    print(f"σ8={s8:.3f}  bestfit P0={bf.x[0]:.2f}  β={bf.x[1]:.2f}  χ²={2*bf.fun:.1f}")
+
+    # ---- NUTS, initialised at the bestfit ----
+    def model():
+        P0   = numpyro.sample("P0",   dist.Uniform(0.0, 20.0))
+        beta = numpyro.sample("beta", dist.Uniform(0.0, 10.0))
+        r    = jnp.asarray(y) - forward(P0, beta)
+        numpyro.factor("loglike", -0.5 * r @ inv_cov @ r)
+    mcmc = MCMC(NUTS(model, dense_mass=True),
+                num_warmup=500, num_samples=2000, num_chains=4,
+                chain_method="sequential", progress_bar=False)
+    mcmc.run(jax.random.PRNGKey(0),
+             init_params={"P0":   jnp.full(4, float(bf.x[0])),
+                          "beta": jnp.full(4, float(bf.x[1]))})
 ```
 
-Output on a laptop (single-thread JAX, sequential chains):
+Output on a laptop (single-thread JAX, sequential chains; bestfit
+time excludes the NUTS run):
 
 ```
-NUTS done in 63.7 s — 8000 samples × 4 chains (126 samples/s)
-
-                mean       std    median      5.0%     95.0%     n_eff    r_hat
-        P0      2.03      1.79      1.56      0.61      3.23    389.50    1.01
-      beta      3.25      0.85      3.04      2.27      4.17    447.55    1.01
-
-Number of divergences: 0
+high σ8 (≈0.81)     L-BFGS bestfit in 0.4 s, 38 fn evals → P0=1.20  β=2.74  χ²=12.3/6
+                    NUTS in 41 s  →  posterior P0 = 1.92 ± 1.60  β = 3.19 ± 0.77
+medium σ8 (≈0.77)   L-BFGS bestfit in 0.4 s, 24 fn evals → P0=1.47  β=2.71  χ²=12.3/6
+                    NUTS in 38 s  →  posterior P0 = 2.34 ± 1.85  β = 3.16 ± 0.74
+low σ8 (≈0.74)      L-BFGS bestfit in 0.4 s, 36 fn evals → P0=3.42  β=3.46  χ²=15.8/6
+                    NUTS in 35 s  →  posterior P0 = 2.75 ± 1.90  β = 3.11 ± 0.66
 ```
 
-Same posterior as the cobaya RW-MH baseline (P₀ = 1.71 ± 0.78, β = 3.10 ± 0.52),
-but with **zero divergences**, no proposal-covariance hand-tuning, and an
-order-of-magnitude better effective-sample-rate per evaluation.
+**Bestfit curves on the bandpowers** — the low-σ8 case visibly needs a
+much higher P₀ to match the bandpower amplitude:
 
-![NUTS corner plot of GNFW P0, beta](_static/nuts_clyy_corner.png)
+![L-BFGS bestfit on Cl^yy bandpowers across a σ8 sweep](_static/synthetic_bestfit.png)
 
-Drawing 500 random posterior samples and overlaying the model band on the
-data:
+**Posterior triangle plot** (`getdist`) — the P₀ mode shifts to higher
+values as σ8 decreases; β is much less sensitive:
 
-![Posterior band on D_ell^yy](_static/nuts_clyy_posterior_band.png)
+![NUTS posteriors for three fitting cosmologies in a σ8 sweep](_static/synthetic_corner.png)
 
-The full runnable script (including the data loader and plot code) is at
+The full runnable script (loader + bestfit + NUTS + plotting) is at
 [`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py).
 
 ## End-to-end MCMC pattern (cobaya Theory)
