@@ -50,15 +50,32 @@ intersphinx_mapping = {
 }
 
 # -- HTML output ------------------------------------------------------------
-html_theme   = "furo"
+# pydata-sphinx-theme — same scientific look as numpy / scipy / matplotlib /
+# jax / astropy / pandas. Clean, dense, two-column layout with a real navbar.
+html_theme   = "pydata_sphinx_theme"
 html_title   = "classy_szlite"
 html_static_path = ["_static"]
 html_show_sourcelink = False
 
 html_theme_options = {
-    "source_repository": "https://github.com/CLASS-SZ/classy_szlite",
-    "source_branch":     "main",
-    "source_directory":  "docs/",
+    "github_url":      "https://github.com/CLASS-SZ/classy_szlite",
+    "navbar_align":    "left",
+    "show_prev_next":  True,
+    "use_edit_page_button": False,
+    "logo":            {"text": "classy_szlite"},
+    "icon_links": [
+        {"name": "PyPI",   "url": "https://pypi.org/project/classy-szlite/",
+         "icon": "fa-brands fa-python"},
+        {"name": "GitHub", "url": "https://github.com/CLASS-SZ/classy_szlite",
+         "icon": "fa-brands fa-github"},
+    ],
+    "header_links_before_dropdown": 7,
+}
+html_context = {
+    "github_user":   "CLASS-SZ",
+    "github_repo":   "classy_szlite",
+    "github_version":"main",
+    "doc_path":      "docs",
 }
 
 # autodoc: include all members by default

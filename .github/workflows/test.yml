@@ -21,10 +21,18 @@ jobs:
       - name: Install package + dev deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" pytest-cov
       - name: Import smoke test (no emulator data on CI)
         run: |
           python -c "import classy_szlite; print(classy_szlite.__version__)"
           python -c "from classy_szlite import CosmoParams, ProfileParamsA10; print(CosmoParams())"
-      - name: Run pytest (smoke tests are skipped when data is absent)
-        run: pytest -v
+      - name: Run pytest with coverage (data-dependent tests skipped on CI)
+        run: |
+          pytest -v --cov=classy_szlite --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
