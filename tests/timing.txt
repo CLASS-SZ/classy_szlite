@@ -1,0 +1,11 @@
+classy_szlite Cl^yy warm-eval timing (median ms)
+------------------------------------------------------------
+workload                                CPU    TPU v6e    speedup
+cl_yy_factory(p) (single)             23.50      36.21       0.65
+cl_yy(cosmo,p,ell) (full pipeline)      48.80      70.32       0.69
+vmap×32 factory (per eval)             3.35      25.92       0.13
+vmap×1024 factory (per eval)           1.98      47.70       0.04
+------------------------------------------------------------
+Max |cl_yy TPU - CPU|/|CPU|:
+  baseline:  4.98e-05
+  lows8:  8.10e-05
