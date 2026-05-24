@@ -1,7 +1,9 @@
 # classy_szlite
 
 [![tests](https://github.com/CLASS-SZ/classy_szlite/actions/workflows/test.yml/badge.svg)](https://github.com/CLASS-SZ/classy_szlite/actions/workflows/test.yml)
-[![PyPI](https://img.shields.io/pypi/v/classy_szlite.svg)](https://pypi.org/project/classy_szlite/)
+[![codecov](https://codecov.io/gh/CLASS-SZ/classy_szlite/branch/main/graph/badge.svg)](https://codecov.io/gh/CLASS-SZ/classy_szlite)
+[![PyPI version](https://img.shields.io/pypi/v/classy-szlite.svg?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/classy-szlite/)
+[![Python versions](https://img.shields.io/pypi/pyversions/classy-szlite.svg?logo=python&logoColor=white)](https://pypi.org/project/classy-szlite/)
 [![Documentation Status](https://readthedocs.org/projects/classy-szlite/badge/?version=latest)](https://classy-szlite.readthedocs.io/en/latest/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 

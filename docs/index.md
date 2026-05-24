@@ -28,6 +28,7 @@ quickstart
 api
 throughput
 gradients
+convergence
 examples
 ```
 

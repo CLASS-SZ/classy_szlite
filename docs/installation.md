@@ -46,8 +46,16 @@ $CLASSY_SZLITE_DATA_DIR/
         └── DER_v2.npz
 ```
 
-Download the data tarball from the CLASS-SZ data distribution (see
-the [CLASS-SZ github org](https://github.com/CLASS-SZ)).
+The ede-v2 emulator `.npz` files live in the
+[`cosmopower-organization/ede`](https://github.com/cosmopower-organization/ede)
+GitHub repository. Clone it and either point
+`$CLASSY_SZLITE_DATA_DIR` at the checkout or symlink the contents into
+`~/class_sz_data/`:
+
+```bash
+git clone https://github.com/cosmopower-organization/ede ~/cosmopower-ede
+export CLASSY_SZLITE_DATA_DIR=~/cosmopower-ede
+```
 
 ## Verification
 
