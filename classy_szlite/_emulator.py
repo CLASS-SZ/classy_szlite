@@ -38,34 +38,26 @@ def _sigmoid(x):
 
 
 # ---------------------------------------------------------------------------
-# .npz loading: support both the legacy pickled cosmopower format AND the
-# new "plain" format (np.savez with flattened keys, no pickle / no tf).
+# .npz loading — plain (no pickle) format
 # ---------------------------------------------------------------------------
 
 _PLAIN_SEP = "."     # cosmopower field names contain `_` but never `.`
 
 
 def _load_emulator_dict(path: str) -> dict:
-    """Return the cosmopower-style dict for an emulator file.
-
-    Tries the plain (no-pickle) format first; falls back to the legacy
-    pickled format if needed.  Raises ``ModuleNotFoundError`` from the
-    legacy path if tensorflow is not importable — migrate to the plain
-    format to avoid that.
-    """
-    plain = np.load(path, allow_pickle=False)
-    # Heuristic: plain format always has "weights_.n" sentinel
-    if "weights_.n" in plain.files:
-        return _unflatten_plain(plain)
-    plain.close()
-
-    # Fall through: assume legacy pickled object array.
-    raw = np.load(path, allow_pickle=True)
-    if "arr_0" not in raw.files:
-        raise ValueError(
-            f"classy_szlite: {path} is not a recognised emulator file."
-        )
-    return raw["arr_0"].item()                                       # may raise ModuleNotFoundError
+    """Return the cosmopower-style dict for a ``_v2_plain.npz`` file."""
+    saved = np.load(path, allow_pickle=False)
+    if "weights_.n" not in saved.files:
+        # Defensive: a few users still have legacy pickled `_v2.npz` files
+        # in their data dir.  Try that path, which requires tensorflow.
+        saved.close()
+        raw = np.load(path, allow_pickle=True)
+        if "arr_0" not in raw.files:
+            raise ValueError(
+                f"classy_szlite: {path} is not a recognised emulator file."
+            )
+        return raw["arr_0"].item()                                   # may raise ModuleNotFoundError
+    return _unflatten_plain(saved)
 
 
 def _unflatten_plain(saved: np.lib.npyio.NpzFile) -> dict:
@@ -135,21 +127,13 @@ class Emulator:
 
     @classmethod
     def from_npz(cls, path: str) -> "Emulator":
-        """Load an emulator from a CosmoPower-style ``.npz`` file.
+        """Load an emulator from a CosmoPower ``_v2_plain.npz`` file.
 
-        Supports two on-disk layouts:
-
-        * **plain** (no pickle): produced by ``np.savez(**flat_dict)`` with the
-          list-valued fields (weights/biases/alphas/betas) flattened to keys
-          like ``weights___0, weights___1, ...`` plus ``weights___n``.  Loads
-          with ``allow_pickle=False`` — no tensorflow / cosmopower import
-          required.  This is the recommended distribution format.
-
-        * **legacy / pickled**: produced by ``np.save(obj, allow_pickle=True)``
-          where ``obj`` is a CosmoPower model instance.  Unpickling references
-          ``tensorflow.python.trackable.data_structures.ListWrapper``, so
-          tensorflow must be importable.  Kept for backward compatibility
-          with existing ``cosmopower-organization/ede`` files.
+        The plain format is produced by ``np.savez(**flat_dict)`` with the
+        list-valued fields (``weights_``, ``biases_``, ``alphas_``, ``betas_``)
+        flattened to keys like ``weights_.0, weights_.1, ..., weights_.n``.
+        Loads with ``allow_pickle=False`` — no tensorflow / cosmopower import
+        required.
         """
         d = _load_emulator_dict(path)
 

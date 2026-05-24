@@ -37,13 +37,9 @@ jobs:
         if: steps.cache-emu.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          # Prefer the pickle-free _v2_plain.npz files (PR #1 in upstream
-          # ede repo) — they don't require tensorflow / cosmopower to
-          # deserialise. Falls through to the legacy _v2.npz if the
-          # plain variant isn't on `main` yet (until the PR is merged
-          # we point at the branch that adds them).
-          BRANCH="add-plain-no-pickle-npz"
-          BASE="https://raw.githubusercontent.com/cosmopower-organization/ede/${BRANCH}"
+          # Pickle-free _v2_plain.npz files — load with allow_pickle=False,
+          # no tensorflow / cosmopower needed.
+          BASE="https://raw.githubusercontent.com/cosmopower-organization/ede/main"
           DEST="${CLASSY_SZLITE_DATA_DIR}/ede"
           mkdir -p "$DEST"/{TTTEEE,PK,PP,growth-and-distances,derived-parameters}
           files=(

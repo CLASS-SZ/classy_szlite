@@ -24,57 +24,39 @@ Place them at one of:
 1. The path in the `$CLASSY_SZLITE_DATA_DIR` environment variable, **or**
 2. `~/class_sz_data/` (default new location)
 
-Expected layout:
+Expected layout — `classy_szlite` reads the pickle-free
+`*_v2_plain.npz` files (loaded with `allow_pickle=False`, no
+TensorFlow / cosmopower needed):
 
 ```
 $CLASSY_SZLITE_DATA_DIR/
 └── ede/
     ├── PK/
-    │   ├── PKL_v2.npz
-    │   └── PKNL_v2.npz
+    │   ├── PKL_v2_plain.npz
+    │   └── PKNL_v2_plain.npz
     ├── TTTEEE/
-    │   ├── TT_v2.npz
-    │   ├── TE_v2.npz
-    │   └── EE_v2.npz
+    │   ├── TT_v2_plain.npz
+    │   ├── TE_v2_plain.npz
+    │   └── EE_v2_plain.npz
     ├── PP/
-    │   └── PP_v2.npz
+    │   └── PP_v2_plain.npz
     ├── growth-and-distances/
-    │   ├── HZ_v2.npz
-    │   ├── DAZ_v2.npz
-    │   └── S8Z_v2.npz
+    │   ├── HZ_v2_plain.npz
+    │   ├── DAZ_v2_plain.npz
+    │   └── S8Z_v2_plain.npz
     └── derived-parameters/
-        └── DER_v2.npz
+        └── DER_v2_plain.npz
 ```
 
-The ede-v2 emulator `.npz` files live in the
+The files live in the
 [`cosmopower-organization/ede`](https://github.com/cosmopower-organization/ede)
-GitHub repository. Clone it and either point
-`$CLASSY_SZLITE_DATA_DIR` at the checkout or symlink the contents into
-`~/class_sz_data/`:
+repository. Clone it and either point `$CLASSY_SZLITE_DATA_DIR` at
+the checkout or symlink the contents into `~/class_sz_data/`:
 
 ```bash
 git clone https://github.com/cosmopower-organization/ede ~/cosmopower-ede
 export CLASSY_SZLITE_DATA_DIR=~/cosmopower-ede
 ```
-
-### `_v2.npz` vs `_v2_plain.npz`
-
-Each emulator is available in two on-disk formats with **identical
-weights**:
-
-- **`<name>_v2.npz`** — original CosmoPower output. Loading requires
-  `cosmopower` to be importable, which transitively imports
-  `tensorflow`. Use this if you already have the CosmoPower stack
-  installed.
-
-- **`<name>_v2_plain.npz`** — pickle-free re-saved form
-  (`np.savez_compressed` with flat keys, ~8 % smaller). Loads with
-  `allow_pickle=False`, **no TensorFlow / cosmopower needed**. Use
-  this for slim deploy targets, CI, or anyone who doesn't want a TF
-  install on their critical path.
-
-`classy_szlite` **prefers `_v2_plain.npz` automatically** when present
-and falls back to `_v2.npz` otherwise — no configuration needed.
 
 ### Why the v2 emulators
 

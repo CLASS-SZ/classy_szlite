@@ -12,18 +12,19 @@ from functools import lru_cache
 from ._emulator import Emulator, default_data_dir
 
 
-# File IDs (paths relative to <data_root>/ede/)
+# File IDs (paths relative to <data_root>/ede/).
+# Pickle-free files from cosmopower-organization/ede@main.
 _EMULATOR_FILES = {
-    "tt":   "TTTEEE/TT_v2.npz",
-    "te":   "TTTEEE/TE_v2.npz",
-    "ee":   "TTTEEE/EE_v2.npz",
-    "pp":   "PP/PP_v2.npz",
-    "pkl":  "PK/PKL_v2.npz",
-    "pknl": "PK/PKNL_v2.npz",
-    "hz":   "growth-and-distances/HZ_v2.npz",
-    "daz":  "growth-and-distances/DAZ_v2.npz",
-    "s8z":  "growth-and-distances/S8Z_v2.npz",
-    "der":  "derived-parameters/DER_v2.npz",
+    "tt":   "TTTEEE/TT_v2_plain.npz",
+    "te":   "TTTEEE/TE_v2_plain.npz",
+    "ee":   "TTTEEE/EE_v2_plain.npz",
+    "pp":   "PP/PP_v2_plain.npz",
+    "pkl":  "PK/PKL_v2_plain.npz",
+    "pknl": "PK/PKNL_v2_plain.npz",
+    "hz":   "growth-and-distances/HZ_v2_plain.npz",
+    "daz":  "growth-and-distances/DAZ_v2_plain.npz",
+    "s8z":  "growth-and-distances/S8Z_v2_plain.npz",
+    "der":  "derived-parameters/DER_v2_plain.npz",
 }
 
 # Subdir under the data root
@@ -77,32 +78,22 @@ DEFAULT_COSMO = {
 # Lazy emulator loading + cache
 # ---------------------------------------------------------------------------
 
-def _plain_variant(rel: str) -> str:
-    """foo/TT_v2.npz -> foo/TT_v2_plain.npz."""
-    return rel[:-len(".npz")] + "_plain.npz"
-
-
 @lru_cache(maxsize=16)
 def get_emulator(name: str) -> Emulator:
-    """Load (and cache) the named emulator.
-
-    Prefers the **pickle-free** ``_plain.npz`` variant if present, so users
-    don't need tensorflow installed to deserialise the file.  Falls back to
-    the original pickled ``v2.npz`` for backwards compatibility.
-    """
+    """Load (and cache) the named emulator."""
     if name not in _EMULATOR_FILES:
         raise ValueError(f"Unknown emulator name {name!r}. "
                          f"Supported: {list(_EMULATOR_FILES)}")
+    rel  = _EMULATOR_FILES[name]
     root = default_data_dir()
-    base = os.path.join(root, _DATA_SUBDIR, _EMULATOR_FILES[name])
-    plain = os.path.join(root, _DATA_SUBDIR, _plain_variant(_EMULATOR_FILES[name]))
-    if os.path.isfile(plain):
-        return Emulator.from_npz(plain)
-    if os.path.isfile(base):
-        return Emulator.from_npz(base)
-    raise FileNotFoundError(
-        f"classy_szlite: emulator file not found.  Looked for:\n  {plain}\n  {base}"
-    )
+    path = os.path.join(root, _DATA_SUBDIR, rel)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"classy_szlite: emulator file not found: {path}\n"
+            f"Get the v2_plain emulator files from "
+            f"https://github.com/cosmopower-organization/ede"
+        )
+    return Emulator.from_npz(path)
 
 
 def output_is_log10(name: str) -> bool:
