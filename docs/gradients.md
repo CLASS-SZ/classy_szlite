@@ -16,10 +16,9 @@ A pure-JAX forward model unlocks the entire JAX ecosystem on top of
 - **Gradient-based sampling** — Hamiltonian Monte Carlo / NUTS
   (`numpyro`, `blackjax`) need $\nabla \log p$. We give it exactly,
   not via finite differences.
-- **MAP / VI** — `jaxopt`, `optimistix`, `optax` minimisers all consume
-  `jax.grad`.
-- **Differentiable simulation-based inference** — couple to flow-based
-  posteriors (`flowMC`, `sbi`) that exploit gradients.
+- **MAP** — `scipy.optimize.minimize` (L-BFGS-B, etc.) with exact
+  `jax.grad` gradients converges in ~20–40 forward+gradient
+  evaluations (see [Examples](examples.md)).
 
 Finite differences are slow, noisy, and require choosing $\varepsilon$.
 Autodiff is exact (up to floating point) and costs roughly the same as
