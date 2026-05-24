@@ -113,26 +113,31 @@ plt.grid(True, alpha=0.3, which="both"); plt.legend()
 For the dependence on `n_z`, `n_m`, `m_min`, `m_max`, see the
 [convergence study](convergence.md).
 
-## Bestfit + NUTS sampling on Cl^yy bandpowers (σ8 sweep)
+## Bestfit + NUTS sampling on Cl^yy bandpowers (baseline vs lows8)
 
 The factory closure makes both gradient-based optimisation (L-BFGS,
 Adam, …) and Hamiltonian-style samplers (NUTS, HMC) a natural fit:
 each forward pass is one ~5 ms `ev(profile)` call, gradients are
 exact via `jax.grad`, and there is no proposal-covariance tuning.
 
-The example below loads a tSZ Cl^yy bandpower dataset and, for each of
-**three fitting cosmologies that differ only in σ8** (`ln10_10_As`),
-does two things:
+The example fits a tSZ Cl^yy bandpower dataset at **two fixed
+cosmologies** that share the same ω_b, ω_cdm, n_s but differ in σ8
+through (ln10_10_As, H0):
 
-1. **L-BFGS bestfit** of (P₀, β) using `scipy.optimize.minimize` with
-   `jax.grad` gradients — converges in ~20–40 function evaluations.
-2. **NumPyro NUTS** for the full posterior, initialised at the bestfit
-   for fast warmup (~40 s for 8000 samples × 4 chains).
+| Cosmology | ln10_10_As | H0   | σ8     |
+| --- | --- | --- | --- |
+| **baseline** | 3.060 | 68.22 | ≈ 0.81 |
+| **lows8** (Flamingo low-S8) | 2.910 | 67.14 | ≈ 0.75 |
 
-This is a clean demonstration of the well-known **σ8 ↔ P₀ degeneracy**:
-lowering σ8 in the fitting cosmology means fewer / lighter clusters, so
-the bestfit pressure normalisation has to move up to match the same
-bandpower amplitude.
+For each cosmology we run:
+
+1. **L-BFGS bestfit** of (P₀, β) via `scipy.optimize.minimize` with
+   exact `jax.grad` gradients — converges in ~20–40 fn evals,
+   < 0.5 s.
+2. **NumPyro NUTS** for the full posterior, initialised at the
+   bestfit — ~35–40 s for 8000 samples × 4 chains.
+3. Loads the matching **cobaya RW-MH** chain (if present on disk) for
+   a sampler-vs-sampler overlay.
 
 ```python
 import jax, jax.numpy as jnp
@@ -146,7 +151,6 @@ import classy_szlite as csl
 ell, y, cov = load_bandpowers()                       # (N,) (N,) (N, N)
 inv_cov     = jnp.asarray(np.linalg.inv(cov))
 
-# --- per-σ8 fit ---
 def build_forward(cosmo, ell_np):
     ell = jnp.asarray(ell_np)
     ev  = csl.cl_yy_factory(cosmo, ell)
@@ -158,13 +162,19 @@ def build_forward(cosmo, ell_np):
         return dl_factor * (c1 + c2)
     return forward
 
-for As in [3.060, 2.950, 2.850]:                     # high / med / low σ8
-    cosmo   = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118, H0=68.22,
-                              tau_reio=0.0561, ln10_10_As=As, n_s=0.9743)
+FIT_COSMOS = [
+    dict(label="baseline (σ8≈0.81)", ln10_10_As=3.060, H0=68.22),
+    dict(label="lows8 (σ8≈0.75)",    ln10_10_As=2.910, H0=67.14116850291264),
+]
+
+for cfg in FIT_COSMOS:
+    cosmo   = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118,
+                              tau_reio=0.0561, n_s=0.9743,
+                              ln10_10_As=cfg["ln10_10_As"], H0=cfg["H0"])
     s8      = csl.derived(cosmo)["sigma_8"]
     forward = build_forward(cosmo, ell)
 
-    # ---- L-BFGS bestfit with JAX gradients ----
+    # L-BFGS bestfit with JAX gradients
     def neg_log_like(x):
         r = jnp.asarray(y) - forward(x[0], x[1])
         return 0.5 * r @ inv_cov @ r
@@ -172,9 +182,9 @@ for As in [3.060, 2.950, 2.850]:                     # high / med / low σ8
     bf = so.minimize(lambda x: float(nll(x)), [8.13, 5.48],
                      jac=lambda x: np.asarray(gnll(x)),
                      method="L-BFGS-B", bounds=[(0.1, 20), (0.5, 10)])
-    print(f"σ8={s8:.3f}  bestfit P0={bf.x[0]:.2f}  β={bf.x[1]:.2f}  χ²={2*bf.fun:.1f}")
+    print(f"{cfg['label']:25s}  bestfit P0={bf.x[0]:.2f} β={bf.x[1]:.2f}  χ²={2*bf.fun:.1f}")
 
-    # ---- NUTS, initialised at the bestfit ----
+    # NUTS, init at bestfit
     def model():
         P0   = numpyro.sample("P0",   dist.Uniform(0.0, 20.0))
         beta = numpyro.sample("beta", dist.Uniform(0.0, 10.0))
@@ -188,29 +198,32 @@ for As in [3.060, 2.950, 2.850]:                     # high / med / low σ8
                           "beta": jnp.full(4, float(bf.x[1]))})
 ```
 
-Output on a laptop (single-thread JAX, sequential chains; bestfit
-time excludes the NUTS run):
+Output on a laptop (single-thread JAX):
 
 ```
-high σ8 (≈0.81)     L-BFGS bestfit in 0.4 s, 38 fn evals → P0=1.20  β=2.74  χ²=12.3/6
-                    NUTS in 41 s  →  posterior P0 = 1.92 ± 1.60  β = 3.19 ± 0.77
-medium σ8 (≈0.77)   L-BFGS bestfit in 0.4 s, 24 fn evals → P0=1.47  β=2.71  χ²=12.3/6
-                    NUTS in 38 s  →  posterior P0 = 2.34 ± 1.85  β = 3.16 ± 0.74
-low σ8 (≈0.74)      L-BFGS bestfit in 0.4 s, 36 fn evals → P0=3.42  β=3.46  χ²=15.8/6
-                    NUTS in 35 s  →  posterior P0 = 2.75 ± 1.90  β = 3.11 ± 0.66
+baseline (σ8≈0.81)   L-BFGS bestfit in 0.4 s, 38 fn evals → P0=1.20  β=2.74  χ²=12.3/6
+                     NUTS in 41 s  →  posterior P0 = 1.92 ± 1.60  β = 3.19 ± 0.77
+lows8    (σ8≈0.75)   L-BFGS bestfit in 0.4 s, 27 fn evals → P0=1.54  β=2.71  χ²=12.3/6
+                     NUTS in 36 s  →  posterior P0 = 2.49 ± 1.91  β = 3.18 ± 0.74
 ```
 
-**Bestfit curves on the bandpowers** — the low-σ8 case visibly needs a
-much higher P₀ to match the bandpower amplitude:
+**Bandpowers + bestfit curves + NUTS 68% bands** for both cosmologies.
+The two bestfit curves are almost indistinguishable in the data range,
+but the underlying GNFW shapes — and especially the P₀ values that
+NUTS uncovers — are very different:
 
-![L-BFGS bestfit on Cl^yy bandpowers across a σ8 sweep](_static/synthetic_bestfit.png)
+![Bestfit + NUTS 68% band on Cl^yy bandpowers, baseline vs lows8](_static/synthetic_bestfit.png)
 
-**Posterior triangle plot** (`getdist`) — the P₀ mode shifts to higher
-values as σ8 decreases; β is much less sensitive:
+**Triangle plot** with **4 contours** — NUTS (solid filled) +
+cobaya RW-MH (dashed) for each cosmology. The NUTS and MH posteriors
+overlap to within sampling noise (good sampler-vs-sampler agreement),
+and the σ8 ↔ P₀ degeneracy clearly shifts the lows8 (red) posterior
+to higher P₀ than the baseline (blue):
 
-![NUTS posteriors for three fitting cosmologies in a σ8 sweep](_static/synthetic_corner.png)
+![Triangle plot: NUTS + cobaya MH posteriors for baseline and lows8 cosmologies](_static/synthetic_corner.png)
 
-The full runnable script (loader + bestfit + NUTS + plotting) is at
+The full runnable script (loader + bestfit + NUTS + MH overlay +
+plotting) is at
 [`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py).
 
 ## End-to-end MCMC pattern (cobaya Theory)

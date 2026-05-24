@@ -1,29 +1,35 @@
-"""Profile-only NUTS + L-BFGS bestfit on a Cl^yy bandpower dataset,
-with a low-σ8 sweep.
+"""Profile-only NUTS + L-BFGS bestfit on Cl^yy bandpowers, for two
+fitting cosmologies (baseline and lows8), with cobaya RW-MH overlays.
 
-What this script does:
+What this script does, for each of two fitting cosmologies that share
+the same baseline ω_b, ω_cdm, n_s but differ in σ8 via (ln10_10_As, H0):
 
-1.  Loads a tSZ Cl^yy bandpower dataset (bandpowers + covariance + ell
-    grid).  The bandpowers are treated as a generic synthetic dataset
-    for the purposes of this example.
+  1. L-BFGS-B bestfit of (P0, β) using scipy.minimize with exact
+     jax.grad gradients on the classy_szlite.cl_yy_factory closure.
+  2. NumPyro NUTS for the full posterior, initialised at the bestfit.
+  3. (If a matching cobaya chain is present on disk) load it via
+     getdist for an MH overlay.
 
-2.  For each of three test cosmologies (high, medium, low σ8 — tuned
-    via ``ln10_10_As``), assumed *fixed* at fit time, it
-        (a) finds the bestfit ``(P0, beta)`` via L-BFGS-B with exact
-            ``jax.grad`` gradients (no finite differences),
-        (b) draws the full posterior with NumPyro NUTS using
-            ``classy_szlite.cl_yy_factory`` as the gradient-friendly
-            forward model (~5 ms / leapfrog step).
+Then writes:
 
-3.  Writes two figures:
-       * ``synthetic_bestfit.png`` — bandpowers ± σ + bestfit curves
-         for all three cosmologies overlaid
-       * ``synthetic_corner.png``  — getdist triangle plot of the
-         three NUTS posteriors
+  * ``synthetic_bestfit.png``  — bandpowers ± σ + 2 bestfit curves +
+    2 NUTS 68% bands.
+  * ``synthetic_corner.png``   — getdist triangle plot with 4
+    contours: NUTS (this work) + cobaya RW-MH (baseline), for each
+    cosmology.
 
-This is a clean demonstration of the well-known σ8 ↔ P0 degeneracy:
-lower σ8 in the *fitting* cosmology forces the bestfit ``P0`` upward
-to match the observed bandpower amplitude.
+Two cosmologies:
+
+  * **baseline**: standard 6-param fixed cosmology used in the may26
+    cobaya run (σ8 ≈ 0.81).
+  * **lows8**: Flamingo low-S8 (ln10_10_As=2.910, H0=67.14) — σ8 ≈
+    0.74. This shifts P0 upward to compensate for the reduced
+    cluster abundance.
+
+Cobaya chains (optional overlays) are expected at:
+
+  * baseline → ``$CLYY_COBAYA_BASE`` / ``~/Desktop/class-sz-plugin-tests/chains/clyy_v2``
+  * lows8    → ``$CLYY_COBAYA_LOWS8`` / ``~/Desktop/class-sz-plugin-tests/chains/clyy_v2_lows8``
 
 Run from the classy_szlite repo root:
 
@@ -31,9 +37,6 @@ Run from the classy_szlite repo root:
 
 Requires (beyond classy_szlite): numpyro, scipy, getdist, matplotlib.
 Emulator data at $CLASSY_SZLITE_DATA_DIR or ~/class_sz_data/.
-
-The bandpower dataset path is taken from $CLYY_DATA_DIR
-(default: ~/Desktop/class-sz-plugin-tests/data).
 """
 from __future__ import annotations
 import os
@@ -62,18 +65,36 @@ ELL_FILE  = "ls_standard_newer3_bp_CIbbp_newcovlmin2000_plancklmax600_test.txt"
 DATA_FILE = "data_ps-ell-y2-erry2_total-act-26_lmin2000_lmax600.txt"
 COV_FILE  = "cov_standard_newer3_bp_CIbbp_newcovlmin2000_plancklmax600_test.txt"
 
-# Reference Planck-18 LCDM-equivalent base cosmology; the σ8 sweep just
-# varies ln10_10_As around this.
-BASE_COSMO = csl.CosmoParams(
-    omega_b=0.0226, omega_cdm=0.118, H0=68.22,
-    tau_reio=0.0561, ln10_10_As=3.06, n_s=0.9743,
-)
+COBAYA_BASE_DEFAULT  = "~/Desktop/class-sz-plugin-tests/chains/clyy_v2"
+COBAYA_LOWS8_DEFAULT = "~/Desktop/class-sz-plugin-tests/chains/clyy_v2_lows8"
 
-# Three fit cosmologies — only ln10_10_As varies, generating a σ8 ladder.
+# Two fitting cosmologies.
+#   baseline: the may26 fixed-cosmology cobaya YAML
+#   lows8:    the Flamingo low-S8 setup
+#             (ln10_10_As=2.910, H0=67.14, omega_b/omega_cdm/n_s same)
 FIT_COSMOS = [
-    dict(label="high σ8 (≈0.81)",  ln10_10_As=3.060, color="C0"),
-    dict(label="medium σ8 (≈0.77)", ln10_10_As=2.950, color="C2"),
-    dict(label="low σ8 (≈0.74)",    ln10_10_As=2.850, color="C3"),
+    dict(
+        key   = "baseline",
+        label = "baseline (σ8≈0.81)",
+        color = "C0",
+        cobaya_root = os.environ.get("CLYY_COBAYA_BASE",  COBAYA_BASE_DEFAULT),
+        cosmo_kwargs = dict(
+            omega_b=0.0226, omega_cdm=0.118,
+            H0=68.22, tau_reio=0.0561,
+            ln10_10_As=3.06, n_s=0.9743,
+        ),
+    ),
+    dict(
+        key   = "lows8",
+        label = "lows8 (σ8≈0.74)",
+        color = "C3",
+        cobaya_root = os.environ.get("CLYY_COBAYA_LOWS8", COBAYA_LOWS8_DEFAULT),
+        cosmo_kwargs = dict(
+            omega_b=0.0226, omega_cdm=0.118,
+            H0=67.14116850291264, tau_reio=0.0561,
+            ln10_10_As=2.910, n_s=0.9743,
+        ),
+    ),
 ]
 
 
@@ -104,7 +125,8 @@ def build_forward(cosmo, ell_np):
     return forward
 
 
-def find_bestfit(forward, y, inv_cov, x0=(8.13, 5.48), bounds=((0.1, 20.), (0.5, 10.))):
+def find_bestfit(forward, y, inv_cov, x0=(8.13, 5.48),
+                 bounds=((0.1, 20.), (0.5, 10.))):
     """L-BFGS-B bestfit using exact jax.grad gradients."""
     y_jnp   = jnp.asarray(y)
     inv_jnp = jnp.asarray(inv_cov)
@@ -144,7 +166,6 @@ def run_nuts(forward, y, inv_cov, P0_init=8.13, beta_init=5.48,
                 num_warmup=num_warmup, num_samples=num_samples,
                 num_chains=num_chains, chain_method="sequential",
                 progress_bar=False)
-    # init_params must broadcast over chains
     init = {
         "P0":   jnp.full((num_chains,), P0_init),
         "beta": jnp.full((num_chains,), beta_init),
@@ -161,20 +182,17 @@ def main():
     inv_cov = np.linalg.inv(cov)
     print(f"Bandpowers: {len(ell_np)} bins, ell ∈ [{ell_np.min():.0f}, {ell_np.max():.0f}]")
 
-    # Per-cosmology bestfit + NUTS
+    from getdist import MCSamples, loadMCSamples
+
     results = []
     for cfg in FIT_COSMOS:
-        cosmo = csl.CosmoParams(
-            omega_b=BASE_COSMO.omega_b, omega_cdm=BASE_COSMO.omega_cdm,
-            H0=BASE_COSMO.H0, tau_reio=BASE_COSMO.tau_reio,
-            ln10_10_As=cfg["ln10_10_As"], n_s=BASE_COSMO.n_s,
-        )
+        cosmo = csl.CosmoParams(**cfg["cosmo_kwargs"])
         s8 = csl.derived(cosmo)["sigma_8"]
         print()
         print(f"=== {cfg['label']}  [σ8={s8:.4f}] ===")
         forward = build_forward(cosmo, ell_np)
 
-        # Bestfit
+        # L-BFGS bestfit
         t0 = time.perf_counter()
         bf = find_bestfit(forward, y, inv_cov)
         chi2_bf = 2 * bf.fun
@@ -188,74 +206,121 @@ def main():
                         P0_init=float(bf.x[0]), beta_init=float(bf.x[1]))
         print(f"  NUTS in {time.perf_counter()-t0:.1f} s")
         samples = mcmc.get_samples()
-        print(f"  posterior P0={np.mean(samples['P0']):.3f}±{np.std(samples['P0']):.3f}  "
+        nuts_arr = np.column_stack([np.asarray(samples["P0"]),
+                                     np.asarray(samples["beta"])])
+        print(f"  NUTS posterior P0={np.mean(samples['P0']):.3f}±{np.std(samples['P0']):.3f}  "
               f"β={np.mean(samples['beta']):.3f}±{np.std(samples['beta']):.3f}")
 
+        # cobaya RW-MH overlay (if chain present)
+        cobaya_root = os.path.expanduser(cfg["cobaya_root"])
+        if os.path.isfile(cobaya_root + ".1.txt"):
+            cobaya_gd = loadMCSamples(cobaya_root, settings={"ignore_rows": 0.3})
+            print(f"  cobaya MH overlay loaded from {cobaya_root}*.txt  "
+                  f"(n={cobaya_gd.numrows})")
+        else:
+            cobaya_gd = None
+            print(f"  no cobaya chain at {cobaya_root}*.txt — skipping MH overlay")
+
         results.append({
-            "cfg":     cfg,
-            "cosmo":   cosmo,
-            "sigma_8": s8,
-            "forward": forward,
-            "bf":      bf,
-            "chi2_bf": chi2_bf,
-            "samples": samples,
+            "cfg":       cfg,
+            "cosmo":     cosmo,
+            "sigma_8":   s8,
+            "forward":   forward,
+            "bf":        bf,
+            "chi2_bf":   chi2_bf,
+            "samples":   samples,
+            "nuts_arr":  nuts_arr,
+            "cobaya_gd": cobaya_gd,
         })
 
     # ---------- plots --------------------------------------------------
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from getdist import MCSamples
     from getdist import plots as gdplots
 
     out_dir = os.path.dirname(__file__) or "."
 
-    # 1) Bestfit vs bandpowers
+    # 1) Cl^yy: bandpowers + bestfit curve + NUTS 68% band per cosmology
     ell_dense = np.geomspace(50, 9000, 100)
     fig, ax = plt.subplots(figsize=(7.5, 4.7), dpi=300)
-    sigma = np.sqrt(np.diag(cov))
-    ax.errorbar(ell_np, y, yerr=sigma, fmt="ko", capsize=3, ms=4,
-                label="bandpower data", zorder=5)
+    sigma_bp = np.sqrt(np.diag(cov))
+    ax.errorbar(ell_np, y, yerr=sigma_bp, fmt="ko", capsize=3, ms=4,
+                label="bandpower data", zorder=10)
     for r in results:
         forward_dense = build_forward(r["cosmo"], ell_dense)
+        # Bestfit
         dl_bf = np.asarray(forward_dense(jnp.asarray(r["bf"].x[0]),
                                           jnp.asarray(r["bf"].x[1])))
-        ax.plot(ell_dense, dl_bf, "-", color=r["cfg"]["color"], lw=2,
-                label=f"bestfit @ σ8={r['sigma_8']:.3f}  "
+        # 68% band from 500 NUTS samples
+        idx = np.random.default_rng(0).choice(len(r["nuts_arr"]), 500, replace=False)
+        mus = np.stack([np.asarray(forward_dense(jnp.asarray(r["nuts_arr"][i, 0]),
+                                                  jnp.asarray(r["nuts_arr"][i, 1])))
+                        for i in idx])
+        lo, hi = np.percentile(mus, [16, 84], axis=0)
+        c = r["cfg"]["color"]
+        ax.fill_between(ell_dense, lo, hi, color=c, alpha=0.25,
+                        label=f"{r['cfg']['label']} 68% (NUTS)")
+        ax.plot(ell_dense, dl_bf, "-", color=c, lw=2,
+                label=f"{r['cfg']['label']} bestfit "
                       f"(P0={r['bf'].x[0]:.2f}, β={r['bf'].x[1]:.2f}, "
                       f"χ²={r['chi2_bf']:.1f}/{len(y)-2})")
     ax.set_xscale("log"); ax.set_yscale("log")
     ax.set_xlabel(r"$\ell$"); ax.set_ylabel(r"$10^{12}\, D_\ell^{yy}$")
-    ax.set_title("L-BFGS bestfit on $C_\\ell^{yy}$ bandpowers "
-                 "across a σ8 sweep")
+    ax.set_title("Bestfit + NUTS 68% band on $C_\\ell^{yy}$ bandpowers")
     ax.grid(True, which="both", alpha=0.3); ax.legend(fontsize=8.5, loc="lower center")
     out_bf = os.path.join(out_dir, "synthetic_bestfit.png")
     fig.savefig(out_bf, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  -> wrote {out_bf}")
 
-    # 2) Triangle plot of the three NUTS posteriors
+    # 2) Triangle plot: 4 contours (2 NUTS + 2 MH) per cosmology
     gd_samples = []
+    labels     = []
+    colors     = []
+    contour_ls = []
+    filled     = []
     for r in results:
-        arr = np.column_stack([np.asarray(r["samples"]["P0"]),
-                                np.asarray(r["samples"]["beta"])])
-        gd = MCSamples(
-            samples=arr,
+        c = r["cfg"]["color"]
+        # NUTS (solid filled)
+        nuts_gd = MCSamples(
+            samples=r["nuts_arr"],
             names=["P0", "beta"],
             labels=[r"P_0^{\rm GNFW}", r"\beta^{\rm GNFW}"],
-            label=f"σ8 = {r['sigma_8']:.3f}",
+            label=f"NUTS — {r['cfg']['label']}",
         )
-        gd_samples.append(gd)
+        gd_samples.append(nuts_gd)
+        labels.append(nuts_gd.label)
+        colors.append(c)
+        contour_ls.append("-"); filled.append(True)
+        # cobaya MH (dashed, unfilled). Extract the (P0GNFW, betaGNFW)
+        # columns into a fresh MCSamples that aligns with the NUTS one.
+        if r["cobaya_gd"] is not None:
+            src = r["cobaya_gd"]
+            p0  = src.samples[:, src.paramNames.numberOfName("P0GNFW")]
+            bt  = src.samples[:, src.paramNames.numberOfName("betaGNFW")]
+            mh = MCSamples(
+                samples=np.column_stack([p0, bt]),
+                weights=src.weights,
+                names=["P0", "beta"],
+                labels=[r"P_0^{\rm GNFW}", r"\beta^{\rm GNFW}"],
+                label=f"cobaya MH — {r['cfg']['label']}",
+            )
+            gd_samples.append(mh)
+            labels.append(mh.label)
+            colors.append(c)
+            contour_ls.append("--"); filled.append(False)
 
     g = gdplots.get_subplot_plotter(width_inch=5.5)
     g.settings.alpha_filled_add = 0.4
-    g.settings.legend_fontsize  = 11
+    g.settings.legend_fontsize  = 10
     g.triangle_plot(
         gd_samples,
         params=["P0", "beta"],
-        filled=True,
-        legend_labels=[s.label for s in gd_samples],
-        contour_colors=[r["cfg"]["color"] for r in results],
+        filled=filled,
+        legend_labels=labels,
+        contour_colors=colors,
+        contour_ls=contour_ls,
     )
     out_corner = os.path.join(out_dir, "synthetic_corner.png")
     g.export(out_corner, dpi=300)
