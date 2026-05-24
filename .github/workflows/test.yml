@@ -12,23 +12,68 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+    env:
+      # classy_szlite reads this; mirrors the layout
+      # <root>/ede/{TTTEEE,PK,PP,growth-and-distances,derived-parameters}/<file>_v2.npz
+      CLASSY_SZLITE_DATA_DIR: ${{ github.workspace }}/_emu_data
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Cache cosmopower-ede v2 emulator data (~128 MB)
+        id: cache-emu
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CLASSY_SZLITE_DATA_DIR }}
+          # Cache key tied to the file list — bump only when the registry adds files
+          key: cosmopower-ede-v2-2026-05-${{ hashFiles('classy_szlite/_registry.py') }}
+
+      - name: Fetch v2 emulator files from cosmopower-organization/ede
+        if: steps.cache-emu.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          BASE="https://raw.githubusercontent.com/cosmopower-organization/ede/main"
+          DEST="${CLASSY_SZLITE_DATA_DIR}/ede"
+          mkdir -p "$DEST"/{TTTEEE,PK,PP,growth-and-distances,derived-parameters}
+          files=(
+            TTTEEE/TT_v2.npz
+            TTTEEE/TE_v2.npz
+            TTTEEE/EE_v2.npz
+            PP/PP_v2.npz
+            PK/PKL_v2.npz
+            PK/PKNL_v2.npz
+            growth-and-distances/HZ_v2.npz
+            growth-and-distances/DAZ_v2.npz
+            growth-and-distances/S8Z_v2.npz
+            derived-parameters/DER_v2.npz
+          )
+          for f in "${files[@]}"; do
+            echo "  fetching $f"
+            curl -sSL --retry 3 --retry-delay 2 -o "$DEST/$f" "$BASE/$f"
+          done
+          echo "--- downloaded sizes ---"
+          du -sh "$DEST"
+          find "$DEST" -name "*.npz" -exec ls -l {} \;
+
       - name: Install package + dev deps
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]" pytest-cov
-      - name: Import smoke test (no emulator data on CI)
+
+      - name: Import smoke test
         run: |
           python -c "import classy_szlite; print(classy_szlite.__version__)"
           python -c "from classy_szlite import CosmoParams, ProfileParamsA10; print(CosmoParams())"
-      - name: Run pytest with coverage (data-dependent tests skipped on CI)
+
+      - name: Run pytest with coverage (data-backed tests now active)
         run: |
           pytest -v --cov=classy_szlite --cov-report=xml --cov-report=term
+
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
         uses: codecov/codecov-action@v4
