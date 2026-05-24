@@ -78,6 +78,14 @@ html_context = {
     "doc_path":      "docs",
 }
 
+# Force the LEFT sidebar to show the full toctree on EVERY page.
+# pydata-sphinx-theme's default per-page "Section Navigation" goes empty
+# when a page is a toctree leaf (no children of its own). Use "sidebar-nav-bs"
+# everywhere so users always see the full table of contents.
+html_sidebars = {
+    "**": ["sidebar-nav-bs"],
+}
+
 # autodoc: include all members by default
 autodoc_default_options = {
     "members":          True,
