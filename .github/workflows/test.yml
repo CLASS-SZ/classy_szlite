@@ -33,24 +33,30 @@ jobs:
           # Cache key tied to the file list — bump only when the registry adds files
           key: cosmopower-ede-v2-2026-05-${{ hashFiles('classy_szlite/_registry.py') }}
 
-      - name: Fetch v2 emulator files from cosmopower-organization/ede
+      - name: Fetch pickle-free v2_plain emulator files from cosmopower-organization/ede
         if: steps.cache-emu.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          BASE="https://raw.githubusercontent.com/cosmopower-organization/ede/main"
+          # Prefer the pickle-free _v2_plain.npz files (PR #1 in upstream
+          # ede repo) — they don't require tensorflow / cosmopower to
+          # deserialise. Falls through to the legacy _v2.npz if the
+          # plain variant isn't on `main` yet (until the PR is merged
+          # we point at the branch that adds them).
+          BRANCH="add-plain-no-pickle-npz"
+          BASE="https://raw.githubusercontent.com/cosmopower-organization/ede/${BRANCH}"
           DEST="${CLASSY_SZLITE_DATA_DIR}/ede"
           mkdir -p "$DEST"/{TTTEEE,PK,PP,growth-and-distances,derived-parameters}
           files=(
-            TTTEEE/TT_v2.npz
-            TTTEEE/TE_v2.npz
-            TTTEEE/EE_v2.npz
-            PP/PP_v2.npz
-            PK/PKL_v2.npz
-            PK/PKNL_v2.npz
-            growth-and-distances/HZ_v2.npz
-            growth-and-distances/DAZ_v2.npz
-            growth-and-distances/S8Z_v2.npz
-            derived-parameters/DER_v2.npz
+            TTTEEE/TT_v2_plain.npz
+            TTTEEE/TE_v2_plain.npz
+            TTTEEE/EE_v2_plain.npz
+            PP/PP_v2_plain.npz
+            PK/PKL_v2_plain.npz
+            PK/PKNL_v2_plain.npz
+            growth-and-distances/HZ_v2_plain.npz
+            growth-and-distances/DAZ_v2_plain.npz
+            growth-and-distances/S8Z_v2_plain.npz
+            derived-parameters/DER_v2_plain.npz
           )
           for f in "${files[@]}"; do
             echo "  fetching $f"
