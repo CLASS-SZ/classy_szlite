@@ -72,6 +72,13 @@ PE_FACTOR  = (2.0 * XH + 2.0) / (5.0 * XH + 3.0)   # P_e / P_th ≈ 0.5176
 
 _SIGMA_T_CGS = SIGMA_T * 1e4    # cm²
 
+# Composite constants for _P_delta — see also hmf._3_OVER_8PI_G note.
+# (M·M_sun/(r·Mpc)²)² × G = pressure in Pa, but M_sun² and Mpc⁴ individually
+# overflow f32 on TPU. Pre-compute the kg/m² conversion so the JAX
+# intermediate stays small.
+_MSUN_PER_MPC2_SI = _Msun_kg / _Mpc_m ** 2          # ≈ 2.09e-15 [kg/m² per (M_sun/Mpc²)]
+_3G_OVER_8PI      = 3.0 * _G_SI / (8.0 * jnp.pi)    # ≈ 7.97e-12 [m³ kg⁻¹ s⁻²]
+
 # Master prefactor  [cm³ / (eV × Mpc)]
 # When multiplied by P_Δ [eV/cm³] × ũ [Mpc³] / χ² [Mpc²]  → dimensionless
 PREFAC_Y = _SIGMA_T_CGS / M_E_C2 * PE_FACTOR * MPC_TO_CM
@@ -173,9 +180,10 @@ def _P_delta(M, r_delta, f_b):
 
     Parameters: M in M_sun, r_delta in Mpc.
     """
-    M_kg = M * _Msun_kg
-    r_m  = r_delta * _Mpc_m
-    P_SI = 3.0 * _G_SI * M_kg ** 2 * f_b / (8.0 * jnp.pi * r_m ** 4)
+    # P_SI = 3G/(8π) × (M_kg/r_m²)² × f_b. Done in this grouping so the
+    # intermediate stays in f32 range on TPU (M_kg² and r_m⁴ overflow).
+    Mr2_kg_per_m2 = (M / r_delta ** 2) * _MSUN_PER_MPC2_SI
+    P_SI = _3G_OVER_8PI * f_b * Mr2_kg_per_m2 ** 2
     return P_SI / _eV_J * 1e-6   # Pa → eV/cm³
 
 
