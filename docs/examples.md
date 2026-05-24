@@ -226,6 +226,35 @@ The full runnable script (loader + bestfit + NUTS + MH overlay +
 plotting) is at
 [`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py).
 
+## Posterior bands on the GNFW pressure profile
+
+Since (P₀, β) are the only GNFW parameters sampled in the fit above,
+each posterior sample maps to a different dimensionless profile
+
+$$
+p(x) = P_0\,(c_{500}\,x)^{-\gamma}\,\bigl[1 + (c_{500}\,x)^\alpha\bigr]^{-(\beta-\gamma)/\alpha},
+\qquad x = r / r_{500}.
+$$
+
+Drawing 500 random samples per chain and taking the 16/50/84
+percentiles gives a median curve + 1σ band per cosmology. Plotted
+together with the **fiducial A10 profile** and a $\,p(x)\,x^2$
+y-axis (which flattens the inner power-law fall-off and makes the
+outer slope β easy to read):
+
+![GNFW pressure profile from Cl^yy NUTS posteriors](_static/profile_bands.png)
+
+Two physical observations stand out:
+
+- **The data prefer a much shallower outer profile than A10.**
+  Median β ≈ 3.2 in both fits vs the A10 fiducial β = 5.48.
+- **lows8 ↔ higher pressure**, as expected — at lower σ8 you need
+  more pressure per cluster to match the same Cl^yy amplitude, so
+  the red band sits above the blue across the full radial range.
+
+The runnable script is at
+[`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py).
+
 ## End-to-end MCMC pattern (cobaya Theory)
 
 For the RW-MH cobaya baseline that the NUTS example above reproduces,
