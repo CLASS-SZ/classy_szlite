@@ -9,3 +9,4 @@ dist/
 !docs/_static/*.png
 .venv/
 .env
+_emu_data_test/
