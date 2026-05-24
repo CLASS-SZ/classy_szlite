@@ -82,7 +82,7 @@ Coverage:
   $C_\ell^{\phi\phi}$, linear and non-linear $P(k,z)$
 
 `classy_szlite` exposes these emulators through a single pure-JAX pipeline
-suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP, SBI).
+suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP).
 
 ### Default cosmology and EDE
 

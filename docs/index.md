@@ -44,8 +44,6 @@ examples
 (NumPyro NUTS + cobaya RW-MH overlay),
 [`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py)
 (GNFW profile posterior bands),
-[`examples/sbi_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/sbi_clyy_profile.py)
-(NPE via flowjax — amortised SBI),
 [`examples/fisher_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/fisher_clyy_profile.py)
 (Fisher matrix via `jax.jacfwd`).
 See [Tutorials & examples](examples.md) for full walkthroughs.
