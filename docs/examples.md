@@ -255,6 +255,104 @@ Two physical observations stand out:
 The runnable script is at
 [`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py).
 
+## Simulation-based inference (SBI / NPE via flowjax)
+
+Neural Posterior Estimation (NPE) is a natural fit for `classy_szlite`:
+the bottleneck of SBI is the ability to simulate $(\theta, y)$ pairs
+quickly, which is exactly what `cl_yy_factory` delivers (~5 ms/eval,
+trivially `jax.vmap`-batchable). We trade gradients (which SBI does
+not need) for an **amortised posterior** — a single trained
+conditional normalizing flow returns the posterior at any new
+bandpower realisation in O(ms).
+
+The example uses [`flowjax`](https://github.com/danielward27/flowjax)
+to train a conditional Masked Autoregressive Flow
+$q_\phi(\theta \mid y)$ on $\sim$8000 simulations per cosmology,
+with a Gaussian proposal centred on the L-BFGS bestfit (sequential
+NPE without importance reweighting — the simplest variant). It
+overlays NUTS + cobaya RW-MH + SBI on the same `(P_0, \beta)` corner
+for the baseline + lows8 cosmologies (6 contours total):
+
+![NUTS + cobaya MH + SBI corner with 6 contours](_static/sbi_corner_6contours.png)
+
+And it shows the amortisation in action — five fresh noise
+realisations passed through the SAME trained flow give five 1-D
+posteriors in O(ms), with the truth (vertical dashed line) sitting
+within the bulk of each:
+
+![SBI amortisation over fresh noise realisations](_static/sbi_amortised.png)
+
+Typical wall time per cosmology on a laptop CPU: ~5 s simulation
+(vmap-batched) + ~10 s flow training + O(ms) per posterior
+evaluation. The runnable script is at
+[`examples/sbi_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/sbi_clyy_profile.py).
+
+```python
+from flowjax.flows import masked_autoregressive_flow
+from flowjax.distributions import Normal
+from flowjax.train import fit_to_data
+
+# theta_train.shape = (N, 2)   y_train.shape = (N, n_bandpowers)
+flow = masked_autoregressive_flow(
+    key=jr.key(0),
+    base_dist=Normal(jnp.zeros(2)),
+    cond_dim=y_train.shape[1],
+    nn_width=128, nn_depth=3, flow_layers=8,
+)
+flow, _ = fit_to_data(jr.key(0), flow, data=(theta_train, y_train),
+                      max_epochs=500, batch_size=512, learning_rate=5e-4)
+
+# Amortised: evaluate at any new y in O(ms)
+samples = flow.sample(jr.key(1), sample_shape=(3000,), condition=y_obs)
+```
+
+## Fisher matrix in one autodiff sweep
+
+For a Gaussian likelihood with fixed covariance $\Sigma$, the Fisher
+matrix at parameter point $\boldsymbol{\theta}$ is
+
+$$
+F_{ij}(\boldsymbol{\theta}) = (\partial_i \mu)^\top\, \Sigma^{-1}\, (\partial_j \mu),
+$$
+
+with $\mu(\boldsymbol{\theta}) = $ forward$(P_0, \beta)$. The Jacobian
+$J = \partial \mu / \partial \boldsymbol{\theta}$ is exactly what
+`jax.jacfwd` returns in a single forward-mode autodiff sweep — no
+finite-difference loop, no $\varepsilon$ tuning.
+
+```python
+import jax, jax.numpy as jnp
+import classy_szlite as csl
+
+forward = build_forward(cosmo, ell)   # see nuts_clyy_profile.py
+
+def mu(x):
+    return forward(x[0], x[1])
+
+J = jax.jit(jax.jacfwd(mu))(jnp.asarray([P0_bf, beta_bf]))    # (n_bp, 2)
+F = J.T @ inv_cov @ J                                          # (2, 2)
+cov_fisher = jnp.linalg.inv(F)
+```
+
+The `examples/fisher_clyy_profile.py` script runs this end-to-end and
+overlays the 68%/95% Fisher ellipses on the NUTS posterior:
+
+![Fisher matrix ellipse + L-BFGS bestfit overlaid on the NUTS posterior](_static/fisher_overlay.png)
+
+Wall time: **~135 ms per Fisher matrix** after JAX warmup (10-run
+average, including jit dispatch). The autodiff Fisher matches a
+2-point central finite-difference reference ($\varepsilon = 10^{-3}$)
+to $|\Delta F|/|F| \sim 10^{-6}$. The Fisher ellipse here is much
+tighter than the NUTS posterior (σ_Fisher ≈ 0.35 vs σ_NUTS ≈ 1.5 for
+$P_0$) — Fisher captures only the local quadratic curvature at the
+bestfit and misses the heavy tail toward larger $P_0$ that NUTS
+readily explores. This is a useful sanity check for forecasting: the
+Gaussian Fisher approximation will under-estimate the uncertainty
+when the true posterior is skewed.
+
+The runnable script is at
+[`examples/fisher_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/fisher_clyy_profile.py).
+
 ## End-to-end MCMC pattern (cobaya Theory)
 
 For the RW-MH cobaya baseline that the NUTS example above reproduces,
