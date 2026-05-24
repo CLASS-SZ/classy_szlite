@@ -167,13 +167,11 @@ def _predict_distances(full: dict, z_grid: jax.Array):
 # ===================================================================
 
 def _compute_sigma(k: jax.Array, pk: jax.Array, n_z: int):
-    """σ(R, z), d(σ²)/dR via mcfit's TophatVar (FFTLog)."""
-    from mcfit import TophatVar
-    with _warnings.catch_warnings():
-        _warnings.filterwarnings("ignore", message="use backend='jax' if desired")
-        tv = TophatVar(np.array(k, copy=False), lowring=True, backend='jax')
-    R_all, var_all = tv(pk, extrap=True)
-    R = R_all.flatten()
+    """σ(R, z), d(σ²)/dR via pure-JAX FFTLog (TPU-safe)."""
+    from ._fftlog import TophatVar
+    tv = TophatVar(np.array(k, copy=False), lowring=True)
+    R_all, var_all = tv(pk)
+    R = jnp.asarray(R_all).flatten()
     sigma = jnp.sqrt(var_all)
     log_R = jnp.log(R)
     var = sigma ** 2

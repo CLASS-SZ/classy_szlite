@@ -50,7 +50,7 @@ import warnings as _warnings
 
 import jax
 import jax.numpy as jnp
-from mcfit import SphericalBessel
+from ._fftlog import SphericalBessel
 
 from .cosmology import CosmoGrids
 from .hmf import HaloGrids, _G_SI, _Msun_kg, _Mpc_m, _c_SI
@@ -134,11 +134,7 @@ _TABLE_U_GRID = jnp.geomspace(1e-5, 100.0, _TABLE_N_U)
 _TABLE_N_BETA = 100
 _TABLE_BETAS  = jnp.linspace(3.0, 13.0, _TABLE_N_BETA)
 
-with _warnings.catch_warnings():
-    _warnings.filterwarnings("ignore",
-                             message="use backend='jax' if desired")
-    _TABLE_SBT = SphericalBessel(_TABLE_U_GRID, nu=0, lowring=True,
-                                  backend='jax')
+_TABLE_SBT = SphericalBessel(_TABLE_U_GRID, nu=0, lowring=True)
 
 _TABLE_S_GRID = jnp.array(_TABLE_SBT.y)        # output s-grid
 _LOG_TABLE_S  = jnp.log(_TABLE_S_GRID)
@@ -148,7 +144,7 @@ def _build_b12_ft_table():
     """Precompute g(s, beta) for Battaglia 2012 on a 2-D grid."""
     profiles = (_TABLE_U_GRID[None, :] ** (-0.3)
                 * (1.0 + _TABLE_U_GRID[None, :]) ** (-_TABLE_BETAS[:, None]))
-    _, g = _TABLE_SBT(profiles, extrap=True)
+    _, g = _TABLE_SBT(profiles)
     return g * jnp.sqrt(jnp.pi / 2.0)             # (n_beta, n_s)
 
 
@@ -157,7 +153,7 @@ def _build_a10_ft_table():
     kernel = (_TABLE_U_GRID ** (-_A10_GAMMA)
               * (1.0 + _TABLE_U_GRID ** _A10_ALPHA)
               ** ((_A10_GAMMA - _A10_BETA) / _A10_ALPHA))
-    _, g = _TABLE_SBT(kernel, extrap=True)
+    _, g = _TABLE_SBT(kernel)
     return g * jnp.sqrt(jnp.pi / 2.0)             # (n_s,)
 
 
@@ -282,7 +278,7 @@ def cl_yy_1h_2h(ell: jax.Array,
             kernel = (_TABLE_U_GRID ** (-gamma)
                       * (1.0 + _TABLE_U_GRID ** alpha)
                       ** ((gamma - beta) / alpha))
-            _, g_table = _TABLE_SBT(kernel, extrap=True)
+            _, g_table = _TABLE_SBT(kernel)
             g_table = g_table * jnp.sqrt(jnp.pi / 2.0)
         else:
             g_table = _A10_G_TABLE
