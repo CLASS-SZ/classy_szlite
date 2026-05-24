@@ -11,11 +11,19 @@ access to:
 - Derived parameters (σ8, Ω_m, S8)
 - Halo-model tSZ Cl^yy (Arnaud 2010 GNFW pressure profile)
 
-Backed by the high-accuracy **ede-v2 CosmoPower emulators** (Bolliet et al.).
+Backed by the high-accuracy **ede-v2 CosmoPower emulators** — the same
+emulators used in the [ACT DR6 extended-cosmology
+analysis](https://arxiv.org/abs/2503.14454) (2025) and the
+[ACT DR6 + DESI DR2 EDE / $H_0$ analysis by Poulin et al.](https://arxiv.org/abs/2505.08051)
+(2025). They match the CAMB-based
+[Jense et al. (2024) emulators](https://github.com/cosmopower-organization/jense_2024_emulators)
+to well under 0.1 $\sigma$ in $\Lambda$CDM, and cover $\Lambda$CDM,
+$m_\nu$-$\Lambda$CDM, $w$CDM, $N_{\rm eff}$-$\Lambda$CDM and EDE.
+
 LCDM-equivalent cosmology is the default — `fEDE = 0.001` (the package's
-default) reproduces standard ΛCDM to emulator precision, and the same
-emulator covers the full early-dark-energy parameter space when you want to
-explore it.
+default) reproduces standard $\Lambda$CDM to emulator precision, and the
+same emulator covers the full early-dark-energy parameter space when you
+want to explore it.
 
 Runtime dependencies: just `jax`, `numpy`, and `mcfit`.
 

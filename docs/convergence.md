@@ -10,7 +10,7 @@ settings for forecasts vs. real data.
 ## What was measured
 
 We compute
-$\Delta C_\ell^{yy}/C_\ell^{yy}\big|_{\rm max}$ across
+$\bigl(\Delta C_\ell^{yy}/C_\ell^{yy}\bigr)_{\max}$ across
 $\ell \in [100, 8000]$ (12 log-spaced bins), using
 
 - profile: Arnaud-10 with $(P_0=8.13,\,\beta=5.48,\,B=1.25)$
@@ -23,7 +23,7 @@ M \in [10^{10},\,3.5\times10^{15}]\,M_\odot/h$.
 
 ## Numerical results
 
-| `n_z` (n_m = 200)   | max $|\Delta C/C|$ |
+| `n_z` (n_m = 200)   | max $\lvert\Delta C/C\rvert$ |
 | --- | --- |
 |  25  |  1.2 × 10⁻² |
 |  50  |  2.8 × 10⁻³ |
@@ -33,7 +33,7 @@ M \in [10^{10},\,3.5\times10^{15}]\,M_\odot/h$.
 | 200  |  1.3 × 10⁻⁴ |
 | 300  |  3.8 × 10⁻⁵ |
 
-| `n_m` (n_z = 100)   | max $|\Delta C/C|$ |
+| `n_m` (n_z = 100)   | max $\lvert\Delta C/C\rvert$ |
 | --- | --- |
 |  50  |  7.2 × 10⁻⁴ |
 | 100  |  6.5 × 10⁻⁴ |
@@ -45,7 +45,7 @@ M \in [10^{10},\,3.5\times10^{15}]\,M_\odot/h$.
 `n_m` is **saturated by ~100**: the integrand decays steeply away from the
 characteristic mass scale, so doubling the grid past that has no effect.
 
-| $M_{\rm max}$ ($M_\odot/h$)   | max $|\Delta C/C|$ |
+| $M_{\rm max}$ ($M_\odot/h$)   | max $\lvert\Delta C/C\rvert$ |
 | --- | --- |
 | 1 × 10¹⁵   |  3.4 × 10⁻¹  *(truncation, miss massive halos)* |
 | 2 × 10¹⁵   |  7.4 × 10⁻²  *(truncation)* |
@@ -53,7 +53,7 @@ characteristic mass scale, so doubling the grid past that has no effect.
 | 5 × 10¹⁵   |  9.5 × 10⁻³  *(slight extra discretisation error)* |
 | 1 × 10¹⁶   |  1.1 × 10⁻²  *(slight extra discretisation error)* |
 
-| $M_{\rm min}$ ($M_\odot/h$)   | max $|\Delta C/C|$ |
+| $M_{\rm min}$ ($M_\odot/h$)   | max $\lvert\Delta C/C\rvert$ |
 | --- | --- |
 | 1 × 10⁸    |  6.4 × 10⁻⁴ |
 | 1 × 10⁹    |  6.4 × 10⁻⁴ |
