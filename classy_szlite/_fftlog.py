@@ -201,31 +201,75 @@ class FFTLog:
 
 
 # ----------------------------------------------------------------------
-# Convenience constructors matching mcfit's API
+# Backend dispatch: mcfit on CPU, pure-JAX FFTLog on TPU
 # ----------------------------------------------------------------------
+# On CPU, mcfit (with backend='jax') is a battle-tested upstream and is
+# fully JIT-traceable — there's no reason to maintain our own copy.
+# On TPU, mcfit's setup hardcodes c128 (via `(self.x[0] + 0j).dtype` and
+# scipy.special.loggamma return type), which XLA's TPU backend refuses.
+# So we ship our own FFTLog only as the TPU fallback.
 
-def TophatVar(k, q=1.5, lowring=True, dtype=None) -> FFTLog:
+def _use_pure_jax():
+    """True iff we should use our pure-JAX FFTLog (TPU path)."""
+    if os.environ.get("CLASSY_SZLITE_FORCE_PURE_FFTLOG"):
+        return True
+    try:
+        return jax.default_backend() == "tpu"
+    except Exception:
+        return False
+
+
+class _McfitShim:
+    """Adapt mcfit's `(F, extrap=True) -> (y, G)` API to our `(F) -> (y, G)`."""
+
+    def __init__(self, mcfit_instance):
+        self._tv = mcfit_instance
+        self.y = jnp.asarray(mcfit_instance.y)
+        self.dtype = jnp.asarray(mcfit_instance.x).dtype
+
+    def __call__(self, F):
+        _, G = self._tv(F, extrap=True)
+        return self.y, G
+
+
+def TophatVar(k, q=1.5, lowring=True, dtype=None):
     """σ²(R) = ∫ dk/(2π²) · k² · P(k) · W²(kR).
 
-    Matches mcfit.cosmology.TophatVar(k, q=1.5, lowring=True) — same
-    prefac (k³ / (2π²)), same MK, same q.
+    Dispatches to mcfit.cosmology.TophatVar on CPU and to the pure-JAX
+    FFTLog on TPU. Both paths use the same Mellin coefficients and the
+    same lowring condition, so the outputs agree to machine precision on
+    CPU (and within f32 FFT precision on TPU).
     """
-    k = np.asarray(k, dtype=np.float64)
-    prefac = k ** 3 / (2.0 * np.pi ** 2)
-    return FFTLog(k, Mellin_TophatSq_dim3, q,
-                  prefac=prefac, postfac=1.0,
-                  lowring=lowring, dtype=dtype)
+    if _use_pure_jax():
+        k = np.asarray(k, dtype=np.float64)
+        prefac = k ** 3 / (2.0 * np.pi ** 2)
+        return FFTLog(k, Mellin_TophatSq_dim3, q,
+                      prefac=prefac, postfac=1.0,
+                      lowring=lowring, dtype=dtype)
+    from mcfit import TophatVar as McfitTV
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.filterwarnings("ignore", message="use backend='jax' if desired")
+        return _McfitShim(McfitTV(np.asarray(k), lowring=lowring, q=q,
+                                   backend='jax'))
 
 
-def SphericalBessel(x, nu=0, q=1.5, lowring=True, dtype=None) -> FFTLog:
+def SphericalBessel(x, nu=0, q=1.5, lowring=True, dtype=None):
     """Spherical Bessel transform of order nu (only nu=0 implemented here).
 
-    G(y) = ∫ dx · x² · j_nu(xy) · F(x), matching mcfit.transforms.SphericalBessel(x, nu=0).
+    Same backend dispatch as TophatVar.
     """
     if nu != 0:
         raise NotImplementedError(f"_fftlog.SphericalBessel only nu=0 (got nu={nu})")
-    x = np.asarray(x, dtype=np.float64)
-    prefac = x ** 3
-    return FFTLog(x, Mellin_SphericalBesselJ_nu0, q,
-                  prefac=prefac, postfac=1.0,
-                  lowring=lowring, dtype=dtype)
+    if _use_pure_jax():
+        x = np.asarray(x, dtype=np.float64)
+        prefac = x ** 3
+        return FFTLog(x, Mellin_SphericalBesselJ_nu0, q,
+                      prefac=prefac, postfac=1.0,
+                      lowring=lowring, dtype=dtype)
+    from mcfit import SphericalBessel as McfitSB
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.filterwarnings("ignore", message="use backend='jax' if desired")
+        return _McfitShim(McfitSB(np.asarray(x), nu=nu, q=q,
+                                   lowring=lowring, backend='jax'))
