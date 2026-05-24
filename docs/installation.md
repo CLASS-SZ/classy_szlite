@@ -57,6 +57,32 @@ git clone https://github.com/cosmopower-organization/ede ~/cosmopower-ede
 export CLASSY_SZLITE_DATA_DIR=~/cosmopower-ede
 ```
 
+### Why the v2 emulators
+
+The `v2` emulators are the emulators used in
+[*The Atacama Cosmology Telescope: DR6 Constraints on Extended Cosmological
+Models*](https://arxiv.org/abs/2503.14454) (2025) and in
+[*Impact of ACT DR6 and DESI DR2 for Early Dark Energy and the Hubble
+tension*](https://arxiv.org/abs/2505.08051) (Poulin et al. 2025).
+
+They are the **highest-accuracy CLASS-based emulators** available in the
+[`cosmopower-organization`](https://github.com/cosmopower-organization)
+namespace, and match the CAMB-based
+[Jense et al. (2024) emulators](https://github.com/cosmopower-organization/jense_2024_emulators)
+to **well under 0.1 $\sigma$ in $\Lambda$CDM**, where $\sigma$ is the
+typical 68% CL on parameter constraints from ACT DR6 data.
+
+Coverage:
+
+- $\Lambda$CDM, $m_\nu$-$\Lambda$CDM, $w$CDM, $N_{\rm eff}$-$\Lambda$CDM,
+  and combinations of these — plus the EDE direction needed for the EDE
+  results above
+- Outputs: distances ($H(z)$, $\chi(z)$, $D_A(z)$), $C_\ell^{TT,TE,EE,BB}$,
+  $C_\ell^{\phi\phi}$, linear and non-linear $P(k,z)$
+
+`classy_szlite` exposes these emulators through a single pure-JAX pipeline
+suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP, SBI).
+
 ## Verification
 
 ```python
