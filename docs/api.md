@@ -63,8 +63,18 @@ for $H(z)$ in km/s/Mpc), $\chi(z)$ in Mpc, and $D_A(z)=\chi(z)/(1+z)$ in Mpc.
 .. autofunction:: classy_szlite.cl_yy_factory
 ```
 
+```{eval-rst}
+.. autofunction:: classy_szlite.cl_yy_trispectrum
+```
+
+```{eval-rst}
+.. autofunction:: classy_szlite.cl_yy_covariance
+```
+
 See the [convergence study](convergence.md) for the dependence on
-$n_z$, $n_M$, $M_{\rm min}$, $M_{\rm max}$.
+$n_z$, $n_M$, $M_{\rm min}$, $M_{\rm max}$, and the
+[Tutorials & examples](examples.md) page for an end-to-end example
+using `cl_yy_covariance` to generate synthetic data via Cholesky.
 
 ## Utility
 

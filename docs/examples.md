@@ -113,6 +113,82 @@ plt.grid(True, alpha=0.3, which="both"); plt.legend()
 For the dependence on `n_z`, `n_m`, `m_min`, `m_max`, see the
 [convergence study](convergence.md).
 
+## Bandpower covariance: Gaussian + 1-halo trispectrum
+
+For tSZ, the bandpower covariance has two pieces:
+
+$$
+\mathrm{Cov}(C_\ell, C_{\ell'}) =
+  \underbrace{\frac{2\,C_\ell^2}{(2\ell+1)\,\Delta\ell\,f_\mathrm{sky}}\,\delta_{\ell\ell'}}_{\text{Gaussian, diagonal}}
+  \;+\;
+  \underbrace{\frac{T^{1h}(\ell,\ell')}{4\pi\,f_\mathrm{sky}}}_{\text{1-halo connected trispectrum}}.
+$$
+
+The 1-halo connected trispectrum
+
+$$
+T^{1h}(\ell, \ell') = \int\!dz\,\frac{dV}{d\Omega\,dz}\,
+   \int\!d\ln M\,\frac{dn}{d\ln M}\,|y_\ell|^2\,|y_{\ell'}|^2
+$$
+
+is a symmetric `(n_ell, n_ell)` matrix. For tSZ it **dominates** the
+Gaussian variance by 1–3 orders of magnitude on the diagonal and
+introduces strong off-diagonal correlations between bandpower bins
+(rare clusters contribute to all multipoles at once).
+
+```python
+import jax.numpy as jnp
+import classy_szlite as csl
+
+cosmo    = csl.CosmoParams()                                # baseline
+fiducial = csl.ProfileParamsA10(                            # A10 universal profile
+    P0=8.130, c500=1.156, gamma=0.3292, alpha=1.062, beta=5.4807, B=1.25,
+)
+ell       = jnp.geomspace(100, 5000, 16)
+delta_ell = ell * jnp.log(ell[1] / ell[0])                  # log-bandwidth
+
+# Just the trispectrum (n_ell, n_ell), symmetric:
+T = csl.cl_yy_trispectrum(cosmo, fiducial, ell)
+
+# Full bandpower covariance (Gaussian variance + trispectrum):
+cov = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell,
+                            fsky=0.6, include_trispectrum=True)
+
+# Cholesky-ready for synthetic-data generation:
+L = jnp.linalg.cholesky(cov)
+```
+
+Diagnostic at the A10 fiducial profile: trispectrum heatmap, full
+covariance correlation matrix, σ on `D_ℓ × 10¹²` with and without the
+trispectrum, and the per-bin variance ratio:
+
+![tSZ trispectrum + bandpower covariance diagnostic at A10 fiducial](_static/trispectrum_diagnostic.png)
+
+**Warm timings** on a single-core CPU (n_z=100, n_m=200; the full
+cosmology + halo-grid build is shared with `cl_yy`):
+
+| `n_ell` | `cl_yy_trispectrum` | `cl_yy_covariance` (incl. `cl_yy`) | mem cost ∝ `n_ell² × n_z × n_m` |
+|---:|---:|---:|---:|
+| 8  |  54 ms | 107 ms | 1.3 M floats |
+| 16 |  61 ms | 123 ms | 5.1 M floats |
+| 32 |  87 ms | 165 ms | 21 M floats |
+
+The cost grows sub-linearly in `n_ell²` because most of the wall is in
+the shared cosmology/halo-model build; only the trispectrum
+contraction itself is `O(n_ell² × n_z × n_m)`. Typical bandpower
+counts (8–30) cost <0.2 s including the covariance assembly.
+
+**Note on units.** `cl_yy_covariance` returns the covariance on the
+**dimensionless** `C_ℓ`. If your data vector is in `D_ℓ × 10¹²` (the
+standard plotting convention), rescale by the outer product of the
+prefactor before Cholesky:
+
+```python
+dl_factor = ell * (ell + 1) / (2 * jnp.pi) * 1e12
+cov_Dell  = cov * (dl_factor[:, None] * dl_factor[None, :])
+L         = jnp.linalg.cholesky(cov_Dell)
+```
+
 ## Bestfit + NUTS + RW-MH on synthetic Cl^yy bandpowers (baseline cosmology)
 
 The factory closure makes both gradient-based optimisation (L-BFGS)
@@ -151,25 +227,33 @@ import classy_szlite as csl
 cosmo    = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118,
                            H0=68.22, tau_reio=0.0561,
                            ln10_10_As=3.060, n_s=0.9743)
-fiducial = csl.ProfileParamsA10(P0=1.20, beta=2.74, B=1.25)
+fiducial = csl.ProfileParamsA10(           # Arnaud 2010 universal profile
+    P0=8.130, c500=1.156, gamma=0.3292, alpha=1.062, beta=5.4807, B=1.25,
+)
 
 # --- log-spaced ell-binning ---
 ell       = jnp.geomspace(100.0, 5000.0, 8)
 delta_ell = ell * jnp.log(ell[1] / ell[0])         # bandwidth per bin
 fsky      = 0.6
 
-# --- analytic covariance (Gaussian + 1h trispectrum) + Cholesky ---
-cov     = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, fsky=fsky)
-inv_cov = jnp.linalg.inv(cov)
-L_chol  = jnp.linalg.cholesky(cov)
-print(f"Trispectrum / Gaussian diag ratio: "
-      f"{np.diag(np.asarray(cov)) / np.diag(np.asarray("
-      f"csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, "
-      f"fsky=fsky, include_trispectrum=False)))}")
+# --- analytic covariance (Gaussian + 1h trispectrum) ---
+# cl_yy_covariance returns the covariance on the DIMENSIONLESS C_ell;
+# the data we'll generate is in D_ell × 1e12 units, so we rescale by
+# (dl_factor ⊗ dl_factor) before Cholesky.
+ev          = csl.cl_yy_factory(cosmo, ell)        # JIT'd fast closure
+dl_factor   = ell * (ell + 1) / (2 * jnp.pi) * 1e12
+cov_cl      = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, fsky=fsky)
+cov         = cov_cl * (dl_factor[:, None] * dl_factor[None, :])   # → D_ell × 1e12 units
+inv_cov     = jnp.linalg.inv(cov)
+L_chol      = jnp.linalg.cholesky(cov)
+
+# Trispectrum vs Gaussian-only on the diagonal (sanity print)
+cov_g_cl = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell,
+                                 fsky=fsky, include_trispectrum=False)
+print("trispectrum / Gaussian variance per bin:",
+      np.round(np.diag(np.asarray(cov_cl)) / np.diag(np.asarray(cov_g_cl)), 1))
 
 # --- generate one synthetic D_ell^yy realisation ---
-ev        = csl.cl_yy_factory(cosmo, ell)          # JIT'd fast closure
-dl_factor = ell * (ell + 1) / (2 * jnp.pi) * 1e12
 c1, c2    = ev(fiducial)
 Dell_fid  = dl_factor * (c1 + c2)
 key       = jax.random.PRNGKey(42)
@@ -212,13 +296,13 @@ print(f"NUTS:      P0={s['P0'].mean():.2f}±{s['P0'].std():.2f}  "
 ```
 
 Typical output on a single-core CPU (warm closure, JIT compiled) —
-the synthetic posterior is centred on the fiducial by construction
+the synthetic posterior is centred on the A10 fiducial by construction
 (modulo Monte-Carlo scatter from the single noise realisation):
 
 ```
-Trispectrum / Gaussian diag ratio: ~300–1000× per bin
-bestfit:   P0≈P0_fid  β≈β_fid  χ²≈8/6     (38 fn evals, ~0.4 s)
-NUTS:      P0=...±...  β=...±...           (~10 s, ESS≈100, R-hat<1.05)
+trispectrum / Gaussian variance per bin: [1455. 904. 591. 423. 340. 307. 298. 298.]
+bestfit:   P0=8.09 (fid 8.13)  β=5.46 (fid 5.48)  χ²=5.2/6    (16 fn evals, ~0.4 s)
+NUTS:      P0=8.13±0.10        β=5.48±0.08                    (~10 s, ESS≈100, R-hat<1.05)
 ```
 
 The synthetic-data path is fully reproducible — you only need
