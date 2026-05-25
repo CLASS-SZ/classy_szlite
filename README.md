@@ -89,6 +89,12 @@ acceleration of halo-model $C_\ell^{yy}$ evaluation:
 
 ![Halo-model Cl^yy evaluation cost across code generations](docs/_static/timing_history.png)
 
+The hatched `cl_yy_factory` bar is the *fixed-cosmology fast path* — it
+skips the cosmology and halo-grid build, which the factory closure
+amortises once per fit. All wall times are single-process CPU
+evaluation: `class_sz` v1 and the szfast-emulator path use OpenMP
+parallelism internally, `classy_szlite` uses JAX / XLA-CPU.
+
 Warm-call timing, n = 100 calls per benchmark, freshly randomised inputs:
 
 | Function | mean ± std (ms) | calls/s |
