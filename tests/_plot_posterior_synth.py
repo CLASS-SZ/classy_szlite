@@ -94,17 +94,15 @@ def main():
     g.triangle_plot(
         [samples], params=["P0", "beta"], filled=True,
         contour_colors=["C0"],
+        # Plain-text legend label: matplotlib's default text engine
+        # does not interpret LaTeX escapes (like \,) outside math mode.
         legend_labels=[
-            f"NumPyro NUTS  ({wall:.0f}\\,s, ESS$\\,\\sim\\,${int(sm['P0']['n_eff'])})"
+            f"NumPyro NUTS (t={wall:.0f}s, ESS={int(sm['P0']['n_eff'])})"
         ],
         markers={"P0": 8.130, "beta": 5.4807},
     )
-    g.fig.suptitle(
-        f"Synthetic-data posterior on (P$_0$, $\\beta$) at A10 fiducial\n"
-        f"covariance inflated $\\times {noise_factor}$ so the degeneracy "
-        f"(corr = {corr:+.2f}) is visible",
-        y=1.05, fontsize=10, fontweight="bold",
-    )
+    # No suptitle — the LaTeX/markdown caption underneath carries the
+    # context. getdist's tight bbox trims any title placed at y > 1.0.
     out = os.path.expanduser("~/classy_szlite/docs/_static/posterior_compare.png")
     g.export(out)
     print(f"\nSaved {out}")
