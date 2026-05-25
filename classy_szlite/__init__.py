@@ -39,12 +39,15 @@ from .api import (
     distances,
     cl_yy,
     cl_yy_factory,
+    cl_yy_trispectrum,
+    cl_yy_covariance,
     cosmo_to_dict,
 )
 
 __all__ = [
     "__version__",
     "CosmoParams", "ProfileParamsA10",
-    "derived", "cl_TTTEEE", "Pk", "Pnl", "distances", "cl_yy", "cl_yy_factory",
+    "derived", "cl_TTTEEE", "Pk", "Pnl", "distances",
+    "cl_yy", "cl_yy_factory", "cl_yy_trispectrum", "cl_yy_covariance",
     "cosmo_to_dict",
 ]
