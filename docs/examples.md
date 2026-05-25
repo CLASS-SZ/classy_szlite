@@ -358,8 +358,11 @@ easy to read):
 
 ![GNFW pressure profile from Cl^yy NUTS posteriors](_static/profile_bands.png)
 
-The data prefer a much shallower outer profile than A10 (median
-β ≈ 3.2 vs the A10 fiducial β = 5.48).
+With synthetic data generated at the A10 fiducial profile (this docs
+example uses `noise_factor = 9` to inflate the bandpower covariance —
+see the inference example above), the NUTS-recovered median sits on
+top of the A10 fiducial by construction; the 1σ band shows the
+posterior uncertainty propagated through the GNFW shape.
 
 The runnable script is at
 [`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py).
@@ -400,13 +403,14 @@ overlays the 68%/95% Fisher ellipses on the NUTS posterior:
 Wall time: **~135 ms per Fisher matrix** after JAX warmup (10-run
 average, including jit dispatch). The autodiff Fisher matches a
 2-point central finite-difference reference ($\varepsilon = 10^{-3}$)
-to $|\Delta F|/|F| \sim 10^{-6}$. The Fisher ellipse here is much
-tighter than the NUTS posterior (σ_Fisher ≈ 0.35 vs σ_NUTS ≈ 1.5 for
-$P_0$) — Fisher captures only the local quadratic curvature at the
-bestfit and misses the heavy tail toward larger $P_0$ that NUTS
-readily explores. This is a useful sanity check for forecasting: the
-Gaussian Fisher approximation will under-estimate the uncertainty
-when the true posterior is skewed.
+to $|\Delta F|/|F| \sim 10^{-6}$. With synthetic A10-fiducial data
+the posterior is nearly Gaussian, so the Fisher 68%/95% ellipses
+match the NUTS contours to within ~3 % on the marginal widths
+(σ_Fisher = 0.316 vs σ_NUTS = 0.326 for $P_0$; σ_Fisher = 0.124 vs
+σ_NUTS = 0.128 for $\beta$). When the posterior is non-Gaussian
+(skewed tails, multi-modality), the Fisher approximation will
+under-estimate the uncertainty — a useful sanity check for
+forecasting.
 
 The runnable script is at
 [`examples/fisher_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/fisher_clyy_profile.py).
