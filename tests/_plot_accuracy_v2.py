@@ -60,7 +60,9 @@ def main():
     ax.set_ylabel(r"$|\hat\mu_{P_0} - \mu_{P_0}^\mathrm{gold}| \,/\, \sigma_{P_0}^\mathrm{gold}$")
     ax.set_title("posterior-mean accuracy vs wall")
     ax.set_ylim(0.01, 3)
-    ax.legend(fontsize=8.5, loc='lower left', framealpha=0.95)
+    # Move legend below the plotting box so it doesn't overlap data
+    ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.18),
+              ncol=2, framealpha=0.95, borderaxespad=0.0)
     ax.grid(True, alpha=0.3, which='both')
 
     # ---- Panel B: ESS rate ----
@@ -81,7 +83,8 @@ def main():
     ax.set_xlabel("wall time (s)")
     ax.set_ylabel("effective sample size  $N / (1 + 2\\tau_\\mathrm{int})$")
     ax.set_title("ESS accumulation rate")
-    ax.legend(fontsize=9, loc='lower right', framealpha=0.95)
+    ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.18),
+              ncol=2, framealpha=0.95, borderaxespad=0.0)
     ax.grid(True, alpha=0.3, which='both')
 
     # No suptitle — the LaTeX figure caption carries the framing.
