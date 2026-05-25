@@ -10,9 +10,9 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 
 
 def main():
-    fig, ax = plt.subplots(figsize=(11.5, 4.6))
-    ax.set_xlim(-0.2, 17.5)
-    ax.set_ylim(-2.6, 2.6)
+    fig, ax = plt.subplots(figsize=(11.5, 5.2))
+    ax.set_xlim(-0.4, 17.4)
+    ax.set_ylim(-3.6, 2.6)
     ax.set_aspect("equal")
     ax.axis("off")
 
@@ -57,7 +57,7 @@ def main():
     P_OUT  = (16.5,  0.0)
 
     box(*P_IN,   "inp",  "cosmology",       r"$\theta_\mathrm{cos}$")
-    box(*P_EMU,  "emu",  "CosmoPower",      r"$P_\mathrm{lin}(k,z),\ H(z),\ \chi(z)$")
+    box(*P_EMU,  "emu",  "neural network",  r"emulators: $P_\mathrm{lin}(k,z),\ H(z),\ \chi(z)$")
     box(*P_SIG,  "fft",  "FFTLog",          r"$P_\mathrm{lin}(k)\to\sigma(R,z)$")
     box(*P_PROF, "fft",  "FFTLog",          r"$\mathbb{P}(r)\to\tilde u(k)$ lookup")
     box(*P_HALO, "halo", "halo grids",      "HMF + bias")
@@ -75,9 +75,18 @@ def main():
     arrow((P_PROF[0] + styles["fft"]["w"] / 2, P_PROF[1]), (P_INT[0], P_INT[1] - styles["intg"]["h"] / 2))
     arrow((P_INT[0] + styles["intg"]["w"] / 2, P_INT[1]), (P_OUT[0] - styles["inp"]["w"] / 2, P_OUT[1]))
 
-    ax.text(8.25, -2.35,
-            r"All boxes are pure JAX: $\partial C_\ell^{yy}/\partial\theta$ via jax.grad in one back-pass.",
-            ha="center", va="center", fontsize=9, style="italic", color="#555")
+    # Backward gradient arrow — output → input via a shallow curved arc
+    # below the boxes. Label placed below the arc.
+    grad = FancyArrowPatch(
+        (P_OUT[0] - 0.2, -0.7), (P_IN[0] + 0.2, -0.7),
+        connectionstyle="arc3,rad=-0.18",
+        arrowstyle="-|>", mutation_scale=18,
+        color="#c1272d", linewidth=1.8, linestyle="--", zorder=1,
+    )
+    ax.add_patch(grad)
+    ax.text(8.25, -3.30,
+            r"jax.grad / backprop: $\partial C_\ell^{yy}/\partial\theta$ in one back-pass",
+            ha="center", va="center", fontsize=10.5, style="italic", color="#c1272d")
 
     plt.tight_layout()
     out = os.path.expanduser("~/classy_szlite/docs/_static/pipeline.png")
