@@ -96,7 +96,9 @@ plt.xlabel("z"); plt.ylabel(r"$\sigma_8(z)$"); plt.grid(True, alpha=0.3, which="
 ## Halo-model tSZ Cl^yy (1h + 2h decomposition)
 
 ```python
-profile = csl.ProfileParamsA10(P0=8.13, beta=5.48, B=1.25)
+profile = csl.ProfileParamsA10(           # Arnaud 2010 universal profile
+    P0=8.130, c500=1.156, gamma=0.3292, alpha=1.062, beta=5.4807, B=1.25,
+)
 ell = jnp.geomspace(2, 9000, 80)
 cl_1h, cl_2h = csl.cl_yy(cosmo, profile, ell)
 
@@ -246,9 +248,17 @@ fsky      = 0.6
 ev          = csl.cl_yy_factory(cosmo, ell)        # JIT'd fast closure
 dl_factor   = ell * (ell + 1) / (2 * jnp.pi) * 1e12
 cov_cl      = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, fsky=fsky)
-cov         = cov_cl * (dl_factor[:, None] * dl_factor[None, :])   # → D_ell × 1e12 units
-inv_cov     = jnp.linalg.inv(cov)
-L_chol      = jnp.linalg.cholesky(cov)
+cov_dell    = cov_cl * (dl_factor[:, None] * dl_factor[None, :])    # → D_ell × 1e12 units
+
+# Inflate the covariance to widen the posterior and make the
+# (P_0, β) degeneracy direction visible in the corner plot. With
+# noise_factor = 1 the constraint is so tight that the posterior
+# collapses to a near-point estimate at the fiducial; 9 (i.e. 3×
+# the per-bin σ) gives ~5% relative widths on P_0 and β.
+noise_factor = 9
+cov     = cov_dell * noise_factor
+inv_cov = jnp.linalg.inv(cov)
+L_chol  = jnp.linalg.cholesky(cov)
 
 # Trispectrum vs Gaussian-only on the diagonal (sanity print)
 cov_g_cl = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell,
@@ -262,7 +272,9 @@ Dell_fid  = dl_factor * (c1 + c2)
 key       = jax.random.PRNGKey(42)
 Dell_data = Dell_fid + L_chol @ jax.random.normal(key, ell.shape)
 # To use real ACT / Planck data instead: replace the three lines
-# above with a loader that returns (ell, Dell_data, cov) from disk.
+# above with a loader that returns (ell, Dell_data, cov) from disk
+# (and drop the `noise_factor` inflation — real data carries its
+# real uncertainty already).
 
 def forward(P0, beta):
     prof = csl.ProfileParamsA10(P0=P0, c500=1.156, gamma=0.3292,
@@ -299,13 +311,15 @@ print(f"NUTS:      P0={s['P0'].mean():.2f}±{s['P0'].std():.2f}  "
 ```
 
 Typical output on a single-core CPU (warm closure, JIT compiled) —
-the synthetic posterior is centred on the A10 fiducial by construction
-(modulo Monte-Carlo scatter from the single noise realisation):
+the synthetic posterior is centred on the A10 fiducial by construction;
+with `noise_factor = 9` the σ on each parameter is large enough to
+expose the (P_0, β) degeneracy direction:
 
 ```
 trispectrum / Gaussian variance per bin: [1455. 904. 591. 423. 340. 307. 298. 298.]
-bestfit:   P0=8.09 (fid 8.13)  β=5.46 (fid 5.48)  χ²=5.2/6    (16 fn evals, ~0.4 s)
-NUTS:      P0=8.13±0.10        β=5.48±0.08                    (~10 s, ESS≈100, R-hat<1.05)
+bestfit:   P0=8.01 (fid 8.13)  β=5.42 (fid 5.48)  χ²=5.2/6   (16 fn evals, ~0.4 s)
+NUTS:      P0=8.04±0.33        β=5.43±0.13        corr(P0,β)=+0.99
+           ESS≈900, R-hat=1.001                              (~22 s wall, 2 chains × 1300 samples)
 ```
 
 The synthetic-data path is fully reproducible — you only need
@@ -313,9 +327,14 @@ The synthetic-data path is fully reproducible — you only need
 Swap in real bandpowers by replacing the three lines that build
 `ell`, `Dell_data`, and `cov`; everything downstream is unchanged.
 
-**Triangle plot** with both posteriors overlaid:
+**Triangle plot of the recovered posterior.** The (P_0, β) posterior
+is correlated at +0.99 — at fixed C_ℓ^yy amplitude, raising P_0 and
+β jointly preserves the integrated pressure of each halo. This
+degeneracy is intrinsic to the GNFW profile and would be broken by
+joint-fitting cluster counts, or by adding more bandpower bins at
+high ℓ where the outer-slope dependence on β saturates:
 
-![NUTS vs cobaya RW-MH posterior on (P₀, β) at the baseline cosmology](_static/posterior_compare.png)
+![NUTS posterior on (P₀, β) showing the +0.99 degeneracy](_static/posterior_compare.png)
 
 The full runnable script (synthetic data + bestfit + NUTS + MH overlay
 + plotting) is at
