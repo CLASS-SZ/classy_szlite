@@ -84,6 +84,11 @@ cl_1h, cl_2h = ev(profile)
 
 ## Throughput
 
+`classy_szlite` is the latest stop in a $\sim 10$-year, $\sim 6000\times$
+acceleration of halo-model $C_\ell^{yy}$ evaluation:
+
+![Halo-model Cl^yy evaluation cost across code generations](docs/_static/timing_history.png)
+
 Warm-call timing, n = 100 calls per benchmark, freshly randomised inputs:
 
 | Function | mean ± std (ms) | calls/s |
