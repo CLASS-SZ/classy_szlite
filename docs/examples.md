@@ -317,9 +317,11 @@ expose the (P_0, β) degeneracy direction:
 
 ```
 trispectrum / Gaussian variance per bin: [1455. 904. 591. 423. 340. 307. 298. 298.]
-bestfit:   P0=8.01 (fid 8.13)  β=5.42 (fid 5.48)  χ²=5.2/6   (16 fn evals, ~0.4 s)
-NUTS:      P0=8.04±0.33        β=5.43±0.13        corr(P0,β)=+0.99
-           ESS≈900, R-hat=1.001                              (~22 s wall, 2 chains × 1300 samples)
+bestfit:     P0=8.01 (fid 8.13)  β=5.42 (fid 5.48)  χ²=5.2/6    (16 fn evals, ~0.4 s)
+NUTS:        P0=8.04±0.33        β=5.43±0.13        corr=+0.99
+             ESS≈900, R-hat=1.001                              (~22 s wall, 2 chains × 1300 samples)
+cobaya RW-MH: P0=8.04±0.30        β=5.44±0.12        n_eff(Kish)≈508
+              R-1=0.05 stopping criterion                       (~67 s wall, single chain)
 ```
 
 The synthetic-data path is fully reproducible — you only need
@@ -327,14 +329,16 @@ The synthetic-data path is fully reproducible — you only need
 Swap in real bandpowers by replacing the three lines that build
 `ell`, `Dell_data`, and `cov`; everything downstream is unchanged.
 
-**Triangle plot of the recovered posterior.** The (P_0, β) posterior
-is correlated at +0.99 — at fixed C_ℓ^yy amplitude, raising P_0 and
-β jointly preserves the integrated pressure of each halo. This
-degeneracy is intrinsic to the GNFW profile and would be broken by
-joint-fitting cluster counts, or by adding more bandpower bins at
-high ℓ where the outer-slope dependence on β saturates:
+**Triangle plot of the recovered posterior.** cobaya RW-MH (red) and
+NumPyro NUTS (blue) on the same synthetic-data likelihood agree to
+within sampling noise — same mean, same width, same +0.99 (P_0, β)
+degeneracy direction. The dashed gridlines mark the A10 fiducial truth;
+both posteriors contain it within the 1σ contour. At equal-quality
+convergence, NUTS reaches publication-grade ~3× faster wall-for-wall
+on this 2D problem (see paper Fig. 7 for the systematic comparison
+across budgets):
 
-![NUTS posterior on (P₀, β) showing the +0.99 degeneracy](_static/posterior_compare.png)
+![cobaya RW-MH vs NumPyro NUTS on (P₀, β); +0.99 degeneracy visible](_static/posterior_compare.png)
 
 The full runnable script (synthetic data + bestfit + NUTS + MH overlay
 + plotting) is at
