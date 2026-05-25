@@ -164,19 +164,22 @@ trispectrum, and the per-bin variance ratio:
 
 ![tSZ trispectrum + bandpower covariance diagnostic at A10 fiducial](_static/trispectrum_diagnostic.png)
 
-**Warm timings** on a single-core CPU (n_z=100, n_m=200; the full
-cosmology + halo-grid build is shared with `cl_yy`):
+**Warm timings** on a single-core CPU (n_z=100, n_m=200). The cosmology
+and halo grids are built once and shared between the 1h/2h integrals
+and the trispectrum contraction:
 
-| `n_ell` | `cl_yy_trispectrum` | `cl_yy_covariance` (incl. `cl_yy`) | mem cost ∝ `n_ell² × n_z × n_m` |
+| `n_ell` | `cl_yy_trispectrum` | `cl_yy_covariance` (Gauss + trisp) | mem cost ∝ `n_ell² × n_z × n_m` |
 |---:|---:|---:|---:|
-| 8  |  54 ms | 107 ms | 1.3 M floats |
-| 16 |  61 ms | 123 ms | 5.1 M floats |
-| 32 |  87 ms | 165 ms | 21 M floats |
+| 8  |  54 ms |  77 ms | 1.3 M floats |
+| 16 |  64 ms |  93 ms | 5.1 M floats |
+| 32 |  90 ms | 139 ms | 21 M floats |
 
-The cost grows sub-linearly in `n_ell²` because most of the wall is in
-the shared cosmology/halo-model build; only the trispectrum
-contraction itself is `O(n_ell² × n_z × n_m)`. Typical bandpower
-counts (8–30) cost <0.2 s including the covariance assembly.
+`cl_yy_covariance` takes ~25–50 ms more than `cl_yy_trispectrum`
+alone because it also runs the 1h+2h `cl_yy` integral (the 2-halo
+term needs an extra `P_lin(k_ℓ, z)` interpolation that the
+trispectrum doesn't). Both functions reuse the same emulator forward
+pass and halo-grid build. Typical bandpower counts (8–30) cost
+<0.2 s including the full covariance assembly.
 
 **Note on units.** `cl_yy_covariance` returns the covariance on the
 **dimensionless** `C_ℓ`. If your data vector is in `D_ℓ × 10¹²` (the
