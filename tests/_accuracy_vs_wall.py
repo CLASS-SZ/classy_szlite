@@ -50,6 +50,18 @@ def run_nuts(model, n_warm, n_samp, chains, seed):
     return wall, summary, samples
 
 
+def _clear_jit_caches():
+    """Avoid LLVM compilation OOM when re-running NUTS over many seeds
+    (each (warm, samp, chains) shape triggers a fresh JIT trace + cache
+    entry that keeps memory until the process exits)."""
+    try:
+        jax.clear_caches()
+    except Exception:
+        pass
+    import gc
+    gc.collect()
+
+
 def main():
     print(f"Backend: {jax.default_backend()}")
     ell, Dell_data, cov = load_data()
@@ -101,11 +113,18 @@ def main():
     # Empirical NUTS Z-score curve: re-run a sweep of small budgets and
     # extract actual posterior means (not just ESS) to compute Z directly.
     # This is the most honest measure of "did the chain hit the right mean".
-    print("\n[3] Empirical NUTS Z-scores at small budgets")
+    # N_SEEDS controls how well-resolved the IQR ribbon is; default 25 so
+    # the 25/75 percentiles are computed from ~6 samples on each side.
+    N_SEEDS = int(os.environ.get("NUTS_N_SEEDS", "25"))
+    print(f"\n[3] Empirical NUTS Z-scores at small budgets ({N_SEEDS} seeds)")
     nuts_z_rows = []
+    # The 200+500×4 config has tripped LLVM "Cannot allocate memory" on the
+    # JIT compile cache after the 100+400×2 chain; dropped for now since the
+    # 4 remaining budgets already span wall ∈ [1, 14] s — the relevant range
+    # for the "sub-10 s NUTS" story.
     for (warm, samp, chains) in [(30, 50, 1), (50, 100, 2), (100, 200, 2),
-                                   (100, 400, 2), (200, 500, 4)]:
-        for seed in range(5):
+                                   (100, 400, 2)]:
+        for seed in range(N_SEEDS):
             wall, sm, samples = run_nuts(model, warm, samp, chains, seed=seed)
             P0_s = np.concatenate(samples['P0']); be_s = np.concatenate(samples['beta'])
             Z_P0 = abs(P0_s.mean() - P0_mu_g) / P0_std_g
@@ -114,9 +133,12 @@ def main():
             nuts_z_rows.append((warm, samp, chains, seed, wall, Z_P0, Z_be,
                                 ess_P0, ess_be))
         cfg = f"{warm}+{samp}×{chains}"
-        walls = [r[4] for r in nuts_z_rows[-5:]]
-        zs    = [r[5] for r in nuts_z_rows[-5:]]
-        print(f"  {cfg:<14}: wall = {np.median(walls):.2f}s, |Z_P0| median = {np.median(zs):.3f}")
+        walls = [r[4] for r in nuts_z_rows[-N_SEEDS:]]
+        zs    = [r[5] for r in nuts_z_rows[-N_SEEDS:]]
+        print(f"  {cfg:<14}: wall = {np.median(walls):.2f}s, |Z_P0| median = {np.median(zs):.3f}  (n={N_SEEDS})", flush=True)
+        # Flush JIT cache between budget points to avoid LLVM-side OOM
+        # when many distinct (warm, samp, chains) trace shapes accumulate.
+        _clear_jit_caches()
 
     nuts_z = np.asarray(nuts_z_rows, dtype=float)
 
