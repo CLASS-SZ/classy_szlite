@@ -9,6 +9,8 @@
 
 **Fast, differentiable cosmology in pure JAX.**
 
+![classy_szlite pipeline](docs/_static/pipeline.png)
+
 `classy_szlite` provides JIT-compiled, `jax.grad`-friendly access to:
 
 - **CMB angular power spectra** — TT, TE, EE
