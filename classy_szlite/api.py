@@ -222,7 +222,10 @@ def cl_yy_trispectrum(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
 def cl_yy_covariance(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
                       delta_ell, fsky: float = 1.0,
                       include_trispectrum: bool = True,
-                      **kwargs) -> jax.Array:
+                      z_grid: jax.Array | None = None,
+                      n_z: int = 100, m_min: float = 1e10,
+                      m_max: float = 3.5e15, n_m: int = 200,
+                      delta_crit: float = 500.0) -> jax.Array:
     """Bandpower covariance for tSZ :math:`C_\\ell^{yy}`.
 
     .. math::
@@ -238,6 +241,10 @@ def cl_yy_covariance(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
     >>> L = jnp.linalg.cholesky(cov)
     >>> y_synth = y_fid + L @ jax.random.normal(key, (len(ell),))
 
+    The covariance is on the dimensionless :math:`C_\\ell`. If the data
+    vector is in :math:`D_\\ell\\times 10^{12}` units, rescale by the
+    outer product of ``ell(ell+1)/(2π) × 1e12`` before Cholesky.
+
     Parameters
     ----------
     cosmo, profile, ell : as for :func:`cl_yy`.
@@ -250,18 +257,31 @@ def cl_yy_covariance(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
         :math:`1/(4\\pi f_\\mathrm{sky})`.
     include_trispectrum : bool
         If False, return Gaussian variance only (diagonal).
-    **kwargs : forwarded to the underlying grid builders (``n_z``, ``n_m``,
-        ``m_min``, ``m_max``, ``delta_crit``, ``z_grid``).
+    z_grid, n_z, m_min, m_max, n_m, delta_crit
+        Forwarded to the cosmology / halo-model grid builders.
     """
     ell_arr = jnp.asarray(ell)
     delta_ell_arr = jnp.broadcast_to(jnp.asarray(delta_ell, dtype=ell_arr.dtype),
                                       ell_arr.shape)
-    cl_1h, cl_2h = cl_yy(cosmo, profile, ell_arr, **kwargs)
+    # Build the cosmology and halo grids ONCE and reuse for both cl_yy
+    # and the trispectrum.  Avoids the 2× emulator + HMF build cost the
+    # naive composition cl_yy(...) + cl_yy_trispectrum(...) would pay.
+    if z_grid is None:
+        z_grid = jnp.geomspace(0.005, 3.0, n_z)
+    cosmo_dict = cosmo_to_dict(cosmo)
+    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid)
+    hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
+                          m_min=m_min, m_max=m_max, n_m=n_m)
+    pp_dict = profile._asdict()
+
+    cl_1h, cl_2h = cl_yy_1h_2h(ell_arr, cg, hg, cosmo_dict,
+                                profile='arnaud10', profile_params=pp_dict)
     cl_tot = cl_1h + cl_2h
     gaussian_diag = 2.0 * cl_tot ** 2 / ((2.0 * ell_arr + 1.0)
                                           * delta_ell_arr * fsky)
     cov = jnp.diag(gaussian_diag)
     if include_trispectrum:
-        T = cl_yy_trispectrum(cosmo, profile, ell_arr, **kwargs)
+        T = cl_yy_1h_trispectrum(ell_arr, cg, hg, cosmo_dict,
+                                  profile='arnaud10', profile_params=pp_dict)
         cov = cov + T / (4.0 * jnp.pi * fsky)
     return cov
