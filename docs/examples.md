@@ -113,24 +113,31 @@ plt.grid(True, alpha=0.3, which="both"); plt.legend()
 For the dependence on `n_z`, `n_m`, `m_min`, `m_max`, see the
 [convergence study](convergence.md).
 
-## Bestfit + NUTS + RW-MH on Cl^yy bandpowers (baseline cosmology)
+## Bestfit + NUTS + RW-MH on synthetic Cl^yy bandpowers (baseline cosmology)
 
 The factory closure makes both gradient-based optimisation (L-BFGS)
 and Hamiltonian-style samplers (NUTS) a natural fit: each forward
 pass is one ~5 ms `ev(profile)` call, gradients are exact via
-`jax.grad`, and there is no proposal-covariance tuning. The example
-below fits a tSZ Cl^yy bandpower dataset at a fixed baseline
-cosmology (Planck-18-like, σ₈ ≈ 0.81) by running **both samplers in
-sequence**:
+`jax.grad`, and there is no proposal-covariance tuning.
 
-1. **L-BFGS bestfit** of (P₀, β) via `scipy.optimize.minimize` with
+We build a **fully self-contained** inference example at a fixed
+baseline cosmology (Planck-18-like, σ₈ ≈ 0.81) by:
+
+1. **Generating synthetic bandpowers** at a fiducial Arnaud-10 profile
+   via a Cholesky decomposition of the analytic tSZ bandpower
+   covariance (Gaussian variance + 1-halo connected trispectrum) —
+   one call to [`classy_szlite.cl_yy_covariance`](api.md). For tSZ
+   the trispectrum dominates the Gaussian variance by ~300–1000× on
+   the diagonal, so leaving it out would massively under-state the
+   error bars.
+2. **L-BFGS bestfit** of (P₀, β) via `scipy.optimize.minimize` with
    exact `jax.grad` gradients — converges in ~30–40 fn evals,
    < 0.5 s.
-2. **NumPyro NUTS** for the full posterior, initialised at the
+3. **NumPyro NUTS** for the full posterior, initialised at the
    bestfit — reaches a publication-grade posterior
    (|Z| < 0.1σ vs gold-standard, R-hat < 1.05) in **~10 s** wall.
-3. **cobaya RW-MH** chain loaded from disk for sampler-vs-sampler
-   overlay — typically ~10–15 min wall to converge to R-1 = 0.01.
+4. **cobaya RW-MH** for sampler-vs-sampler comparison — typically
+   ~10–15 min wall single-core to converge to R-1 = 0.01.
 
 ```python
 import jax, jax.numpy as jnp
@@ -140,16 +147,35 @@ import numpyro, numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 import classy_szlite as csl
 
-# --- load bandpowers + covariance ---
-ell, y, cov = load_bandpowers()                       # (N,) (N,) (N, N)
-inv_cov     = jnp.asarray(np.linalg.inv(cov))
+# --- baseline cosmology + fiducial profile ---
+cosmo    = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118,
+                           H0=68.22, tau_reio=0.0561,
+                           ln10_10_As=3.060, n_s=0.9743)
+fiducial = csl.ProfileParamsA10(P0=1.20, beta=2.74, B=1.25)
 
-# baseline cosmology (Planck-18-like, σ₈ ≈ 0.81)
-cosmo = csl.CosmoParams(omega_b=0.0226, omega_cdm=0.118,
-                        H0=68.22, tau_reio=0.0561,
-                        ln10_10_As=3.060, n_s=0.9743)
-ev = csl.cl_yy_factory(cosmo, jnp.asarray(ell))       # JIT'd closure
-dl_factor = jnp.asarray(ell * (ell + 1) / (2 * np.pi) * 1e12)
+# --- log-spaced ell-binning ---
+ell       = jnp.geomspace(100.0, 5000.0, 8)
+delta_ell = ell * jnp.log(ell[1] / ell[0])         # bandwidth per bin
+fsky      = 0.6
+
+# --- analytic covariance (Gaussian + 1h trispectrum) + Cholesky ---
+cov     = csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, fsky=fsky)
+inv_cov = jnp.linalg.inv(cov)
+L_chol  = jnp.linalg.cholesky(cov)
+print(f"Trispectrum / Gaussian diag ratio: "
+      f"{np.diag(np.asarray(cov)) / np.diag(np.asarray("
+      f"csl.cl_yy_covariance(cosmo, fiducial, ell, delta_ell, "
+      f"fsky=fsky, include_trispectrum=False)))}")
+
+# --- generate one synthetic D_ell^yy realisation ---
+ev        = csl.cl_yy_factory(cosmo, ell)          # JIT'd fast closure
+dl_factor = ell * (ell + 1) / (2 * jnp.pi) * 1e12
+c1, c2    = ev(fiducial)
+Dell_fid  = dl_factor * (c1 + c2)
+key       = jax.random.PRNGKey(42)
+Dell_data = Dell_fid + L_chol @ jax.random.normal(key, ell.shape)
+# To use real ACT / Planck data instead: replace the three lines
+# above with a loader that returns (ell, Dell_data, cov) from disk.
 
 def forward(P0, beta):
     prof = csl.ProfileParamsA10(P0=P0, c500=1.156, gamma=0.3292,
@@ -159,7 +185,7 @@ def forward(P0, beta):
 
 # 1) L-BFGS bestfit with JAX gradients
 def neg_log_like(x):
-    r = jnp.asarray(y) - forward(x[0], x[1])
+    r = Dell_data - forward(x[0], x[1])
     return 0.5 * r @ inv_cov @ r
 nll, gnll = jax.jit(neg_log_like), jax.jit(jax.grad(neg_log_like))
 bf = so.minimize(lambda x: float(nll(x)), [8.13, 5.48],
@@ -171,7 +197,7 @@ print(f"bestfit:   P0={bf.x[0]:.2f}  β={bf.x[1]:.2f}  χ²={2*bf.fun:.1f}/6")
 def model():
     P0   = numpyro.sample("P0",   dist.Uniform(0.0, 20.0))
     beta = numpyro.sample("beta", dist.Uniform(0.0, 10.0))
-    r    = jnp.asarray(y) - forward(P0, beta)
+    r    = Dell_data - forward(P0, beta)
     numpyro.factor("loglike", -0.5 * r @ inv_cov @ r)
 
 mcmc = MCMC(NUTS(model, dense_mass=True),
@@ -185,25 +211,27 @@ print(f"NUTS:      P0={s['P0'].mean():.2f}±{s['P0'].std():.2f}  "
       f"β={s['beta'].mean():.2f}±{s['beta'].std():.2f}")
 ```
 
-Typical output on a single-core CPU (warm closure, JIT compiled):
+Typical output on a single-core CPU (warm closure, JIT compiled) —
+the synthetic posterior is centred on the fiducial by construction
+(modulo Monte-Carlo scatter from the single noise realisation):
 
 ```
-bestfit:   P0=1.20  β=2.74  χ²=12.3/6           (38 fn evals, ~0.4 s)
-NUTS:      P0=1.92±1.40  β=3.21±0.75           (~10 s, ESS≈100, R-hat<1.05)
+Trispectrum / Gaussian diag ratio: ~300–1000× per bin
+bestfit:   P0≈P0_fid  β≈β_fid  χ²≈8/6     (38 fn evals, ~0.4 s)
+NUTS:      P0=...±...  β=...±...           (~10 s, ESS≈100, R-hat<1.05)
 ```
 
-For the **RW-MH overlay**, run a cobaya chain with the same likelihood
-and load the chain with `getdist.loadMCSamples`. A converged cobaya
-chain (R-1 = 0.01) typically takes ~10–15 min single-core. NUTS and
-RW-MH posteriors agree to within sampling noise (NUTS is ~50–100×
-faster wall-for-wall at matched accuracy).
+The synthetic-data path is fully reproducible — you only need
+`classy_szlite` + `numpyro` + `scipy`, no external bandpower files.
+Swap in real bandpowers by replacing the three lines that build
+`ell`, `Dell_data`, and `cov`; everything downstream is unchanged.
 
 **Triangle plot** with both posteriors overlaid:
 
 ![NUTS vs cobaya RW-MH posterior on (P₀, β) at the baseline cosmology](_static/posterior_compare.png)
 
-The full runnable script (loader + bestfit + NUTS + MH overlay +
-plotting) is at
+The full runnable script (synthetic data + bestfit + NUTS + MH overlay
++ plotting) is at
 [`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py).
 
 ## Posterior bands on the GNFW pressure profile

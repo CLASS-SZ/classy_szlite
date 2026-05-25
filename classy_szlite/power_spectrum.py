@@ -221,6 +221,159 @@ def _interp_1d_log(log_x, log_x_table, y_table):
 # cl_yy — public API
 # ===================================================================
 
+def _y_ell_grid(ell: jax.Array,
+                cg: CosmoGrids,
+                hg: HaloGrids,
+                params: dict,
+                profile: str,
+                profile_params: dict | None):
+    """Compute the Compton-y per-halo coefficient y_ell(M, z) on the
+    (n_ell, n_z, n_m) grid plus the line-of-sight volume element.
+
+    Returns ``(y_ell, dVdzdOmega)`` with shapes ``(n_ell, n_z, n_m)`` and
+    ``(n_z,)``. Internal helper used by both :func:`cl_yy_1h_2h` and
+    :func:`cl_yy_1h_trispectrum`.
+    """
+    h = params['H0'] / 100.0
+    Omega_b   = params['omega_b'] / h ** 2
+    Omega_cdm = params['omega_cdm'] / h ** 2
+    Omega_ncdm = params.get('m_ncdm', 0.06) / (93.14 * h ** 2)
+    Omega_m = Omega_b + Omega_cdm + Omega_ncdm
+    f_b = Omega_b / Omega_m
+
+    n_ell = ell.shape[0]
+    n_z = cg.z.shape[0]
+    n_m = hg.lnM.shape[0]
+    M = jnp.exp(hg.lnM)                              # (n_m,) M_sun
+
+    if profile == 'arnaud10':
+        P0    = profile_params.get('P0', _A10_P0) if profile_params else _A10_P0
+        c500  = profile_params.get('c500', _A10_C500) if profile_params else _A10_C500
+        gamma = profile_params.get('gamma', _A10_GAMMA) if profile_params else _A10_GAMMA
+        alpha = profile_params.get('alpha', _A10_ALPHA) if profile_params else _A10_ALPHA
+        beta  = profile_params.get('beta', _A10_BETA) if profile_params else _A10_BETA
+        B     = profile_params.get('B', 1.0) if profile_params else 1.0
+
+        shape_params_vary = (profile_params is not None
+                             and any(k in profile_params
+                                     for k in ('gamma', 'alpha', 'beta')))
+        if shape_params_vary:
+            kernel = (_TABLE_U_GRID ** (-gamma)
+                      * (1.0 + _TABLE_U_GRID ** alpha)
+                      ** ((gamma - beta) / alpha))
+            _, g_table = _TABLE_SBT(kernel)
+            g_table = g_table * jnp.sqrt(jnp.pi / 2.0)
+        else:
+            g_table = _A10_G_TABLE
+
+        M_eff = M / B
+        r_delta = jnp.power(
+            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 500.0
+                                     * hg.rho_crit_z[:, None]),
+            1.0 / 3.0)
+
+        s_query = ((ell[:, None, None] + 0.5)
+                   * r_delta[None, :, :]
+                   * (1.0 + cg.z)[None, :, None]
+                   / (c500 * cg.chi[None, :, None]))
+
+        log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
+        g_interp = _interp_1d_log(
+            log_sq, _LOG_TABLE_S, g_table
+        ).reshape(n_ell, n_z, n_m)
+
+        r_over_c = r_delta / c500
+        u_at_ell = (4.0 * jnp.pi * P0
+                    * r_over_c[None, :, :] ** 3
+                    * g_interp)
+
+        H0_over_c = h * 100.0 * 1e3 / _c_SI
+        Ez = cg.Hz / H0_over_c
+        M_h_eff = M_eff * h
+        P_delta_grid = _P500_arnaud10(M_h_eff[None, :], Ez[:, None], h)
+
+    else:  # battaglia12
+        B = profile_params.get('B', 1.0) if profile_params else 1.0
+        M_eff = M / B
+        r_delta = jnp.power(
+            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 200.0
+                                     * hg.rho_crit_z[:, None]),
+            1.0 / 3.0)
+
+        P0, xc, beta_vals = _b12_params(M_eff[None, :], cg.z[:, None],
+                                        profile_params=profile_params)
+
+        s_query = ((ell[:, None, None] + 0.5)
+                   * r_delta[None, :, :] * xc[None, :, :]
+                   * (1.0 + cg.z)[None, :, None]
+                   / cg.chi[None, :, None])
+
+        n_s = _TABLE_S_GRID.shape[0]
+        n_beta = _TABLE_BETAS.shape[0]
+        beta_flat = beta_vals.ravel()
+        ib = jnp.clip(jnp.searchsorted(_TABLE_BETAS, beta_flat) - 1,
+                       0, n_beta - 2)
+        tb = ((beta_flat - _TABLE_BETAS[ib])
+              / (_TABLE_BETAS[ib + 1] - _TABLE_BETAS[ib]))
+        ib_b = jnp.tile(ib, n_ell)
+        tb_b = jnp.tile(tb, n_ell)
+        log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
+        is_ = jnp.clip(jnp.searchsorted(_LOG_TABLE_S, log_sq) - 1,
+                        0, n_s - 2)
+        ts = ((log_sq - _LOG_TABLE_S[is_])
+              / (_LOG_TABLE_S[is_ + 1] - _LOG_TABLE_S[is_]))
+        g00 = _B12_G_TABLE[ib_b, is_]
+        g01 = _B12_G_TABLE[ib_b, is_ + 1]
+        g10 = _B12_G_TABLE[ib_b + 1, is_]
+        g11 = _B12_G_TABLE[ib_b + 1, is_ + 1]
+        g_interp = ((1 - tb_b) * (1 - ts) * g00
+                    + (1 - tb_b) * ts * g01
+                    + tb_b * (1 - ts) * g10
+                    + tb_b * ts * g11).reshape(n_ell, n_z, n_m)
+
+        u_at_ell = (4.0 * jnp.pi * r_delta[None, :, :] ** 3
+                    * P0[None, :, :] * xc[None, :, :] ** 3
+                    * g_interp)
+        P_delta_grid = _P_delta(M[None, :], r_delta, f_b)
+
+    prefac = PREFAC_Y_E if profile == 'arnaud10' else PREFAC_Y
+    onepz2_chi2 = (1.0 + cg.z) ** 2 / cg.chi ** 2
+    y_ell = (prefac * P_delta_grid[None, :, :]
+             * u_at_ell
+             * onepz2_chi2[None, :, None])             # (n_ell, n_z, n_m)
+    dVdzdOmega = cg.chi ** 2 / cg.Hz                   # (n_z,)
+    return y_ell, dVdzdOmega
+
+
+def cl_yy_1h_trispectrum(ell: jax.Array,
+                          cg: CosmoGrids,
+                          hg: HaloGrids,
+                          params: dict,
+                          profile: str = 'arnaud10',
+                          profile_params: dict | None = None) -> jax.Array:
+    """1-halo connected trispectrum :math:`T^{1h}(\\ell, \\ell')`.
+
+    .. math::
+       T^{1h}_{yyyy}(\\ell, \\ell') = \\int\\!dz\\,\\frac{dV}{d\\Omega\\,dz}
+           \\,\\int\\!d\\ln M\\,\\frac{dn}{d\\ln M}\\,
+           |y_\\ell(M,z)|^2\\,|y_{\\ell'}(M,z)|^2
+
+    Returns a symmetric ``(n_ell, n_ell)`` matrix.  Used in the
+    bandpower covariance via :func:`classy_szlite.cl_yy_covariance`.
+    """
+    y_ell, dVdzdOmega = _y_ell_grid(ell, cg, hg, params, profile, profile_params)
+    y2 = y_ell ** 2                                    # (n_ell, n_z, n_m)
+    # integrand[i, j, z, M] = HMF[z, M] * y2[i, z, M] * y2[j, z, M]
+    integrand = (hg.dndlnm[None, None, :, :]
+                 * y2[:, None, :, :]
+                 * y2[None, :, :, :])                  # (n_ell, n_ell, n_z, n_m)
+    M_integ = jnp.trapezoid(integrand, hg.lnM, axis=3) # (n_ell, n_ell, n_z)
+    T = jnp.trapezoid(dVdzdOmega[None, None, :] * M_integ,
+                       cg.z, axis=2)                   # (n_ell, n_ell)
+    # Symmetrise — numerical floor for any FP asymmetry from the M-integral
+    return 0.5 * (T + T.T)
+
+
 def cl_yy_1h_2h(ell: jax.Array,
                 cg: CosmoGrids,
                 hg: HaloGrids,
@@ -252,144 +405,11 @@ def cl_yy_1h_2h(ell: jax.Array,
     cl_1h, cl_2h : 1-d arrays, shape (n_ell,)
         Dimensionless C_ell.
     """
-    h = params['H0'] / 100.0
-    Omega_b   = params['omega_b'] / h ** 2
-    Omega_cdm = params['omega_cdm'] / h ** 2
-    Omega_ncdm = params.get('m_ncdm', 0.06) / (93.14 * h ** 2)
-    Omega_m = Omega_b + Omega_cdm + Omega_ncdm
-    f_b = Omega_b / Omega_m
-
     n_ell = ell.shape[0]
     n_z = cg.z.shape[0]
-    n_m = hg.lnM.shape[0]
 
-    M = jnp.exp(hg.lnM)                              # (n_m,) M_sun  — TRUE halo mass
-
-    # ── y_ell computation ────────────────────────────────────────────────
-    if profile == 'arnaud10':
-        # Extract profile parameters (fall back to module defaults)
-        P0    = profile_params.get('P0', _A10_P0) if profile_params else _A10_P0
-        c500  = profile_params.get('c500', _A10_C500) if profile_params else _A10_C500
-        gamma = profile_params.get('gamma', _A10_GAMMA) if profile_params else _A10_GAMMA
-        alpha = profile_params.get('alpha', _A10_ALPHA) if profile_params else _A10_ALPHA
-        beta  = profile_params.get('beta', _A10_BETA) if profile_params else _A10_BETA
-        # Hydrostatic mass bias: M_HSE = M_true / B. The Arnaud 10 P_500 was
-        # calibrated against M_HSE, so the profile is evaluated at M_eff and
-        # r_500c at M_eff. B = 1.0 reproduces the no-bias case (back-compat).
-        B     = profile_params.get('B', 1.0) if profile_params else 1.0
-
-        # Recompute FT table when shape params differ from defaults
-        shape_params_vary = (profile_params is not None
-                             and any(k in profile_params
-                                     for k in ('gamma', 'alpha', 'beta')))
-        if shape_params_vary:
-            kernel = (_TABLE_U_GRID ** (-gamma)
-                      * (1.0 + _TABLE_U_GRID ** alpha)
-                      ** ((gamma - beta) / alpha))
-            _, g_table = _TABLE_SBT(kernel)
-            g_table = g_table * jnp.sqrt(jnp.pi / 2.0)
-        else:
-            g_table = _A10_G_TABLE
-
-        # Effective (HSE) mass and r_500c. M_eff = M_true / B.
-        M_eff = M / B                                  # (n_m,)
-        r_delta = jnp.power(
-            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 500.0
-                                     * hg.rho_crit_z[:, None]),
-            1.0 / 3.0)                                # (n_z, n_m) — this is r_500c_HSE
-
-        # s = k_phys × r_500c / c500,  k_phys = (ell+0.5)(1+z)/chi = (ell+0.5)/d_A
-        s_query = ((ell[:, None, None] + 0.5)
-                   * r_delta[None, :, :]
-                   * (1.0 + cg.z)[None, :, None]
-                   / (c500 * cg.chi[None, :, None]))
-
-        # 1-D interpolation
-        log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
-        g_interp = _interp_1d_log(
-            log_sq, _LOG_TABLE_S, g_table
-        ).reshape(n_ell, n_z, n_m)
-
-        # ũ = 4π P0 (r/c500)³ g(s)  [Mpc³]
-        r_over_c = r_delta / c500
-        u_at_ell = (4.0 * jnp.pi * P0
-                    * r_over_c[None, :, :] ** 3
-                    * g_interp)
-
-        # Arnaud 2010 electron pressure P_500 at M_HSE [eV/cm³]
-        H0_over_c = h * 100.0 * 1e3 / _c_SI   # H0/c in 1/Mpc
-        Ez = cg.Hz / H0_over_c                  # (n_z,)
-        M_h_eff = M_eff * h                      # M_HSE in M_sun/h
-        P_delta_grid = _P500_arnaud10(M_h_eff[None, :], Ez[:, None], h)
-
-    else:  # battaglia12
-        # Hydrostatic mass bias for B12 as well (default 1.0). The B12 fit
-        # is calibrated against simulation halo masses; setting B ≠ 1 lets
-        # users mimic a calibration offset, in the same M → M/B sense as A10.
-        B = profile_params.get('B', 1.0) if profile_params else 1.0
-
-        # Effective (HSE) mass and r_200c
-        M_eff = M / B                                  # (n_m,)
-        r_delta = jnp.power(
-            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 200.0
-                                     * hg.rho_crit_z[:, None]),
-            1.0 / 3.0)
-
-        P0, xc, beta_vals = _b12_params(M_eff[None, :], cg.z[:, None],
-                                        profile_params=profile_params)
-
-        # s = k_phys × r_200c × xc,  k_phys = (ell+0.5)(1+z)/chi
-        s_query = ((ell[:, None, None] + 0.5)
-                   * r_delta[None, :, :] * xc[None, :, :]
-                   * (1.0 + cg.z)[None, :, None]
-                   / cg.chi[None, :, None])
-
-        # 2-D bilinear interpolation in (log_s, beta)
-        n_s = _TABLE_S_GRID.shape[0]
-        n_beta = _TABLE_BETAS.shape[0]
-
-        beta_flat = beta_vals.ravel()
-        ib = jnp.clip(jnp.searchsorted(_TABLE_BETAS, beta_flat) - 1,
-                       0, n_beta - 2)
-        tb = ((beta_flat - _TABLE_BETAS[ib])
-              / (_TABLE_BETAS[ib + 1] - _TABLE_BETAS[ib]))
-        ib_b = jnp.tile(ib, n_ell)
-        tb_b = jnp.tile(tb, n_ell)
-
-        log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
-        is_ = jnp.clip(jnp.searchsorted(_LOG_TABLE_S, log_sq) - 1,
-                        0, n_s - 2)
-        ts = ((log_sq - _LOG_TABLE_S[is_])
-              / (_LOG_TABLE_S[is_ + 1] - _LOG_TABLE_S[is_]))
-
-        g00 = _B12_G_TABLE[ib_b, is_]
-        g01 = _B12_G_TABLE[ib_b, is_ + 1]
-        g10 = _B12_G_TABLE[ib_b + 1, is_]
-        g11 = _B12_G_TABLE[ib_b + 1, is_ + 1]
-        g_interp = ((1 - tb_b) * (1 - ts) * g00
-                    + (1 - tb_b) * ts * g01
-                    + tb_b * (1 - ts) * g10
-                    + tb_b * ts * g11).reshape(n_ell, n_z, n_m)
-
-        # ũ = 4π r³ P0 xc³ g(s, β)  [Mpc³]
-        u_at_ell = (4.0 * jnp.pi * r_delta[None, :, :] ** 3
-                    * P0[None, :, :] * xc[None, :, :] ** 3
-                    * g_interp)
-
-        # P_200c [eV/cm³]
-        P_delta_grid = _P_delta(M[None, :], r_delta, f_b)
-
-    # ── y_ell = prefac × P × ũ × (1+z)² / χ² ────────────────────────
-    # A10: P_500 is electron pressure → use PREFAC_Y_E (no PE_FACTOR)
-    # B12: P_200c is thermal pressure → use PREFAC_Y   (with PE_FACTOR)
-    prefac = PREFAC_Y_E if profile == 'arnaud10' else PREFAC_Y
-    onepz2_chi2 = (1.0 + cg.z) ** 2 / cg.chi ** 2    # (n_z,)
-    y_ell = (prefac * P_delta_grid[None, :, :]
-             * u_at_ell
-             * onepz2_chi2[None, :, None])             # (n_ell, n_z, n_m)
-
-    # ── Volume element dV/dz/dΩ = χ²/H ─────────────────────────────────
-    dVdzdOmega = cg.chi ** 2 / cg.Hz                   # (n_z,)
+    # ── y_ell + volume element via shared helper ────────────────────────
+    y_ell, dVdzdOmega = _y_ell_grid(ell, cg, hg, params, profile, profile_params)
 
     # ── 1-halo: C_ell^1h = ∫dz (dV/dΩ) ∫dlnM (dn/dlnM) y²  ───────────
     integ_1h = hg.dndlnm[None, :, :] * y_ell ** 2      # (n_ell, n_z, n_m)

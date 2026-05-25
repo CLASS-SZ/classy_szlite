@@ -11,7 +11,7 @@ from ._registry import get_emulator, DEFAULT_COSMO
 from .params import CosmoParams, ProfileParamsA10
 from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances
 from .hmf import build_halo_grids
-from .power_spectrum import cl_yy_1h_2h
+from .power_spectrum import cl_yy_1h_2h, cl_yy_1h_trispectrum
 
 jax.config.update("jax_enable_x64", True)
 
@@ -193,3 +193,75 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
         return cl_1h, cl_2h
 
     return evaluate
+
+
+def cl_yy_trispectrum(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
+                       z_grid: jax.Array | None = None,
+                       n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
+                       n_m: int = 200, delta_crit: float = 500.0) -> jax.Array:
+    """1-halo connected tSZ trispectrum :math:`T^{1h}(\\ell, \\ell')`.
+
+    Symmetric ``(n_ell, n_ell)`` matrix.  Used to construct the
+    non-Gaussian part of the bandpower covariance; see
+    :func:`cl_yy_covariance`.
+
+    Same per-call cost as :func:`cl_yy` for the cosmology grids, plus an
+    extra ``O(n_ell² n_z n_m)`` integral for the trispectrum contraction.
+    """
+    if z_grid is None:
+        z_grid = jnp.geomspace(0.005, 3.0, n_z)
+    cosmo_dict = cosmo_to_dict(cosmo)
+    cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid)
+    hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
+                          m_min=m_min, m_max=m_max, n_m=n_m)
+    return cl_yy_1h_trispectrum(jnp.asarray(ell), cg, hg, cosmo_dict,
+                                 profile='arnaud10',
+                                 profile_params=profile._asdict())
+
+
+def cl_yy_covariance(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
+                      delta_ell, fsky: float = 1.0,
+                      include_trispectrum: bool = True,
+                      **kwargs) -> jax.Array:
+    """Bandpower covariance for tSZ :math:`C_\\ell^{yy}`.
+
+    .. math::
+       \\mathrm{Cov}(C_\\ell, C_{\\ell'}) =
+           \\frac{2\\,C_\\ell^2}{(2\\ell + 1)\\,\\Delta\\ell\\,f_\\mathrm{sky}}
+           \\,\\delta_{\\ell\\ell'}
+           \\;+\\; \\frac{T^{1h}(\\ell, \\ell')}{4\\pi\\,f_\\mathrm{sky}}
+
+    Returns the full :math:`(n_\\ell, n_\\ell)` covariance matrix
+    suitable for a Cholesky decomposition to generate synthetic
+    bandpower realisations:
+
+    >>> L = jnp.linalg.cholesky(cov)
+    >>> y_synth = y_fid + L @ jax.random.normal(key, (len(ell),))
+
+    Parameters
+    ----------
+    cosmo, profile, ell : as for :func:`cl_yy`.
+    delta_ell : float or array_like
+        Bandpower width(s) :math:`\\Delta\\ell`.  Scalar broadcasts to all
+        bins.
+    fsky : float
+        Observed sky fraction; the Gaussian variance scales as
+        :math:`1/f_\\mathrm{sky}` and the trispectrum term as
+        :math:`1/(4\\pi f_\\mathrm{sky})`.
+    include_trispectrum : bool
+        If False, return Gaussian variance only (diagonal).
+    **kwargs : forwarded to the underlying grid builders (``n_z``, ``n_m``,
+        ``m_min``, ``m_max``, ``delta_crit``, ``z_grid``).
+    """
+    ell_arr = jnp.asarray(ell)
+    delta_ell_arr = jnp.broadcast_to(jnp.asarray(delta_ell, dtype=ell_arr.dtype),
+                                      ell_arr.shape)
+    cl_1h, cl_2h = cl_yy(cosmo, profile, ell_arr, **kwargs)
+    cl_tot = cl_1h + cl_2h
+    gaussian_diag = 2.0 * cl_tot ** 2 / ((2.0 * ell_arr + 1.0)
+                                          * delta_ell_arr * fsky)
+    cov = jnp.diag(gaussian_diag)
+    if include_trispectrum:
+        T = cl_yy_trispectrum(cosmo, profile, ell_arr, **kwargs)
+        cov = cov + T / (4.0 * jnp.pi * fsky)
+    return cov
