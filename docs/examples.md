@@ -147,19 +147,25 @@ The full validation script (with `classy_sz` set-up + timing harness) is
 
 ![Battaglia-2012 validation against classy_sz](_static/b12_validation.png)
 
-**Agreement.** Within the SZ-relevant range (ℓ ≥ 1500 — i.e. ACT / SPT /
-SO bandpowers) the two codes match to **<1%**. For ℓ ≥ 500 the
-disagreement stays under 5%. At very low ℓ (≤ 200) the curves diverge
-by up to ~15%, driven by small differences in the HMF tabulation and
-the 2-halo subtraction (`classy_sz` `output: tSZ_1h` integrates the
-profile differently in the long-wavelength limit). In practice this
-region of the spectrum is dominated by 2-halo and is rarely used to
-constrain pressure parameters.
+**Agreement.** Across the full range ℓ ∈ [100, 5000], the two codes match to
+**<1.3%** (max), **0.7% mean**. The agreement holds from ℓ ≥ 1500 (SZ
+data range) down to ℓ = 100 (low-ℓ 2-halo regime) — the residual ~1%
+comes from minor differences in HMF tabulation between the codes.
 
-**Timing.** At fixed cosmology, `classy_szlite` is ~**100× faster** than
-`classy_sz` per evaluation (~4 ms vs ~430 ms on CPU), making it the
-practical choice for profile-parameter MCMCs at the cost of a one-off
-~2.6 s factory build.
+**Important — classy_sz precision settings.** Reaching this agreement
+requires running `classy_sz` with `n_l_pressure_profile = 500`,
+`n_m_pressure_profile = 500`, `n_z_pressure_profile = 500`,
+`pressure_profile_epsrel = 1e-4`, matching the official
+[`test_classy_sz_clyy_b12_fast.py`](https://github.com/CLASS-SZ/class_sz/blob/master/class-sz/tests/test_classy_sz_clyy_b12_fast.py)
+test. With the smaller defaults (`n_l = 300`, ndim_redshifts ~50, etc.) the
+classy_sz B12 FFT-tabulation is under-resolved at low ℓ and produces a
+spurious ~30% offset at ℓ < 200. This is a numerical convergence
+artefact, not a physics difference.
+
+**Timing.** At fixed cosmology, `classy_szlite` is **~800× faster** per
+evaluation than fully-converged `classy_sz` (~4 ms vs ~3.6 s on CPU),
+making it the practical choice for profile-parameter MCMCs at the cost
+of a one-off ~2.5 s factory build.
 
 ## Bandpower covariance: Gaussian + 1-halo trispectrum
 

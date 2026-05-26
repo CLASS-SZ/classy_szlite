@@ -55,6 +55,14 @@ csz.set({
     "x_min_gas_pressure_fftw": 1e-4, "x_max_gas_pressure_fftw": 1e6,
     "redshift_epsabs": 1e-40, "redshift_epsrel": 1e-4,
     "mass_epsabs":     1e-40, "mass_epsrel":     1e-4,
+    # Converged precision for the B12 FFT tabulation (matches the official
+    # classy_sz test test_classy_sz_clyy_b12_fast.py). Without these the
+    # default n_l_pressure_profile=300 leaves the FFTLog under-resolved at
+    # low ell and produces a spurious ~30% offset at ell < 200.
+    "n_z_pressure_profile": 500, "n_m_pressure_profile": 500,
+    "n_l_pressure_profile": 500,
+    "l_min_gas_pressure_profile": 1e-2, "l_max_gas_pressure_profile": 5e4,
+    "pressure_profile_epsrel": 1e-4, "pressure_profile_epsabs": 1e-100,
     # B12 defaults from Battaglia+2012 fits
     "P0_B12": 18.1,    "alpha_m_P0_B12": 0.154,    "alpha_z_P0_B12": -0.758,
     "xc_B12": 0.497,   "alpha_m_xc_B12": -0.00865, "alpha_z_xc_B12": 0.731,
