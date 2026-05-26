@@ -254,17 +254,33 @@ def _y_ell_grid(ell: jax.Array,
         beta  = profile_params.get('beta', _A10_BETA) if profile_params else _A10_BETA
         B     = profile_params.get('B', 1.0) if profile_params else 1.0
 
+        # Support injected (truncated) FT tables from cl_yy_factory(x_outSZ=…).
+        # When present, '_g_table' and '_log_s_grid' override the globals so
+        # that integration is truncated at u_max = c500 * x_outSZ instead of
+        # the default u_max = 100.
+        _injected_g    = (profile_params.get('_g_table')
+                          if profile_params is not None else None)
+        _injected_logs = (profile_params.get('_log_s_grid')
+                          if profile_params is not None else None)
+
         shape_params_vary = (profile_params is not None
                              and any(k in profile_params
                                      for k in ('gamma', 'alpha', 'beta')))
-        if shape_params_vary:
+        if _injected_g is not None:
+            # Use the pre-built truncated table verbatim (already includes
+            # the correct kernel shape with the caller's gamma/alpha/beta).
+            g_table   = _injected_g
+            log_s_use = _injected_logs
+        elif shape_params_vary:
             kernel = (_TABLE_U_GRID ** (-gamma)
                       * (1.0 + _TABLE_U_GRID ** alpha)
                       ** ((gamma - beta) / alpha))
             _, g_table = _TABLE_SBT(kernel)
             g_table = g_table * jnp.sqrt(jnp.pi / 2.0)
+            log_s_use = _LOG_TABLE_S
         else:
-            g_table = _A10_G_TABLE
+            g_table   = _A10_G_TABLE
+            log_s_use = _LOG_TABLE_S
 
         M_eff = M / B
         r_delta = jnp.power(
@@ -279,7 +295,7 @@ def _y_ell_grid(ell: jax.Array,
 
         log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
         g_interp = _interp_1d_log(
-            log_sq, _LOG_TABLE_S, g_table
+            log_sq, log_s_use, g_table
         ).reshape(n_ell, n_z, n_m)
 
         r_over_c = r_delta / c500
