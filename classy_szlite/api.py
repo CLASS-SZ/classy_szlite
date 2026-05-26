@@ -137,14 +137,43 @@ def distances(cosmo: CosmoParams, z_arr):
 # tSZ Cl^yy (halo-model, Arnaud 2010 profile)
 # ---------------------------------------------------------------------------
 
+def _a10_setup_sbt(x_outSZ: float, c500_fiducial: float):
+    """Build the truncated SBT machinery (non-JIT). Runs once per factory.
+
+    Returns ``(u_grid_jax, sb, log_s_grid)`` where ``sb`` is an mcfit
+    SphericalBessel object whose ``__call__`` uses jax primitives and
+    is JIT-traceable.
+    """
+    import numpy as _np
+    import warnings as _warnings
+    import mcfit as _mcfit
+    u_max  = float(c500_fiducial) * float(x_outSZ)
+    u_grid = _np.geomspace(1e-5, u_max, 256)
+    with _warnings.catch_warnings():
+        _warnings.filterwarnings("ignore", message="use backend='jax' if desired")
+        sb = _mcfit.SphericalBessel(u_grid, backend='jax')
+    return jnp.asarray(u_grid), sb, jnp.asarray(_np.log(_np.asarray(sb.y)))
+
+
+def _a10_compute_g(sb, u_jax, gamma, alpha, beta):
+    """JIT-traceable kernel evaluation + SBT. Returns g_table on log_s_grid."""
+    kernel = u_jax ** (-gamma) * (1.0 + u_jax ** alpha) ** ((gamma - beta) / alpha)
+    _, g = sb(kernel, extrap=False)
+    return g * jnp.sqrt(jnp.pi / 2.0)
+
+
 def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
           z_grid: jax.Array | None = None,
           n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
-          n_m: int = 200, delta_crit: float = 500.0):
+          n_m: int = 200, delta_crit: float = 500.0,
+          x_outSZ: float = 4.0, c500_fiducial: float = 1.156):
     """Halo-model tSZ angular power spectrum (full pipeline per call).
 
     Returns ``(cl_1h, cl_2h)`` — dimensionless C_ell. Multiply by
     ``ell*(ell+1)/(2π)*1e12`` to get ``D_ell × 1e12``.
+
+    The GNFW pressure profile is truncated at x = x_outSZ * r_500c
+    (default 4.0, matching classy_sz / Arnaud+2010 convention).
 
     For MCMC sampling only profile parameters at fixed cosmology, use
     :func:`cl_yy_factory` instead — ~3× faster.
@@ -155,7 +184,16 @@ def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
     cg = build_cosmo_grids(cosmo_dict, z_grid=z_grid)
     hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
                           m_min=m_min, m_max=m_max, n_m=n_m)
+    from .power_spectrum import _A10_GAMMA, _A10_ALPHA, _A10_BETA
     pp_dict = profile._asdict()
+    u_jax, sb, log_s = _a10_setup_sbt(x_outSZ, c500_fiducial)
+    g_tab = _a10_compute_g(
+        sb, u_jax,
+        pp_dict.get('gamma', _A10_GAMMA),
+        pp_dict.get('alpha', _A10_ALPHA),
+        pp_dict.get('beta',  _A10_BETA),
+    )
+    pp_dict = dict(pp_dict, _g_table=g_tab, _log_s_grid=log_s)
     cl_1h, cl_2h = cl_yy_1h_2h(jnp.asarray(ell), cg, hg, cosmo_dict,
                                 profile='arnaud10', profile_params=pp_dict)
     return cl_1h, cl_2h
@@ -190,10 +228,12 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
         Should match the c500 you will pass in ProfileParamsA10.
         Default 1.156 (Arnaud et al. 2010).
     """
-    import numpy as _np
-    import warnings as _warnings
-    import mcfit as _mcfit
-
+    # classy_sz sets the GNFW profile to exactly zero for r/r_500c > x_outSZ
+    # before FFT-transforming.  We replicate this by building a truncated
+    # u-grid (1e-5 to c500_fiducial * x_outSZ, 256 pts) and transforming
+    # with extrap=False — see :func:`_build_a10_truncated_g` for details.
+    # Truncated grid + extrap=False replicates classy_sz's x_outSZ truncation
+    # to within <1% (beta>5), <3% (beta~3), <8% (beta~1.7).
     if z_grid is None:
         z_grid = jnp.geomspace(0.005, 3.0, n_z)
     cosmo_dict = cosmo_to_dict(cosmo)
@@ -201,53 +241,21 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
     hg = build_halo_grids(cg, cosmo_dict, delta_crit=delta_crit,
                           m_min=m_min, m_max=m_max, n_m=n_m)
     ell_jax = jnp.asarray(ell)
-
-    # Build a FT table with sharp profile truncation at x_outSZ.
-    #
-    # classy_sz sets the GNFW profile to exactly zero for r/r_500c > x_outSZ
-    # before FFT-transforming.  We replicate this by building a u-grid that
-    # runs exactly from 1e-5 to u_max = c500_fiducial * x_outSZ (256 points)
-    # and transforming with extrap=False (no power-law extrapolation beyond the
-    # grid edges).  This avoids two failure modes:
-    #
-    #   - extrap=True on the truncated grid: power-law extrapolation beyond
-    #     u_max incorrectly adds contribution from the non-zero profile tail
-    #     for slowly decaying (low-beta) kernels.
-    #   - extrap=True / extrap=False on the full grid (1e-5…100) with trailing
-    #     zeros: mcfit's ratio-based extrapolation computes 0/0 → NaN, and
-    #     extrap=False with a sharp zero edge introduces Gibbs ringing.
-    #
-    # Truncated grid + extrap=False replicates classy_sz's x_outSZ truncation
-    # to within <1% (beta>5), <3% (beta~3), <8% (beta~1.7).
-    from .power_spectrum import (_A10_GAMMA as _G0, _A10_ALPHA as _AL0)
-
-    _u_max         = float(c500_fiducial) * float(x_outSZ)
-    _u_grid_trunc  = _np.geomspace(1e-5, _u_max, 256)   # ends exactly at u_max
-    with _warnings.catch_warnings():
-        _warnings.filterwarnings("ignore", message="use backend='jax' if desired")
-        _sb_trunc = _mcfit.SphericalBessel(_u_grid_trunc, backend='jax')
-    _local_log_s   = jnp.asarray(_np.log(_np.asarray(_sb_trunc.y)))
-
-    def _build_local_g(gamma, alpha, beta):
-        """Build sharp-truncated g(s) for given shape params (extrap=False)."""
-        u = jnp.asarray(_u_grid_trunc)
-        kernel = (u ** (-gamma)
-                  * (1.0 + u ** alpha) ** ((gamma - beta) / alpha))
-        _, g = _sb_trunc(kernel, extrap=False)
-        return g * jnp.sqrt(jnp.pi / 2.0)
+    from .power_spectrum import _A10_GAMMA, _A10_ALPHA, _A10_BETA
+    # Build the truncated SBT machinery once (outside @jax.jit); the JIT'd
+    # evaluate then only does the kernel + SBT call, both jax-primitive.
+    u_jax, sb, log_s = _a10_setup_sbt(x_outSZ, c500_fiducial)
 
     @jax.jit
     def evaluate(profile: ProfileParamsA10):
         pp = profile._asdict()
-        gamma = pp.get('gamma', _G0)
-        alpha = pp.get('alpha', _AL0)
-        beta  = pp.get('beta',  5.4807)
-        # Build truncated g-table for this (gamma, alpha, beta) combo.
-        # JAX traces through _sb_trunc since mcfit backend='jax' uses
-        # rfft / multiply / hfft — all JAX primitives.
-        g_tab = _build_local_g(gamma, alpha, beta)
-        # Inject truncated tables into profile_params so _y_ell_grid uses them.
-        pp_ext = dict(pp, _g_table=g_tab, _log_s_grid=_local_log_s)
+        g_tab = _a10_compute_g(
+            sb, u_jax,
+            pp.get('gamma', _A10_GAMMA),
+            pp.get('alpha', _A10_ALPHA),
+            pp.get('beta',  _A10_BETA),
+        )
+        pp_ext = dict(pp, _g_table=g_tab, _log_s_grid=log_s)
         cl_1h, cl_2h = cl_yy_1h_2h(
             ell_jax, cg, hg, cosmo_dict,
             profile='arnaud10', profile_params=pp_ext,
