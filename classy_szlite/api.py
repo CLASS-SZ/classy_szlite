@@ -164,7 +164,8 @@ def cl_yy(cosmo: CosmoParams, profile: ProfileParamsA10, ell,
 def cl_yy_factory(cosmo: CosmoParams, ell,
                   z_grid: jax.Array | None = None,
                   n_z: int = 100, m_min: float = 1e10, m_max: float = 3.5e15,
-                  n_m: int = 200, delta_crit: float = 500.0):
+                  n_m: int = 200, delta_crit: float = 500.0,
+                  x_outSZ: float = 4.0, c500_fiducial: float = 1.156):
     """Fixed-cosmology fast-path: precompute the heavy bits, get a closure.
 
     Builds ``CosmoGrids`` (emulators → P_lin, distances, σ(R)) and
@@ -175,7 +176,24 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
     A subsequent ``ev(profile)`` call only runs the ``cl_yy_1h_2h``
     halo-model integration — typically ~5 ms per call. Intended for MCMC
     over profile / nuisance parameters with fixed cosmology.
+
+    Parameters
+    ----------
+    x_outSZ : float, optional
+        Outer truncation radius of the GNFW pressure profile in units of
+        r_500c (i.e. x = r / r_500c). The FT look-up table u-grid runs
+        from 1e-5 to ``c500_fiducial * x_outSZ`` (in u = c500 * x units),
+        matching the classy_sz ``x_outSZ`` convention. Default 4.0
+        (literature / ACT-DR6 may26 convention).
+    c500_fiducial : float, optional
+        c500 used to convert x_outSZ → u_max at table-build time.
+        Should match the c500 you will pass in ProfileParamsA10.
+        Default 1.156 (Arnaud et al. 2010).
     """
+    import numpy as _np
+    import warnings as _warnings
+    import mcfit as _mcfit
+
     if z_grid is None:
         z_grid = jnp.geomspace(0.005, 3.0, n_z)
     cosmo_dict = cosmo_to_dict(cosmo)
@@ -184,11 +202,55 @@ def cl_yy_factory(cosmo: CosmoParams, ell,
                           m_min=m_min, m_max=m_max, n_m=n_m)
     ell_jax = jnp.asarray(ell)
 
+    # Build a FT table with sharp profile truncation at x_outSZ.
+    #
+    # classy_sz sets the GNFW profile to exactly zero for r/r_500c > x_outSZ
+    # before FFT-transforming.  We replicate this by building a u-grid that
+    # runs exactly from 1e-5 to u_max = c500_fiducial * x_outSZ (256 points)
+    # and transforming with extrap=False (no power-law extrapolation beyond the
+    # grid edges).  This avoids two failure modes:
+    #
+    #   - extrap=True on the truncated grid: power-law extrapolation beyond
+    #     u_max incorrectly adds contribution from the non-zero profile tail
+    #     for slowly decaying (low-beta) kernels.
+    #   - extrap=True / extrap=False on the full grid (1e-5…100) with trailing
+    #     zeros: mcfit's ratio-based extrapolation computes 0/0 → NaN, and
+    #     extrap=False with a sharp zero edge introduces Gibbs ringing.
+    #
+    # Truncated grid + extrap=False replicates classy_sz's x_outSZ truncation
+    # to within <1% (beta>5), <3% (beta~3), <8% (beta~1.7).
+    from .power_spectrum import (_A10_GAMMA as _G0, _A10_ALPHA as _AL0)
+
+    _u_max         = float(c500_fiducial) * float(x_outSZ)
+    _u_grid_trunc  = _np.geomspace(1e-5, _u_max, 256)   # ends exactly at u_max
+    with _warnings.catch_warnings():
+        _warnings.filterwarnings("ignore", message="use backend='jax' if desired")
+        _sb_trunc = _mcfit.SphericalBessel(_u_grid_trunc, backend='jax')
+    _local_log_s   = jnp.asarray(_np.log(_np.asarray(_sb_trunc.y)))
+
+    def _build_local_g(gamma, alpha, beta):
+        """Build sharp-truncated g(s) for given shape params (extrap=False)."""
+        u = jnp.asarray(_u_grid_trunc)
+        kernel = (u ** (-gamma)
+                  * (1.0 + u ** alpha) ** ((gamma - beta) / alpha))
+        _, g = _sb_trunc(kernel, extrap=False)
+        return g * jnp.sqrt(jnp.pi / 2.0)
+
     @jax.jit
     def evaluate(profile: ProfileParamsA10):
+        pp = profile._asdict()
+        gamma = pp.get('gamma', _G0)
+        alpha = pp.get('alpha', _AL0)
+        beta  = pp.get('beta',  5.4807)
+        # Build truncated g-table for this (gamma, alpha, beta) combo.
+        # JAX traces through _sb_trunc since mcfit backend='jax' uses
+        # rfft / multiply / hfft — all JAX primitives.
+        g_tab = _build_local_g(gamma, alpha, beta)
+        # Inject truncated tables into profile_params so _y_ell_grid uses them.
+        pp_ext = dict(pp, _g_table=g_tab, _log_s_grid=_local_log_s)
         cl_1h, cl_2h = cl_yy_1h_2h(
             ell_jax, cg, hg, cosmo_dict,
-            profile='arnaud10', profile_params=profile._asdict(),
+            profile='arnaud10', profile_params=pp_ext,
         )
         return cl_1h, cl_2h
 
