@@ -115,6 +115,52 @@ plt.grid(True, alpha=0.3, which="both"); plt.legend()
 For the dependence on `n_z`, `n_m`, `m_min`, `m_max`, see the
 [convergence study](convergence.md).
 
+## Battaglia-2012 profile: validation against `classy_sz`
+
+`classy_szlite`'s Battaglia-2012 (B12) GNFW profile is validated against
+the reference `classy_sz` C-code at the same fixed cosmology, matched
+physical mass range, and the same Battaglia+2012 fitting coefficients.
+
+```python
+ell = jnp.geomspace(100., 5000., 30)
+from classy_szlite.api import cosmo_to_dict
+from classy_szlite.cosmology import build as build_cg
+from classy_szlite.hmf import build_halo_grids
+from classy_szlite.power_spectrum import cl_yy_1h_2h
+
+cd = cosmo_to_dict(cosmo)
+cg = build_cg(cd, z_grid=jnp.geomspace(0.005, 3.0, 100))
+hg = build_halo_grids(cg, cd, delta_crit=200.0,        # M200c HMF for B12
+                       m_min=1e10, m_max=3.5e15, n_m=200)
+
+# B12 default fitting coefficients are baked in — pass profile_params=None
+@jax.jit
+def evaluate():
+    return cl_yy_1h_2h(ell, cg, hg, cd, profile='battaglia12',
+                       profile_params=None)
+
+cl_1h, cl_2h = evaluate()    # ~4 ms warm on CPU
+```
+
+The full validation script (with `classy_sz` set-up + timing harness) is
+[`examples/validate_b12.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/validate_b12.py).
+
+![Battaglia-2012 validation against classy_sz](_static/b12_validation.png)
+
+**Agreement.** Within the SZ-relevant range (ℓ ≥ 1500 — i.e. ACT / SPT /
+SO bandpowers) the two codes match to **<1%**. For ℓ ≥ 500 the
+disagreement stays under 5%. At very low ℓ (≤ 200) the curves diverge
+by up to ~15%, driven by small differences in the HMF tabulation and
+the 2-halo subtraction (`classy_sz` `output: tSZ_1h` integrates the
+profile differently in the long-wavelength limit). In practice this
+region of the spectrum is dominated by 2-halo and is rarely used to
+constrain pressure parameters.
+
+**Timing.** At fixed cosmology, `classy_szlite` is ~**100× faster** than
+`classy_sz` per evaluation (~4 ms vs ~430 ms on CPU), making it the
+practical choice for profile-parameter MCMCs at the cost of a one-off
+~2.6 s factory build.
+
 ## Bandpower covariance: Gaussian + 1-halo trispectrum
 
 For tSZ, the bandpower covariance has two pieces:
