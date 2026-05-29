@@ -75,16 +75,40 @@ _CMB_LOG_CONVENTION = {"tt": True, "ee": True, "pp": True, "te": False}
 
 def cl_TTTEEE(cosmo: CosmoParams,
               spectra: tuple[str, ...] = ("tt", "te", "ee"),
-              ell_factor: bool = True) -> dict:
+              ell_factor: bool = True,
+              ell_convention: str = "classy_szfast") -> dict:
     """CMB angular power spectra.
 
     Returns a dict with keys ``'ell'`` and the requested spectra
     (``'tt','te','ee'``). Values are **dimensionless** — multiply by
     ``Tcmb_uK² = (2.7255e6)²`` to convert to μK².
 
-    ``ell_factor`` (default ``True``) — return ``D_ell = ell(ell+1) Cl / (2π)``;
-    ``False`` returns raw Cl.
+    Parameters
+    ----------
+    cosmo
+        ``CosmoParams`` instance (the ede-v2 input vector).
+    spectra
+        Requested spectra, any subset of ``("tt", "te", "ee", "pp")``.
+    ell_factor
+        If ``True`` (default), return ``D_ℓ = ℓ(ℓ+1) Cℓ / (2π)``. If ``False``,
+        return the raw ``Cℓ``.
+    ell_convention
+        - ``"classy_szfast"`` (default) — output ``ℓ ∈ [2, ..., 9500]``, with
+          ``Cℓ(ℓ) = pred[ℓ−2] / ℓ²``. This is what ``classy_szfast`` does inside
+          ``calculate_cmb``; using it gives bit-identical Cls to the
+          ``cobaya + classy_sz fast-mode`` stack that every published EDE chain
+          (including ACT-DR6 + Planck) was fit with.
+        - ``"emulator_modes"`` — output ``ℓ ∈ [1, ..., 9499]`` exactly as stored
+          in the ede-v2 ``modes`` metadata, with ``Cℓ(ℓ) = pred[ℓ−1] / ℓ²``. Use
+          this only if you intentionally want to disagree with the published
+          chains.
     """
+    if ell_convention not in ("classy_szfast", "emulator_modes"):
+        raise ValueError(
+            f"Unknown ell_convention {ell_convention!r}; expected "
+            "'classy_szfast' or 'emulator_modes'."
+        )
+
     full = dict(DEFAULT_COSMO); full.update(cosmo_to_dict(cosmo))
 
     out = {}
@@ -99,7 +123,13 @@ def cl_TTTEEE(cosmo: CosmoParams,
             pred = 10.0 ** pred
         out[spec] = pred
         if ell is None:
-            ell = np.asarray(em.modes)
+            modes = np.asarray(em.modes)
+            if ell_convention == "classy_szfast":
+                # pred[i] is treated as Cℓ × ℓ² with ℓ = i + 2 (drops ℓ = 1
+                # from the emulator's modes list).
+                ell = modes + 1
+            else:
+                ell = modes
 
     # ede-v2 recovery factor: raw → Cl
     factor_to_Cl = 1.0 / (ell ** 2)
@@ -109,6 +139,63 @@ def cl_TTTEEE(cosmo: CosmoParams,
     out["ell"] = ell
     if ell_factor:
         fac_dl = ell * (ell + 1) / (2.0 * np.pi)
+        for s in spectra:
+            out[s] = out[s] * fac_dl
+    return out
+
+
+def cl_TTTEEE_jax(cosmo: CosmoParams | dict,
+                  spectra: tuple[str, ...] = ("tt", "te", "ee"),
+                  ell_factor: bool = True,
+                  ell_convention: str = "classy_szfast"):
+    """JAX-traceable, JIT-able variant of :func:`cl_TTTEEE`.
+
+    Accepts either a :class:`CosmoParams` (with possibly traced JAX scalars)
+    or a plain ``dict`` whose values are jnp arrays. Returns a dict of jnp
+    arrays. The emulator forward pass is already pure-JAX (see
+    :class:`classy_szlite._emulator.Emulator.predict`); this wrapper just
+    avoids the ``np.asarray`` round-trip in :func:`cl_TTTEEE` that would
+    break tracing.
+
+    See :func:`cl_TTTEEE` for the ``ell_convention`` argument.
+    """
+    import jax.numpy as jnp
+    if ell_convention not in ("classy_szfast", "emulator_modes"):
+        raise ValueError(
+            f"Unknown ell_convention {ell_convention!r}."
+        )
+    if hasattr(cosmo, "_asdict") or hasattr(cosmo, "__dataclass_fields__"):
+        cosmo_dict = cosmo_to_dict(cosmo)
+    else:
+        cosmo_dict = dict(cosmo)
+    # Canonicalise the A_s key (callers commonly use ``ln10_10_As``).
+    if "ln10_10_As" in cosmo_dict and "ln10^{10}A_s" not in cosmo_dict:
+        cosmo_dict["ln10^{10}A_s"] = cosmo_dict.pop("ln10_10_As")
+    full = dict(DEFAULT_COSMO); full.update(cosmo_dict)
+
+    out = {}
+    ell = None
+    for spec in spectra:
+        if spec not in _CMB_LOG_CONVENTION:
+            raise ValueError(f"Unknown spectrum {spec!r}.")
+        em = get_emulator(spec)
+        p_in = {k: jnp.atleast_1d(jnp.asarray(full[k], dtype=jnp.float64))
+                for k in em.parameters}
+        pred = em.predict(p_in)
+        pred = jnp.atleast_1d(pred).reshape(-1)
+        if _CMB_LOG_CONVENTION[spec]:
+            pred = 10.0 ** pred
+        out[spec] = pred
+        if ell is None:
+            modes = jnp.asarray(em.modes, dtype=jnp.float64)
+            ell = modes + 1 if ell_convention == "classy_szfast" else modes
+
+    inv_ell2 = 1.0 / (ell ** 2)
+    for s in spectra:
+        out[s] = out[s] * inv_ell2
+    out["ell"] = ell
+    if ell_factor:
+        fac_dl = ell * (ell + 1) / (2.0 * jnp.pi)
         for s in spectra:
             out[s] = out[s] * fac_dl
     return out

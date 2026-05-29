@@ -581,3 +581,112 @@ dl     = D_ell(8.13, 5.48)                                                      
 g_P0   = jax.grad(lambda P0, b: jnp.sum(D_ell(P0, b)), argnums=0)(8.13, 5.48)    # ~17 ms warm
 g_beta = jax.grad(lambda P0, b: jnp.sum(D_ell(P0, b)), argnums=1)(8.13, 5.48)
 ```
+
+## EDE NUTS demo — recovering an MCMC posterior in 3 hours
+
+This walks through the most ambitious validation we have run with
+``classy_szlite`` so far: reproducing the ACT-DR6 + Planck **early dark energy
+(EDE)** posterior with HMC (No-U-Turn Sampler), and comparing the result
+against the published RW-MH chain that originally fit the data.
+
+The full reference for everything below — chain configuration, scripts, log
+files, posterior triangles, timing breakdowns — is the report at
+[``docs/_static/ede_nuts_report.md``](_static/ede_nuts_report.md).
+
+### Pipeline at a glance
+
+1. **Theory.** Cosmological observables come from ``classy_szlite``'s ede-v2
+   CosmoPower emulator (CMB TT/TE/EE through ℓ_max = 9 500, used via the new
+   :func:`~classy_szlite.cl_TTTEEE_jax` function with the
+   ``classy_szfast`` ℓ-convention).
+2. **Likelihoods.** The same four cobaya likelihoods used by the reference
+   chain, but re-implemented in JAX inside the new
+   :mod:`classy_szlite.likelihoods` sub-package — see
+   :func:`~classy_szlite.likelihoods.chi2_lowTT`,
+   :func:`~classy_szlite.likelihoods.chi2_sroll2`,
+   :func:`~classy_szlite.likelihoods.chi2_plac` and
+   :func:`~classy_szlite.likelihoods.chi2_mflike_v2`.
+3. **Foreground marginalisation.** The 11 amplitudes that enter linearly
+   (``a_kSZ, a_p, a_s, a_tSZ, a_c, a_gtt, a_gee, a_psee, a_pste, a_gte, xi``)
+   are sampled; SED tilts and bandpass shifts are held at the chain
+   best-fit. See :func:`~classy_szlite.likelihoods.fg_totals_jax`.
+4. **Sampler.** NumPyro NUTS, 4 parallel chains, ``dense_mass=True``,
+   ``target_accept_prob=0.9``, ``max_tree_depth=11``, 800 warmup + 3 000
+   samples per chain.
+
+### Setting up the data tables
+
+The JAX likelihoods need a small number of pre-computed tables (bandpowers,
+covariances, window functions, fixed foreground at best-fit). Extract them
+once on a machine where ``cobaya`` plus the relevant data packages are
+installed:
+
+```bash
+python -m classy_szlite.likelihoods.extract_data \
+    --chain-yaml /path/to/p-actbase_ede+n3_classsz.input.yaml \
+    --packages-path ~/cobaya_packages
+```
+
+That writes ``~/.classy_szlite/likelihood_data.npz`` (~150 MB) and
+``~/.classy_szlite/mflike_fg_components.npz`` (~25 MB). Subsequent calls
+load them automatically; alternatively set
+``CLASSY_SZLITE_LIKELIHOOD_DATA`` to point elsewhere.
+
+### Running NUTS
+
+```python
+import jax, jax.numpy as jnp
+import numpyro
+import numpyro.distributions as dist
+from numpyro.infer import NUTS, MCMC
+
+import classy_szlite as csl
+from classy_szlite.likelihoods import total_chi2
+
+UNIFORM_BOUNDS = {
+    "omega_b": (0.017, 0.027), "omega_cdm": (0.09, 0.15), "H0": (40.0, 99.0),
+    "fEDE": (0.001, 0.5), "log10z_c": (3.0, 4.3), "thetai_scf": (0.1, 3.1),
+    "logA": (2.5, 3.5), "n_s": (0.9, 1.1), "tau_reio": (0.0, 0.1),
+    # ... + 29 nuisance bounds; see scripts/jax_priors.py in the test repo.
+}
+
+def neg2_loglike(p):
+    cosmo = {
+        "H0": p["H0"], "omega_b": p["omega_b"], "omega_cdm": p["omega_cdm"],
+        "ln10_10_As": p["logA"], "n_s": p["n_s"], "tau_reio": p["tau_reio"],
+        "fEDE": p["fEDE"], "log10z_c": p["log10z_c"], "thetai_scf": p["thetai_scf"],
+        "m_ncdm": 0.02, "N_ur": 0.00441,
+    }
+    return total_chi2(cosmo, p, use_v2_foregrounds=True)
+
+def model():
+    p = {n: numpyro.sample(n, dist.Uniform(lo, hi))
+         for n, (lo, hi) in UNIFORM_BOUNDS.items()}
+    numpyro.factor("loglike", -0.5 * neg2_loglike(p))
+
+kernel = NUTS(model, target_accept_prob=0.9, max_tree_depth=11, dense_mass=True)
+mcmc = MCMC(kernel, num_warmup=800, num_samples=3000, num_chains=4,
+            chain_method="parallel", progress_bar=True)
+mcmc.run(jax.random.PRNGKey(0))
+samples = mcmc.get_samples(group_by_chain=True)
+```
+
+On a Mac M4 (10 performance cores, 4 chains running in parallel) this
+completes in ≈ 3 hours. All chains satisfy R-hat ≤ 1.012 with a median
+divergence rate of 1.7 %.
+
+### Result
+
+* Recovered cosmology marginals match the reference MH-RW chain to
+  well within 1 σ on every parameter — including the non-Gaussian, near-
+  prior-boundary ``fEDE`` distribution.
+* τ-shift in early NUTS runs (v2 NUTS gave τ = 0.0649 vs reference 0.0599)
+  vanishes once the ``classy_szfast`` ℓ-convention is used in
+  :func:`classy_szlite.cl_TTTEEE_jax` (now the default).
+* Wall-clock: **~3 h** for ``classy_szlite`` NUTS, **~18 days** for the
+  RW-MH reference chain on the same hardware class — a ~140× speedup at
+  the same statistical precision.
+
+The full report has the corner plots, R-hat / ESS tables, per-component
+timing breakdowns and a discussion of where the speed-up came from (the
+``mflike.BandpowerForeground`` Python overhead, mostly).
