@@ -198,6 +198,35 @@ Configurable via `use_fast_foreground: True` on the
 identical when on. (No PR has been opened upstream; we can do that once
 the change is reviewed by the mflike team.)
 
+## A bug we found while writing this up
+
+While auditing the fixed-foreground anchor in
+``classy_szlite.likelihoods.foreground.fg_totals_jax``, we found that the
+foreground extractor (used to build ``mflike_fg_components.npz``) had
+hardcoded ``alpha_s = -0.4`` whereas the chain's input.yaml sets
+``alpha_s: value: 1.0`` (the ℓ power-law slope for radio sources). At the
+chain best-fit this is invisible — the amplitude-deviation factor
+``(a − a_bf) / a_bf`` is zero so the wrong template never enters — but at
+non-best-fit amplitudes the radio sub-component scaled with the wrong
+ℓ-shape. The bug was caught by adding a regression test that compares
+``fg_totals_jax`` against the closed-form linear extrapolation at 20%
+perturbations of every amplitude.
+
+The fix: read every tilt's ``value:`` straight out of the chain yaml
+inside the extractor rather than hardcoding defaults. After re-running
+``extract_data`` the JAX foreground matches cobaya to **machine precision
+(Δχ² ≈ 10⁻¹¹)** at three far-from-BF amplitude vectors (a_tSZ doubled,
+a_s shrunk 5×, ξ tripled, etc.), confirming that the linearisation is
+amplitude-exact and the chain best-fit dict is purely a normalisation
+choice — not a data leak.
+
+The NUTS v3 chain reported above was sampled with the buggy radio
+template. Because radio is a sub-dominant TT component in this analysis,
+the cosmology marginals are essentially unaffected (we re-checked at the
+posterior mean with the corrected templates — total χ² shifts by < 1).
+The ``a_s`` posterior is the one to take with a grain of salt; a rerun
+with the corrected templates is planned.
+
 ## Open issues and follow-ups
 
 * **SED tilts / bandpass shifts still fixed** in `chi2_mflike_v2`. The
