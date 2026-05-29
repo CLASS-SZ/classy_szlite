@@ -38,3 +38,23 @@ Source   = "https://github.com/CLASS-SZ/classy_szlite"
 where    = ["."]
 include  = ["classy_szlite*"]
 exclude  = ["tests*", "examples*"]
+
+[tool.coverage.run]
+source = ["classy_szlite"]
+# The cobaya extractors and their CLI need a full cobaya + act_dr6_mflike
+# install + Planck/ACT data packages to exercise. They are pure scripts
+# (run once per machine to produce the npz tables), so we leave them out of
+# the coverage metric — the JAX likelihoods themselves are covered by
+# tests/test_likelihoods.py when the data is present.
+omit = [
+    "classy_szlite/likelihoods/_extract_main.py",
+    "classy_szlite/likelihoods/_extract_fg.py",
+    "classy_szlite/likelihoods/extract_data.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

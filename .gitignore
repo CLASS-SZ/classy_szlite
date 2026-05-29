@@ -10,3 +10,4 @@ dist/
 .venv/
 .env
 _emu_data_test/
+/.coverage
