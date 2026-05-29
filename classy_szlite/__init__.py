@@ -35,6 +35,7 @@ from .params import CosmoParams, ProfileParamsA10
 from .api import (
     derived,
     cl_TTTEEE,
+    cl_TTTEEE_jax,
     Pk, Pnl,
     distances,
     cl_yy,
@@ -47,7 +48,7 @@ from .api import (
 __all__ = [
     "__version__",
     "CosmoParams", "ProfileParamsA10",
-    "derived", "cl_TTTEEE", "Pk", "Pnl", "distances",
+    "derived", "cl_TTTEEE", "cl_TTTEEE_jax", "Pk", "Pnl", "distances",
     "cl_yy", "cl_yy_factory", "cl_yy_trispectrum", "cl_yy_covariance",
     "cosmo_to_dict",
 ]
