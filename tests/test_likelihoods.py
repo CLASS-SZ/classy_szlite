@@ -90,6 +90,69 @@ def test_grad_through_total_chi2():
         assert jnp.isfinite(g[k]), f"non-finite gradient for {k}"
 
 
+def test_fg_linearity_at_far_amplitudes():
+    """``chi2_mflike_v2`` is amplitude-linear by construction (with SED tilts
+    fixed). This regression test fired when ``alpha_s`` was wrong in the
+    extractor: at the BF point the bug is invisible (deviation = 0), but at
+    perturbed amplitudes the chi² blew up by thousands. We compare against
+    a hand-computed linear extrapolation that doesn't reach into cobaya."""
+    from classy_szlite.likelihoods import chi2_mflike_v2, foreground
+    from classy_szlite.likelihoods.core import _cosmo_to_cls
+
+    # Build cosmology Cls once.
+    cosmo_d = dict(omega_b=BF_COSMO.omega_b, omega_cdm=BF_COSMO.omega_cdm,
+                    H0=BF_COSMO.H0, ln10_10_As=BF_COSMO.ln10_10_As,
+                    n_s=BF_COSMO.n_s, tau_reio=BF_COSMO.tau_reio,
+                    fEDE=BF_COSMO.fEDE, log10z_c=BF_COSMO.log10z_c,
+                    thetai_scf=BF_COSMO.thetai_scf,
+                    m_ncdm=0.02, N_ur=0.00441)
+    cls = _cosmo_to_cls(cosmo_d)
+
+    # χ² at BF — anchor
+    chi2_bf = float(chi2_mflike_v2(cls, BF_NUIS))
+
+    # Perturb amplitudes by ±20% one at a time and check the fg total matches
+    # the linear scaling exactly.
+    foreground._TABLES = None        # force a clean reload
+    foreground._load()
+    tt, te, ee, bf, fg_bf = foreground._TABLES
+
+    # Amplitudes that don't enter the tSZ_and_CIB cross term — pure linear.
+    for amp_key in ("a_kSZ", "a_p", "a_s", "a_gtt"):
+        pert = dict(BF_NUIS); pert[amp_key] = 1.2 * pert[amp_key]
+        fg_jax = foreground.fg_totals_jax(pert)
+        comp = {"a_kSZ": "kSZ", "a_p": "cibp", "a_s": "radio",
+                 "a_gtt": "dust"}[amp_key]
+        i, j, ell_idx = 2, 2, 1498  # pa5_f150², ell ≈ 1500
+        d = 0.2  # 1.2 / 1 − 1
+        expected = float(fg_bf["tt"][i, j, ell_idx]
+                          + d * tt[comp][i, j, ell_idx])
+        actual = float(fg_jax["tt"][i, j, ell_idx])
+        assert abs(actual - expected) < 1e-9, (
+            f"{amp_key} 20%-perturb: jax={actual:.6e} expected={expected:.6e}"
+        )
+
+    # a_tSZ / a_c / xi all enter the cross via −ξ √(a_tSZ a_c). At 20%
+    # perturbation of a_tSZ both tSZ self and cross move, so the test
+    # accumulates both contributions.
+    pert = dict(BF_NUIS); pert["a_tSZ"] = 1.2 * pert["a_tSZ"]
+    fg_jax = foreground.fg_totals_jax(pert)
+    i, j, ell_idx = 2, 2, 1498
+    bf_amp_cross = -float(BF_NUIS["xi"]) * (float(BF_NUIS["a_tSZ"])
+                                              * float(BF_NUIS["a_c"])) ** 0.5
+    new_amp_cross = -float(BF_NUIS["xi"]) * (1.2 * float(BF_NUIS["a_tSZ"])
+                                               * float(BF_NUIS["a_c"])) ** 0.5
+    d_tSZ = 0.2
+    d_cross = new_amp_cross / bf_amp_cross - 1.0
+    expected = float(fg_bf["tt"][i, j, ell_idx]
+                      + d_tSZ * tt["tSZ"][i, j, ell_idx]
+                      + d_cross * tt["tSZxCIB"][i, j, ell_idx])
+    actual = float(fg_jax["tt"][i, j, ell_idx])
+    assert abs(actual - expected) < 1e-9, (
+        f"a_tSZ 20%-perturb: jax={actual:.6e} expected={expected:.6e}"
+    )
+
+
 def test_ell_convention_round_trip():
     """Both conventions store the same emulator output, just under a shifted
     ℓ axis. ``Cl(ell) × ell²`` should therefore agree element-wise."""

@@ -91,16 +91,29 @@ print(f"Best-fit chi2: total={sum(-2*v for v in loglikes.values()):.3f}")
 fg_theory = model.theory["mflike.BandpowerForeground"]
 print(f"fg_theory: {fg_theory}, ells {len(fg_theory.ells)}")
 
-# Build foreground component breakdown at best-fit
+# Build foreground component breakdown at best-fit. Tilt values that the
+# chain holds fixed are read directly from the input.yaml via cobaya's
+# parameter routing, so we don't accidentally hardcode a wrong default.
+import re
+_chain_tilts = {}
+with open(CHAIN_YAML) as f_yaml:
+    yaml_src = f_yaml.read()
+for _tilt in ("alpha_s", "alpha_p", "alpha_dT", "alpha_dE",
+              "T_d", "T_effd", "beta_d"):
+    m = re.search(rf"^\s*{_tilt}:\s*\n\s*value:\s*([0-9.\-+eE]+)",
+                  yaml_src, flags=re.MULTILINE)
+    if m:
+        _chain_tilts[_tilt] = float(m.group(1))
+print(f"chain tilt fixed values: {_chain_tilts}")
+
 fg_params_bf = {
     "a_tSZ": BF["a_tSZ"], "alpha_tSZ": BF["alpha_tSZ"], "a_kSZ": BF["a_kSZ"],
-    "a_p": BF["a_p"], "beta_p": BF["beta_p"], "a_c": BF["a_c"], "beta_c": BF["beta_c"],
-    "a_s": BF["a_s"], "beta_s": BF["beta_s"], "alpha_s": -0.4,  # derived from chain yaml
-    "alpha_p": 1.0,  # derived (from cobaya defaults)
+    "a_p": BF["a_p"], "beta_p": BF["beta_p"], "a_c": BF["a_c"],
+    "beta_c": BF["beta_c"],
+    "a_s": BF["a_s"], "beta_s": BF["beta_s"],
     "a_gtt": BF["a_gtt"], "a_gte": BF["a_gte"], "a_gee": BF["a_gee"],
     "a_psee": BF["a_psee"], "a_pste": BF["a_pste"], "xi": BF["xi"],
-    "T_d": BF["T_d"], "beta_d": BF["beta_d"], "T_effd": 19.6,
-    "alpha_dT": -0.6, "alpha_dE": -0.4,
+    **_chain_tilts,
 }
 
 # Pass bandpass shifts via fg theory's fg_params (mflike reads them from must_provide)
