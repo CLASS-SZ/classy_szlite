@@ -191,12 +191,28 @@ to off.
 | **total cobaya step**                  | **163 ms**| **49 ms** | **3.3×** |
 
 A cobaya MCMC that picks up this patch would therefore run **~3× faster
-on the same algorithm**, with no JAX involvement at all. Branch:
-[`borisbolliet/LAT_MFLike#fast-foreground`](https://github.com/borisbolliet/LAT_MFLike/tree/fast-foreground).
-Configurable via `use_fast_foreground: True` on the
-`mflike.BandpowerForeground` theory block. Default off; output bit-
-identical when on. (No PR has been opened upstream; we can do that once
-the change is reviewed by the mflike team.)
+on the same algorithm**, with no JAX involvement at all.
+
+- Fork: <https://github.com/borisbolliet/LAT_MFLike>
+- Branch: [`fast-foreground`](https://github.com/borisbolliet/LAT_MFLike/tree/fast-foreground)
+  (off upstream `v1.0.2`)
+- Single commit:
+  [`74b2b4b` — "foreground: opt-in BandpowerForeground fast path (33× for FG-eval)"](https://github.com/borisbolliet/LAT_MFLike/commit/74b2b4b),
+  +194 / −1 line in `mflike/foreground.py`
+- One-line install over an existing venv:
+  ```bash
+  pip install --force-reinstall \
+      git+https://github.com/borisbolliet/LAT_MFLike.git@fast-foreground
+  ```
+- Activate per-yaml with:
+  ```yaml
+  theory:
+    mflike.BandpowerForeground:
+      use_fast_foreground: True
+  ```
+
+Default is off; output is bit-identical when on. (No PR has been opened
+upstream; we can do that once the change is reviewed by the mflike team.)
 
 ## A bug we found while writing this up
 
@@ -244,8 +260,11 @@ with the corrected templates is planned.
 ## Reproducibility
 
 * Patched `mflike` (foreground fast path):
-  `https://github.com/borisbolliet/LAT_MFLike/tree/fast-foreground`
-* `classy_szlite` source: `https://github.com/CLASS-SZ/classy_szlite`
+  [fork](https://github.com/borisbolliet/LAT_MFLike), branch
+  [`fast-foreground`](https://github.com/borisbolliet/LAT_MFLike/tree/fast-foreground),
+  single commit
+  [`74b2b4b`](https://github.com/borisbolliet/LAT_MFLike/commit/74b2b4b).
+* `classy_szlite` source: <https://github.com/CLASS-SZ/classy_szlite>
 * Bundled JAX likelihoods: `classy_szlite.likelihoods` (this release).
 * Reference chain analysed: `p-actbase_ede+n3_classsz` from
   the act-dr6-ede-analysis directory.

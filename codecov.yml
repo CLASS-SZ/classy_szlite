@@ -1,0 +1,44 @@
+coverage:
+  status:
+    project:
+      default:
+        # Allow ~2pp project-coverage slip per PR. Anything bigger needs
+        # explanation in the PR description.
+        target: auto
+        threshold: 2%
+    patch:
+      default:
+        # PRs are required to cover their own diff to 75%. Files in the
+        # data-backed likelihoods sub-package are only exercised when the
+        # extracted npz tables are present (see classy_szlite.likelihoods.
+        # extract_data); CI has the emulator weights but not the full
+        # likelihood data, so we relax patch coverage on those modules.
+        target: 75%
+        threshold: 5%
+
+# CI runs against the emulator weights but not against the JAX-likelihood
+# tables; tests/test_likelihoods.py is skipped in that case. The smoke
+# tests (test_likelihoods_smoke.py) still hit the import-time and error
+# paths, so the modules below are not fully covered in CI by design.
+component_management:
+  individual_components:
+    - component_id: jax_likelihoods
+      name: "classy_szlite.likelihoods (data-backed)"
+      paths:
+        - classy_szlite/likelihoods/core.py
+        - classy_szlite/likelihoods/foreground.py
+      statuses:
+        - type: project
+          target: 50%
+          threshold: 5%
+        - type: patch
+          target: 50%
+          threshold: 10%
+
+ignore:
+  - "classy_szlite/likelihoods/_extract_main.py"
+  - "classy_szlite/likelihoods/_extract_fg.py"
+  - "classy_szlite/likelihoods/extract_data.py"
+  - "tests/**"
+  - "docs/**"
+  - "examples/**"
