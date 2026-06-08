@@ -29,7 +29,7 @@ Quick start:
 >>> ev = csl.cl_yy_factory(cosmo, ell=jnp.geomspace(2, 9000, 80))  # fast path
 >>> cl_1h, cl_2h = ev(profile)
 """
-__version__ = "0.2.10"
+__version__ = "0.2.11"
 
 from .params import CosmoParams, ProfileParamsA10
 from .api import (
