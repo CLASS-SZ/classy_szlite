@@ -18,11 +18,55 @@ Runtime dependencies: `jax >= 0.4`, `numpy >= 1.24`, `mcfit >= 0.0.21`.
 
 ## Emulator data
 
-`classy_szlite` does not bundle the CosmoPower emulator `.npz` files.
-Place them at one of:
+`classy_szlite` does not bundle the CosmoPower emulator `.npz` files
+(~115 MB), so you fetch them once after installing.
+
+### Quick way (recommended)
+
+```bash
+classy-szlite-get-data
+# or, equivalently:
+python -m classy_szlite.fetch_data
+```
+
+This downloads exactly the pickle-free `*_v2_plain.npz` files
+`classy_szlite` needs into `~/class_sz_data/ede/` (or
+`$CLASSY_SZLITE_DATA_DIR` if you've set it), and **verifies every file
+loads with `allow_pickle=False`** before committing it into place. It is
+safe to re-run: already-valid files are skipped, and any *invalid* file
+(e.g. an accidentally-downloaded pickled `_v2.npz`, or a truncated
+download) is detected and re-fetched. Options:
+
+```bash
+classy-szlite-get-data --dest /custom/path   # put data elsewhere
+classy-szlite-get-data --force               # re-download everything
+classy-szlite-get-data --quiet               # only warnings/errors
+```
+
+If you use a custom `--dest` that isn't an auto-detected location, export
+it so `classy_szlite` finds it:
+
+```bash
+export CLASSY_SZLITE_DATA_DIR=/custom/path
+```
+
+```{admonition} Common error
+:class: warning
+`ValueError: Cannot load file containing pickled data when
+allow_pickle=False` (or `Object arrays cannot be loaded …`) means a
+**pickled** `_v2.npz` file is sitting where a pickle-free
+`_v2_plain.npz` should be — usually from hand-copying the wrong file out
+of the GitHub web UI. Just run `classy-szlite-get-data`; it replaces the
+bad files automatically.
+```
+
+### Manual layout
+
+If you'd rather place the files yourself, put them at one of:
 
 1. The path in the `$CLASSY_SZLITE_DATA_DIR` environment variable, **or**
-2. `~/class_sz_data/` (default new location)
+2. `~/class_sz_data/` (default new location), **or**
+3. `~/class_sz_data_directory/` (legacy location, still honoured)
 
 Expected layout — `classy_szlite` reads the pickle-free
 `*_v2_plain.npz` files (loaded with `allow_pickle=False`, no
