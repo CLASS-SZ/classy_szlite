@@ -690,3 +690,60 @@ divergence rate of 1.7 %.
 The full report has the corner plots, R-hat / ESS tables, per-component
 timing breakdowns and a discussion of where the speed-up came from (the
 ``mflike.BandpowerForeground`` Python overhead, mostly).
+
+## The tSZ "y-kernel": where the Compton-y power spectrum comes from
+
+A classic class_sz diagnostic
+([class_sz_szkernel.ipynb](https://github.com/CLASS-SZ/notebooks/blob/main/class_sz_szkernel.ipynb))
+is the **tSZ kernel** — the integrand of the 1-halo Compton-y power spectrum
+in the (redshift, halo-mass) plane at a fixed multipole. The 1-halo term is
+
+```math
+C_\ell^{yy,\,1h} = \int dz\, \frac{dV}{dz\,d\Omega}
+    \int d\ln M\, \frac{dn}{d\ln M}\, |y_\ell(M,z)|^2 ,
+```
+
+so the quantity under the double integral,
+
+```math
+\frac{d^2 C_\ell^{yy}}{dz\, d\ln M}
+    = \frac{dV}{dz\,d\Omega}\,\frac{dn}{d\ln M}\,|y_\ell(M,z)|^2 ,
+```
+
+tells you which haloes source the signal at a given scale.
+
+`classy_szlite` exposes exactly these pieces — `_y_ell_grid` returns
+`y_ell(ℓ, z, M)` and the volume element `dV/dzdΩ`, while the halo grids carry
+`dn/dlnM`. The kernel is then a one-line product:
+
+```python
+import jax.numpy as jnp
+import classy_szlite as csl
+from classy_szlite.api import cosmo_to_dict
+from classy_szlite.cosmology import build as build_cosmo_grids
+from classy_szlite.hmf import build_halo_grids
+from classy_szlite.power_spectrum import _y_ell_grid
+
+cosmo = csl.CosmoParams(omega_b=0.02242, omega_cdm=0.11933, H0=67.66,
+                        ln10_10_As=3.047, n_s=0.9665, tau_reio=0.0561)
+cd = cosmo_to_dict(cosmo)
+cg = build_cosmo_grids(cd, z_grid=jnp.linspace(0.01, 5.0, 300))
+hg = build_halo_grids(cg, cd, delta_crit=200.0, m_min=1e10, m_max=1e15, n_m=300)
+
+y_ell, dVdz = _y_ell_grid(jnp.asarray([10000.0]), cg, hg, cd,
+                          profile="battaglia12", profile_params=None)
+kernel = dVdz[None, :, None] * hg.dndlnm[None, :, :] * y_ell ** 2   # (ℓ, z, M)
+```
+
+Plotting `kernel` with `cmap='hot'` (x = log₁₀M, y = z) reproduces the
+class_sz SZ-kernel heat-map:
+
+![tSZ y-kernel at ell = 10000](_static/sz_kernel.png)
+
+As the multipole increases, the bright region migrates from massive, nearby
+clusters (large angular scales) toward lower-mass, higher-redshift haloes
+(small angular scales):
+
+![tSZ y-kernel multipole migration](_static/sz_kernel_migration.png)
+
+Full script: [`examples/sz_kernel.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/sz_kernel.py).
