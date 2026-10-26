@@ -41,6 +41,11 @@ _DATA_SUBDIR = "ede"
 PK_GRID = dict(kmin=5e-4, kmax=10.0, nk=1000, ndspl=1,
                prefac="k3", extrap_kmin=1e-4)
 
+# Redshift above which the nonlinear Pk is set to the linear one: CLASS-EDE
+# does not apply HMcode beyond z ~ 5-10 (cosmology dependent) and the PKNL
+# emulator is trained on HMcode spectra only (same convention as classy_szfast).
+PKNL_ZMAX = 5.0
+
 # Distance emulator z-grid: HZ trained on linspace(0, 20, 5000); DAZ omits
 # z=0 (returns 4999 values) — we prepend chi(0)=0 in cosmology._predict_distances.
 DIST_ZMAX = 20.0

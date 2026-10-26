@@ -28,7 +28,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ._registry import (
-    PK_GRID, DIST_ZMAX, DEFAULT_COSMO,
+    PK_GRID, PKNL_ZMAX, DIST_ZMAX, DEFAULT_COSMO,
     get_emulator, output_is_log10,
 )
 
@@ -106,6 +106,10 @@ def _predict_pk(full: dict, z_grid: jax.Array, kind: str = 'linear'):
     params_pk['z_pk_save_nonclass'] = list(z_grid)
 
     log10pk = em.predict(params_pk)
+    if kind != 'linear':
+        # P_nl = P_lin above PKNL_ZMAX
+        log10pk_lin = get_emulator('pkl').predict(params_pk)
+        log10pk = jnp.where((jnp.asarray(z_grid) > PKNL_ZMAX)[:, None], log10pk_lin, log10pk)
     pk_emu = jnp.float64(10.0**log10pk * pk_power_fac)          # (n_z, n_k_emu)
 
     extrap_kmin = cfg['extrap_kmin']
