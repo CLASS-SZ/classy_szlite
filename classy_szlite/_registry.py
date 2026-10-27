@@ -1,8 +1,12 @@
 """Emulator file IDs, grid configs, and lazy loading.
 
-Single emulator suite: **ede-v2**. The ede-v2 CosmoPower emulators are
-extremely accurate and cover the LCDM-equivalent point at ``fEDE = 0.001``;
-they replace any need for a separate LCDM emulator path.
+Emulator suites **ede-v3** (default) and **ede-v2**, both trained on the same
+CLASS-EDE spectra and covering the LCDM-equivalent point at ``fEDE = 0.001``.
+ede-v3 (October 2026) retrains every network on the full training set; its TE
+emulator predicts ``atanh(r_l)`` with ``r_l = C_l^TE / sqrt(C_l^TT C_l^EE)``.
+Select the suite with :func:`set_emulator_version` or the environment variable
+``CLASSY_SZLITE_EMULATORS`` (``v3`` or ``v2``). If the v3 files are not present
+and no version was requested, ede-v2 is used.
 """
 from __future__ import annotations
 
@@ -14,18 +18,68 @@ from ._emulator import Emulator, default_data_dir
 
 # File IDs (paths relative to <data_root>/ede/).
 # Pickle-free files from cosmopower-organization/ede@main.
-_EMULATOR_FILES = {
-    "tt":   "TTTEEE/TT_v2_plain.npz",
-    "te":   "TTTEEE/TE_v2_plain.npz",
-    "ee":   "TTTEEE/EE_v2_plain.npz",
-    "pp":   "PP/PP_v2_plain.npz",
-    "pkl":  "PK/PKL_v2_plain.npz",
-    "pknl": "PK/PKNL_v2_plain.npz",
-    "hz":   "growth-and-distances/HZ_v2_plain.npz",
-    "daz":  "growth-and-distances/DAZ_v2_plain.npz",
-    "s8z":  "growth-and-distances/S8Z_v2_plain.npz",
-    "der":  "derived-parameters/DER_v2_plain.npz",
+_SUITES = {
+    "v2": {
+        "tt":   "TTTEEE/TT_v2_plain.npz",
+        "te":   "TTTEEE/TE_v2_plain.npz",
+        "ee":   "TTTEEE/EE_v2_plain.npz",
+        "pp":   "PP/PP_v2_plain.npz",
+        "pkl":  "PK/PKL_v2_plain.npz",
+        "pknl": "PK/PKNL_v2_plain.npz",
+        "hz":   "growth-and-distances/HZ_v2_plain.npz",
+        "daz":  "growth-and-distances/DAZ_v2_plain.npz",
+        "s8z":  "growth-and-distances/S8Z_v2_plain.npz",
+        "der":  "derived-parameters/DER_v2_plain.npz",
+    },
+    "v3": {
+        "tt":   "TTTEEE/TT_v3_plain.npz",
+        "te":   "TTTEEE/rTE_v3_plain.npz",
+        "ee":   "TTTEEE/EE_v3_plain.npz",
+        "pp":   "PP/PP_v3_plain.npz",
+        "pkl":  "PK/PKL_v3_plain.npz",
+        "pknl": "PK/PKNL_v3_plain.npz",
+        "hz":   "growth-and-distances/HZ_v3_plain.npz",
+        "daz":  "growth-and-distances/DAZ_v3_plain.npz",
+        "s8z":  "growth-and-distances/S8Z_v3_plain.npz",
+        "der":  "derived-parameters/DER_v3_plain.npz",
+    },
 }
+# suites whose TE emulator predicts atanh(r_l)
+_TE_FROM_R = {"v3"}
+
+# every file of every suite (used by the data fetcher)
+_EMULATOR_FILES = {f"{name}@{v}": rel for v, files in _SUITES.items() for name, rel in files.items()}
+
+_version_requested = os.environ.get("CLASSY_SZLITE_EMULATORS")
+_version = _version_requested or "v3"
+
+
+def set_emulator_version(version: str) -> None:
+    """Select the emulator suite (``"v3"`` or ``"v2"``) for subsequent calls."""
+    global _version, _version_requested
+    if version not in _SUITES:
+        raise ValueError(f"Unknown emulator version {version!r}; expected one of {list(_SUITES)}")
+    _version = _version_requested = version
+    get_emulator.cache_clear()
+
+
+def emulator_version() -> str:
+    """The emulator suite in use (``"v3"`` falls back to ``"v2"`` if its files are missing)."""
+    global _version
+    if _version_requested is None and _version == "v3":
+        root = default_data_dir()
+        if not all(os.path.isfile(os.path.join(root, _DATA_SUBDIR, rel)) for rel in _SUITES["v3"].values()):
+            import warnings
+            warnings.warn("classy_szlite: ede-v3 emulator files not found, using ede-v2. "
+                          "Run classy-szlite-get-data to download ede-v3.", stacklevel=2)
+            _version = "v2"
+    return _version
+
+
+def te_from_r() -> bool:
+    """True if the TE emulator of the active suite predicts atanh(r_l)."""
+    return emulator_version() in _TE_FROM_R
+
 
 # Subdir under the data root
 _DATA_SUBDIR = "ede"
@@ -86,16 +140,17 @@ DEFAULT_COSMO = {
 @lru_cache(maxsize=16)
 def get_emulator(name: str) -> Emulator:
     """Load (and cache) the named emulator."""
-    if name not in _EMULATOR_FILES:
+    files = _SUITES[emulator_version()]
+    if name not in files:
         raise ValueError(f"Unknown emulator name {name!r}. "
-                         f"Supported: {list(_EMULATOR_FILES)}")
-    rel  = _EMULATOR_FILES[name]
+                         f"Supported: {list(files)}")
+    rel  = files[name]
     root = default_data_dir()
     path = os.path.join(root, _DATA_SUBDIR, rel)
     if not os.path.isfile(path):
         raise FileNotFoundError(
             f"classy_szlite: emulator file not found: {path}\n"
-            f"Get the v2_plain emulator files from "
+            f"Get the emulator files with classy-szlite-get-data, or from "
             f"https://github.com/cosmopower-organization/ede"
         )
     return Emulator.from_npz(path)

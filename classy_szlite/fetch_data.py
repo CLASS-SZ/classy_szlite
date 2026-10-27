@@ -1,4 +1,4 @@
-"""Download the ede-v2 CosmoPower emulator data for classy_szlite.
+"""Download the ede-v2 and ede-v3 CosmoPower emulator data for classy_szlite.
 
 The emulator weights (~115 MB) live in a separate repository,
 ``cosmopower-organization/ede``, and are not bundled in the PyPI wheel.
@@ -118,7 +118,7 @@ def fetch(dest: str | os.PathLike | None = None, *,
     """
     dest_root = Path(dest).expanduser() if dest else _default_dest()
     if not quiet:
-        print(f"classy_szlite: fetching {len(_EMULATOR_FILES)} ede-v2 emulator "
+        print(f"classy_szlite: fetching {len(_EMULATOR_FILES)} ede-v2/ede-v3 emulator "
               f"files into {dest_root / _DATA_SUBDIR}")
     failures = []
     for rel in _EMULATOR_FILES.values():
@@ -146,7 +146,7 @@ def fetch(dest: str | os.PathLike | None = None, *,
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="python -m classy_szlite.fetch_data",
-        description="Download the ede-v2 CosmoPower emulator data for classy_szlite.",
+        description="Download the ede-v2 and ede-v3 CosmoPower emulator data for classy_szlite.",
     )
     p.add_argument("--dest", default=None,
                    help="destination dir (default: $CLASSY_SZLITE_DATA_DIR, "

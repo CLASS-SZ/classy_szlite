@@ -7,7 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from ._registry import get_emulator, DEFAULT_COSMO
+from ._registry import get_emulator, te_from_r, DEFAULT_COSMO
 from .params import CosmoParams, ProfileParamsA10
 from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances
 from .hmf import build_halo_grids
@@ -111,11 +111,15 @@ def cl_TTTEEE(cosmo: CosmoParams,
 
     full = dict(DEFAULT_COSMO); full.update(cosmo_to_dict(cosmo))
 
-    out = {}
-    ell = None
     for spec in spectra:
         if spec not in _CMB_LOG_CONVENTION:
             raise ValueError(f"Unknown spectrum {spec!r}. Pick from {tuple(_CMB_LOG_CONVENTION)}.")
+    r_te = "te" in spectra and te_from_r()
+    needed = list(spectra) + ([s for s in ("tt", "ee") if s not in spectra] if r_te else [])
+
+    out = {}
+    ell = None
+    for spec in needed:
         em = get_emulator(spec)
         p_in = {k: [full[k]] for k in em.parameters}
         pred = np.asarray(em.predict(p_in)).flatten()
@@ -130,6 +134,11 @@ def cl_TTTEEE(cosmo: CosmoParams,
                 ell = modes + 1
             else:
                 ell = modes
+
+    if r_te:
+        # ede-v3: the TE emulator predicts atanh(r_l); TE = r_l sqrt(TT EE)
+        out["te"] = np.tanh(out["te"]) * np.sqrt(out["tt"] * out["ee"])
+        out = {s: out[s] for s in spectra}
 
     # ede-v2 recovery factor: raw → Cl
     factor_to_Cl = 1.0 / (ell ** 2)
@@ -173,11 +182,15 @@ def cl_TTTEEE_jax(cosmo: CosmoParams | dict,
         cosmo_dict["ln10^{10}A_s"] = cosmo_dict.pop("ln10_10_As")
     full = dict(DEFAULT_COSMO); full.update(cosmo_dict)
 
-    out = {}
-    ell = None
     for spec in spectra:
         if spec not in _CMB_LOG_CONVENTION:
             raise ValueError(f"Unknown spectrum {spec!r}.")
+    r_te = "te" in spectra and te_from_r()
+    needed = list(spectra) + ([s for s in ("tt", "ee") if s not in spectra] if r_te else [])
+
+    out = {}
+    ell = None
+    for spec in needed:
         em = get_emulator(spec)
         p_in = {k: jnp.atleast_1d(jnp.asarray(full[k], dtype=jnp.float64))
                 for k in em.parameters}
@@ -189,6 +202,10 @@ def cl_TTTEEE_jax(cosmo: CosmoParams | dict,
         if ell is None:
             modes = jnp.asarray(em.modes, dtype=jnp.float64)
             ell = modes + 1 if ell_convention == "classy_szfast" else modes
+
+    if r_te:
+        out["te"] = jnp.tanh(out["te"]) * jnp.sqrt(out["tt"] * out["ee"])
+        out = {s: out[s] for s in spectra}
 
     inv_ell2 = 1.0 / (ell ** 2)
     for s in spectra:
