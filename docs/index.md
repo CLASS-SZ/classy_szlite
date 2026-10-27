@@ -11,15 +11,14 @@ access to:
 - Derived parameters (σ8, Ω_m, S8)
 - Halo-model tSZ Cl^yy (Arnaud 2010 GNFW pressure profile)
 
-Backed by the high-accuracy **`v2` CosmoPower emulators** — the same
-emulators used in the
+Backed by the **ede-v3 CosmoPower emulators** (default since v0.2.14), retrained
+on the CLASS-EDE training set of the **ede-v2 emulators** used in the
 [ACT DR6 extended-cosmology analysis](https://arxiv.org/abs/2503.14454)
 (2025) and the
 [ACT DR6 + DESI DR2 analysis](https://arxiv.org/abs/2505.08051) by
-Poulin et al. (2025). They match the CAMB-based
-[Jense et al. (2024) emulators](https://github.com/cosmopower-organization/jense_2024_emulators)
-to well under 0.1 $\sigma$ in $\Lambda$CDM (where $\sigma$ is the typical
-68% CL on parameter constraints from ACT DR6).
+Poulin et al. (2025), with test errors 1.3 to 20 times lower. The ede-v2
+emulators remain available with `classy_szlite.set_emulator_version("v2")`
+(see [Installation](installation.md)).
 
 Runtime dependencies: just `jax`, `numpy`, and `mcfit`. See
 [Installation](installation.md) for the emulator-coverage details
