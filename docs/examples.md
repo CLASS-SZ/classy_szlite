@@ -547,7 +547,7 @@ for omega_cdm in omega_cdm_vals:
 
 ## Exploring EDE space
 
-The `v2` emulator suite spans early-dark-energy parameter space; set
+The ede emulator suite spans early-dark-energy parameter space; set
 `fEDE`, `log10z_c`, `thetai_scf` to non-default values to leave the
 LCDM-equivalent point:
 

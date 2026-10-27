@@ -22,7 +22,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="session")
 def cosmo():
-    """Default ede-v2 LCDM-equivalent cosmology."""
+    """Default LCDM-equivalent cosmology of the ede emulators."""
     import classy_szlite as csl
     return csl.CosmoParams()
 

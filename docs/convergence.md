@@ -14,7 +14,7 @@ $\bigl(\Delta C_\ell^{yy}/C_\ell^{yy}\bigr)_{\max}$ across
 $\ell \in [100, 8000]$ (12 log-spaced bins), using
 
 - profile: Arnaud-10 with $(P_0=8.13,\,\beta=5.48,\,B=1.25)$
-- cosmology: ede-v2 LCDM-equivalent (defaults)
+- cosmology: ede LCDM-equivalent (defaults)
 
 against a **high-resolution reference** of $n_z = 400,\,n_M = 600,\,
 M \in [10^{10},\,3.5\times10^{15}]\,M_\odot/h$.
@@ -82,7 +82,7 @@ characteristic mass scale, so doubling the grid past that has no effect.
   mass range, raise `n_m` proportionally.
 - $\sigma(R)$ is computed via `mcfit.TophatVar`, which requires a
   uniformly **log-spaced** $k$ grid. The grid is hardcoded to match the
-  ede-v2 emulator's $k$ range (down to $k=10^{-4}$ after low-$k$
+  ede emulator's $k$ range (down to $k=10^{-4}$ after low-$k$
   $k^{n_s}$ extrapolation), so there is no `k_min`/`k_max` knob to
   tune. The convergence above already accounts for this fixed grid.
 

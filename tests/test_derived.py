@@ -31,7 +31,7 @@ def test_S8_definition(cosmo):
 
 
 def test_Omega_m_sums_correctly():
-    # Σmν = 3 m_ncdm under ede-v2 ν convention; Ω_m h² = ω_b + ω_cdm + Σmν/93.14
+    # Σmν = 3 m_ncdm under the ede ν convention; Ω_m h² = ω_b + ω_cdm + Σmν/93.14
     cosmo = csl.CosmoParams()
     d = csl.derived(cosmo)
     h2 = (cosmo.H0 / 100.0) ** 2

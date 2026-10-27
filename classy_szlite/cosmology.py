@@ -1,4 +1,4 @@
-"""Cosmological grids from the ede-v2 CosmoPower emulators (pure JAX).
+"""Cosmological grids from the ede-v3 CosmoPower emulators (pure JAX).
 
 Calls emulators once, returns a frozen :class:`CosmoGrids` container that
 downstream JIT-compiled functions can consume without further Python
@@ -146,13 +146,13 @@ def _predict_distances(full: dict, z_grid: jax.Array):
     Hz_fine = h_em.predict(p_h)
     Da_fine = d_em.predict(p_d)
 
-    # Apply 10^ for log-output emulators (both Hz and Da in ede-v2 are log10)
+    # Apply 10^ for log-output emulators (both Hz and Da are log10)
     if output_is_log10('hz'):
         Hz_fine = 10.0 ** Hz_fine
     if output_is_log10('daz'):
         Da_fine = 10.0 ** Da_fine
 
-    # ede-v2 DAZ omits z=0; prepend chi(0)=0
+    # the DAZ emulator omits z=0; prepend chi(0)=0
     Da_fine = jnp.concatenate([jnp.zeros(1, dtype=Da_fine.dtype), Da_fine])
 
     z_fine = jnp.linspace(0.0, DIST_ZMAX, Hz_fine.shape[-1])

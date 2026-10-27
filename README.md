@@ -19,13 +19,12 @@
 - **Derived parameters** — σ8, Ω_m, S8
 - **Halo-model tSZ Cl^yy** — Arnaud 2010 GNFW pressure profile
 
-Backed by the **`ede-v3` CosmoPower emulators** (default since v0.2.14;
-[accuracy tables](https://github.com/cosmopower-organization/ede#ede-v3-october-2026)),
-retrained on the CLASS-EDE training set of the **`v2` emulators** used in the
+Backed by the **`ede-v3` CosmoPower emulators**
+([accuracy tables](https://github.com/cosmopower-organization/ede#ede-v3-october-2026)),
+retrained on the CLASS-EDE training set of the `v2` emulators used in the
 [ACT DR6 extended-cosmology analysis](https://arxiv.org/abs/2503.14454) (2025) and the
 [ACT DR6 + DESI DR2 analysis](https://arxiv.org/abs/2505.08051) by
-Poulin et al. (2025). The `v2` emulators remain available with
-`classy_szlite.set_emulator_version("v2")`. See
+Poulin et al. (2025). See
 [Installation](https://classy-szlite.readthedocs.io/en/latest/installation.html)
 for the emulator-coverage details.
 

@@ -22,7 +22,7 @@ cosmo = csl.CosmoParams(
 ```
 
 EDE-specific fields (`fEDE`, `log10z_c`, `thetai_scf`, `r`) and the
-neutrino fields (`m_ncdm`, `N_ur`) default to the ede-v2 emulator's
+neutrino fields (`m_ncdm`, `N_ur`) default to the ede emulators'
 LCDM-equivalent setup — most users never need to touch them.
 
 ## The five calculations

@@ -9,7 +9,7 @@ access to:
   * Derived parameters (σ8, Ω_m, S8)
   * Halo-model tSZ Cl^yy (Arnaud 2010 GNFW)
 
-Backed by the ede-v3 (default) and ede-v2 CosmoPower emulators (Bolliet et al.).
+Backed by the ede-v3 CosmoPower emulators (Bolliet et al.).
 LCDM-equivalent cosmology is obtained by leaving ``fEDE = 0.001`` (the
 default) — no separate emulator path needed.
 
@@ -29,7 +29,7 @@ Quick start:
 >>> ev = csl.cl_yy_factory(cosmo, ell=jnp.geomspace(2, 9000, 80))  # fast path
 >>> cl_1h, cl_2h = ev(profile)
 """
-__version__ = "0.2.14"
+__version__ = "0.2.15"
 
 from .params import CosmoParams, ProfileParamsA10
 from .api import (
@@ -44,12 +44,11 @@ from .api import (
     cl_yy_covariance,
     cosmo_to_dict,
 )
-from ._registry import set_emulator_version, emulator_version
 
 __all__ = [
     "__version__",
     "CosmoParams", "ProfileParamsA10",
     "derived", "cl_TTTEEE", "cl_TTTEEE_jax", "Pk", "Pnl", "distances",
     "cl_yy", "cl_yy_factory", "cl_yy_trispectrum", "cl_yy_covariance",
-    "cosmo_to_dict", "set_emulator_version", "emulator_version",
+    "cosmo_to_dict",
 ]

@@ -1,7 +1,7 @@
 """Parameter containers (JAX pytrees via NamedTuple).
 
 A single :class:`CosmoParams` covers the full parameter space supported by
-the ede-v2 emulator suite — the standard 6 cosmological parameters plus the
+the ede emulator suite — the standard 6 cosmological parameters plus the
 EDE-specific fields (``fEDE``, ``log10z_c``, ``thetai_scf``, ``r``) and the
 neutrino fields (``m_ncdm``, ``N_ur``). LCDM-equivalent runs use the
 default ``fEDE = 0.001``; users typically don't need to touch the EDE or
@@ -18,7 +18,7 @@ import jax
 
 
 class CosmoParams(NamedTuple):
-    """Cosmological parameters for the ede-v2 emulator suite.
+    """Cosmological parameters for the ede emulator suite.
 
     Defaults give the LCDM-equivalent point (Planck 18 + ``fEDE = 0.001``).
     """
@@ -36,7 +36,7 @@ class CosmoParams(NamedTuple):
     thetai_scf:   float | jax.Array = 2.83
     r:            float | jax.Array = 0.0
 
-    # ν convention (matches ede-v2 emulator training: 3 deg. ν × 0.02 eV)
+    # ν convention (matches the ede emulator training: 3 deg. ν × 0.02 eV)
     m_ncdm:       float | jax.Array = 0.02
     N_ur:         float | jax.Array = 0.00441
 

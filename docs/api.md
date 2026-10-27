@@ -21,7 +21,7 @@ For runnable code + plots, see [Tutorials & examples](examples.md).
 .. autofunction:: classy_szlite.derived
 ```
 
-The ``der_full`` array contains 17 entries from the ede-v2 DER emulator
+The ``der_full`` array contains 17 entries from the ede-v3 DER emulator
 (index 0 = $h$, index 1 = $\sigma_8$, index 2 = $\Omega_m$, etc.).
 
 ## CMB angular power spectra

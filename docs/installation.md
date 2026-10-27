@@ -19,7 +19,7 @@ Runtime dependencies: `jax >= 0.4`, `numpy >= 1.24`, `mcfit >= 0.0.21`.
 ## Emulator data
 
 `classy_szlite` does not bundle the CosmoPower emulator `.npz` files
-(ede-v3 ~290 MB, ede-v2 ~120 MB), so you fetch them once after installing.
+(~290 MB), so you fetch them once after installing.
 
 ### Quick way (recommended)
 
@@ -29,12 +29,12 @@ classy-szlite-get-data
 python -m classy_szlite.fetch_data
 ```
 
-This downloads exactly the pickle-free `*_v3_plain.npz` (default suite)
-and `*_v2_plain.npz` files `classy_szlite` needs into `~/class_sz_data/ede/` (or
+This downloads exactly the pickle-free `*_v3_plain.npz` files `classy_szlite`
+needs into `~/class_sz_data/ede/` (or
 `$CLASSY_SZLITE_DATA_DIR` if you've set it), and **verifies every file
 loads with `allow_pickle=False`** before committing it into place. It is
 safe to re-run: already-valid files are skipped, and any *invalid* file
-(e.g. an accidentally-downloaded pickled `_v3.npz` or `_v2.npz`, or a
+(e.g. an accidentally-downloaded pickled `_v3.npz`, or a
 truncated download) is detected and re-fetched. Options:
 
 ```bash
@@ -54,8 +54,8 @@ export CLASSY_SZLITE_DATA_DIR=/custom/path
 :class: warning
 `ValueError: Cannot load file containing pickled data when
 allow_pickle=False` (or `Object arrays cannot be loaded …`) means a
-**pickled** `_v3.npz` / `_v2.npz` file is sitting where a pickle-free
-`_v3_plain.npz` / `_v2_plain.npz` should be — usually from hand-copying the wrong file out
+**pickled** `_v3.npz` file is sitting where a pickle-free
+`_v3_plain.npz` should be — usually from hand-copying the wrong file out
 of the GitHub web UI. Just run `classy-szlite-get-data`; it replaces the
 bad files automatically.
 ```
@@ -70,8 +70,7 @@ If you'd rather place the files yourself, put them at one of:
 
 Expected layout — `classy_szlite` reads the pickle-free
 `*_v3_plain.npz` files (loaded with `allow_pickle=False`, no
-TensorFlow / cosmopower needed); for the ede-v2 suite, the same files with
-`_v2_plain` (and `TE_v2_plain.npz` in place of `rTE_v3_plain.npz`):
+TensorFlow / cosmopower needed):
 
 ```
 $CLASSY_SZLITE_DATA_DIR/
@@ -103,37 +102,29 @@ git clone https://github.com/cosmopower-organization/ede ~/cosmopower-ede
 export CLASSY_SZLITE_DATA_DIR=~/cosmopower-ede
 ```
 
-### Emulator suites
+### Emulator suite
 
-**ede-v3** (default since v0.2.14, October 2026) retrains every emulator on
-the CLASS-EDE training set of ede-v2, with all training samples, a common
-train/test split for the CMB spectra and full float32 precision. Its TE
-emulator predicts the correlation coefficient
+**ede-v3** (October 2026; since v0.2.15 the only suite) retrains every
+emulator on the CLASS-EDE training set of the ede-v2 emulators, with all
+training samples, a common train/test split for the CMB spectra and full
+float32 precision. Its TE emulator predicts the correlation coefficient
 $r_\ell = C_\ell^{TE}/\sqrt{C_\ell^{TT} C_\ell^{EE}}$ (as $\operatorname{atanh} r_\ell$),
 and `classy_szlite` reconstructs $C_\ell^{TE} = r_\ell \sqrt{C_\ell^{TT} C_\ell^{EE}}$.
 Test errors are 1.3 to 20 times lower than ede-v2 (TT 0.078% against 0.164%
 at the 95th percentile); accuracy tables in the
 [`cosmopower-organization/ede` README](https://github.com/cosmopower-organization/ede#ede-v3-october-2026).
 
-**ede-v2** are the emulators used in
+ede-v2 are the emulators used in
 [*The Atacama Cosmology Telescope: DR6 Constraints on Extended Cosmological
 Models*](https://arxiv.org/abs/2503.14454) (2025) and in
 [*Impact of ACT DR6 and DESI DR2 for Early Dark Energy and the Hubble
 tension*](https://arxiv.org/abs/2505.08051) (Poulin et al. 2025). They
 match the CAMB-based
 [Jense et al. (2024) emulators](https://github.com/cosmopower-organization/jense_2024_emulators)
-to **well under 0.1 $\sigma$ in $\Lambda$CDM**, where $\sigma$ is the
+to well under 0.1 $\sigma$ in $\Lambda$CDM, where $\sigma$ is the
 typical 68% CL on parameter constraints from ACT DR6 data. To reproduce
-those analyses, select them with
-
-```python
-import classy_szlite as csl
-csl.set_emulator_version("v2")      # or: export CLASSY_SZLITE_EMULATORS=v2
-csl.emulator_version()              # 'v2'
-```
-
-If the ede-v3 files are not present and no version was requested,
-`classy_szlite` uses ede-v2 and warns.
+those analyses exactly, use `classy_szlite <= 0.2.14` with
+`set_emulator_version("v2")`, or class_sz with `cosmo_model: 6`.
 
 Coverage:
 
@@ -148,7 +139,7 @@ suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP).
 
 ### Default cosmology and EDE
 
-Both emulator suites are trained on an EDE parameter range that
+The emulators are trained on an EDE parameter range that
 includes the LCDM-equivalent point. `classy_szlite` exploits this:
 ``CosmoParams()`` defaults to ``fEDE = 0.001`` so the very first call
 gives standard $\Lambda$CDM to emulator precision — you don't have to
@@ -161,7 +152,6 @@ pipeline handles it.
 ```python
 import classy_szlite as csl
 print(csl.__version__)
-print(csl.emulator_version())          # 'v3'
 print(csl.derived(csl.CosmoParams()))
-# Expect: {'sigma_8': 0.8120, 'Omega_m': 0.3110, 'S8': 0.8268, ...}   (ede-v2: 0.8119, 0.3110, 0.8267)
+# Expect: {'sigma_8': 0.8120, 'Omega_m': 0.3110, 'S8': 0.8268, ...}
 ```

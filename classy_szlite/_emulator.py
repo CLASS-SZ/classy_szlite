@@ -45,7 +45,7 @@ _PLAIN_SEP = "."     # cosmopower field names contain `_` but never `.`
 
 
 def _load_emulator_dict(path: str) -> dict:
-    """Return the cosmopower-style dict for a ``_v2_plain.npz`` file."""
+    """Return the cosmopower-style dict for a ``*_plain.npz`` file."""
     saved = np.load(path, allow_pickle=False)
     if "weights_.n" not in saved.files:
         # Defensive: a few users still have legacy pickled `_v2.npz` files
@@ -127,7 +127,7 @@ class Emulator:
 
     @classmethod
     def from_npz(cls, path: str) -> "Emulator":
-        """Load an emulator from a CosmoPower ``_v2_plain.npz`` file.
+        """Load an emulator from a CosmoPower ``*_plain.npz`` file.
 
         The plain format is produced by ``np.savez(**flat_dict)`` with the
         list-valued fields (``weights_``, ``biases_``, ``alphas_``, ``betas_``)

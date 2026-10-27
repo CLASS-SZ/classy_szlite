@@ -7,7 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from ._registry import get_emulator, te_from_r, DEFAULT_COSMO
+from ._registry import get_emulator, DEFAULT_COSMO
 from .params import CosmoParams, ProfileParamsA10
 from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances
 from .hmf import build_halo_grids
@@ -56,7 +56,7 @@ def derived(cosmo: CosmoParams) -> dict:
 
     sigma_8 = float(der[1])
     h = float(cosmo.H0) / 100.0
-    # Σmν = 3 × m_ncdm for ede-v2 ν convention (3 degenerate ν)
+    # Σmν = 3 × m_ncdm for ede ν convention (3 degenerate ν)
     sum_mnu = 3.0 * float(cosmo.m_ncdm)
     Omega_m = (float(cosmo.omega_b) + float(cosmo.omega_cdm)
                + sum_mnu / 93.14) / h ** 2
@@ -69,7 +69,7 @@ def derived(cosmo: CosmoParams) -> dict:
 # ---------------------------------------------------------------------------
 
 # TT, EE, PP emulators output log10(prefactored Cl); TE outputs Cl directly
-# (it can be negative). Recovery factor: ede-v2 uses 1/ell² to get raw Cl.
+# (it can be negative). Recovery factor: the emulators use 1/ell² to get raw Cl.
 _CMB_LOG_CONVENTION = {"tt": True, "ee": True, "pp": True, "te": False}
 
 
@@ -86,7 +86,7 @@ def cl_TTTEEE(cosmo: CosmoParams,
     Parameters
     ----------
     cosmo
-        ``CosmoParams`` instance (the ede-v2 input vector).
+        ``CosmoParams`` instance (the emulator input vector).
     spectra
         Requested spectra, any subset of ``("tt", "te", "ee", "pp")``.
     ell_factor
@@ -99,7 +99,7 @@ def cl_TTTEEE(cosmo: CosmoParams,
           ``cobaya + classy_sz fast-mode`` stack that every published EDE chain
           (including ACT-DR6 + Planck) was fit with.
         - ``"emulator_modes"`` — output ``ℓ ∈ [1, ..., 9499]`` exactly as stored
-          in the ede-v2 ``modes`` metadata, with ``Cℓ(ℓ) = pred[ℓ−1] / ℓ²``. Use
+          in the emulator ``modes`` metadata, with ``Cℓ(ℓ) = pred[ℓ−1] / ℓ²``. Use
           this only if you intentionally want to disagree with the published
           chains.
     """
@@ -114,7 +114,7 @@ def cl_TTTEEE(cosmo: CosmoParams,
     for spec in spectra:
         if spec not in _CMB_LOG_CONVENTION:
             raise ValueError(f"Unknown spectrum {spec!r}. Pick from {tuple(_CMB_LOG_CONVENTION)}.")
-    r_te = "te" in spectra and te_from_r()
+    r_te = "te" in spectra          # the TE emulator predicts atanh(r_l)
     needed = list(spectra) + ([s for s in ("tt", "ee") if s not in spectra] if r_te else [])
 
     out = {}
@@ -136,11 +136,11 @@ def cl_TTTEEE(cosmo: CosmoParams,
                 ell = modes
 
     if r_te:
-        # ede-v3: the TE emulator predicts atanh(r_l); TE = r_l sqrt(TT EE)
+        # TE = r_l sqrt(TT EE)
         out["te"] = np.tanh(out["te"]) * np.sqrt(out["tt"] * out["ee"])
         out = {s: out[s] for s in spectra}
 
-    # ede-v2 recovery factor: raw → Cl
+    # recovery factor: raw → Cl
     factor_to_Cl = 1.0 / (ell ** 2)
     for s in spectra:
         out[s] = out[s] * factor_to_Cl
@@ -185,7 +185,7 @@ def cl_TTTEEE_jax(cosmo: CosmoParams | dict,
     for spec in spectra:
         if spec not in _CMB_LOG_CONVENTION:
             raise ValueError(f"Unknown spectrum {spec!r}.")
-    r_te = "te" in spectra and te_from_r()
+    r_te = "te" in spectra          # the TE emulator predicts atanh(r_l)
     needed = list(spectra) + ([s for s in ("tt", "ee") if s not in spectra] if r_te else [])
 
     out = {}
