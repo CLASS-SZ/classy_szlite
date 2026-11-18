@@ -478,3 +478,19 @@ The peak buffer with masking:
     ± 0.011 at goal and 0.235 ± 0.014 at baseline. The catalogue model with
     the finder's own noise gives 0.241 and 0.236.
   - Over 40% of the sky the error on the mean would be ±0.004–0.005 (2%).
+- **Correction, same day:** the 1.450 factor is explained. The reference
+  table was made with the tSZ-deprojected lensing noise curve (deproj1,
+  v3.1.1), over the file's full range 2 ≤ ℓ ≤ 5000.
+  - With that curve, our filter with the documented normalisation (κ at the
+    scale radius) reproduces cosmocnc_jax's baseline table to 0.3% in level
+    and 0.3% in shape, with no free factor.
+  - The paper's text cites the deproj0 file name. deproj1 is the sensible
+    choice for clusters, because their own tSZ biases a standard
+    reconstruction. It is 2.1–2.5× noisier in power at ℓ = 500–2000.
+  - Production now uses deproj1, SENS1 for baseline and SENS2 for goal; the
+    fudge factor is gone. At goal, σ_κ is 18% below baseline.
+  - 32 tiles: stacked p = 0.250 ± 0.011 at goal (catalogue model 0.256) and
+    0.236 ± 0.014 at baseline (0.237).
+  - The lensing tests pass, with the table matching the reference to 1%.
+  - Ruled out along the way: deproj2 (CIB deprojected), v3.1.0, the TT and
+    polarisation-only columns, and the lensing power spectrum in the noise.

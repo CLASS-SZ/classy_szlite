@@ -120,7 +120,7 @@ Headline tests, each on map-level mock data at a known cosmology:
 - **Lensing observable** (catalogue level, for the matched halo; cosmocnc_jax's `p_so_sim` model):
   - parameters: β_CMBlens = 0.92, σ_lnp = 0.22, corr(ln q, ln p) = 0 (the paper's r = 0), a_lens = 1;
   - **σ_κ(θ) at SO goal lensing depth** (decided 2026-11-18, to match the goal tSZ maps).
-    - **Source:** the minimum-variance quadratic-estimator noise curve of the SO noise models, goal version. That is the SENS2 sibling of the paper's `nlkk_v3_1_0_deproj0_SENS1_fsky0p4_qe_lT30-3000_lP30-5000.dat`.
+    - **Source:** the minimum-variance quadratic-estimator noise curve of the SO noise models with the tSZ deprojected (deproj1), goal version (SENS2). The paper cites the deproj0 file, but its table is reproduced only by deproj1 (2026-11-18).
     - **Filter:** our own truncated-NFW matched filter (c500 = 3, 5 R500), as the paper describes.
     - **Check:** the same code on the SENS1 curve must reproduce cosmocnc_jax's baseline table (`so_sim_lensing_mf_noise.npy`).
     - **Baseline comparisons:** the paper comparison and SO_sim_0 keep cosmocnc_jax's cubic log-log fit to its baseline table. We hold that fit at its end values outside the table (0.739′–5.87′), because SO_sim_0's mean p favours that (0.297 against 0.307 extrapolated; observed 0.2986 ± 0.0080);
@@ -264,7 +264,7 @@ Data:
   - No NaMaster and no full coupling matrix for the periodic tiles.
 
 **M6. Data vector, legacy reproduction, timing.**
-- The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing. *Lensing done 2026-11-18 (`LOG.md`, "stacked CMB lensing"); σ_κ carries an unexplained constant 1.450 to match the paper's baseline table.*
+- The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing. *Lensing done 2026-11-18 (`LOG.md`, "stacked CMB lensing"): σ_κ from the tSZ-deprojected SO curves (deproj1), which reproduce the paper's baseline table to 0.3% with no free factor.*
 - **Legacy credit rule**, the lean version (candidates within 30′; exact lattice sums only for near-ties), on a fixed-capacity cell grid.
   - Route (a), first: the counting step on exported tiles with the stored kernel files (`data_real/step3b/kernel_prod_goal.npz`, `halos_prod_goal.npz`, `arbiter/datavec_pooled_goal.npz`). Credited counts must be identical except documented near-ties, and R_p must agree to round-off.
   - Route (b), later: port the virtual-cluster kernel machinery in legacy mode, and match the SO goal deficit of −2.10% within ~0.25%.
