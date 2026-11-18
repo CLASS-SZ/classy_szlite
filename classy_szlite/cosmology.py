@@ -107,16 +107,28 @@ def _emu(emus, name):
 # Public builder
 # ===================================================================
 
+# Training box of the ede-v3 emulators in ln(10^10 A_s) (from their input
+# standardisation, assuming uniform training sets): [2.50, 3.50].
+LN10AS_REFERENCE = 3.0
+
+
 def build(params: dict,
           z_grid: jax.Array | None = None,
           n_z: int = 100,
-          emus: dict | None = None) -> CosmoGrids:
+          emus: dict | None = None,
+          as_reference: float | None = None) -> CosmoGrids:
     """Call the emulators once and return a ``CosmoGrids`` container.
 
     Pure JAX: ``jax.jit(jax.vmap(build))`` works, with ``params`` values as
     (batched) scalars. ``emus`` (from :func:`emulators`) may be passed in, so
     that the weights are jit arguments rather than baked-in constants; by
     default the cached emulators are used.
+
+    ``as_reference``: if given (e.g. ``LN10AS_REFERENCE``), the emulators are
+    evaluated at ln(10¹⁰A_s) = as_reference and the linear P(k) is rescaled by
+    A_s / A_s,ref, which is exact in linear theory (distances do not depend on
+    A_s). Any A_s is then safe, even outside the emulators' training box
+    (2.5-3.5), which the corners of a σ8 prior reach.
     """
     full = dict(DEFAULT_COSMO)
     full.update(params)
@@ -126,8 +138,9 @@ def build(params: dict,
     z_grid = jnp.asarray(z_grid, dtype=jnp.float64)
     z_grid = jnp.where(z_grid < 5e-3, 5e-3, z_grid)
 
-    k, pk = _predict_pk(full, z_grid, kind='linear', emus=emus)
-    Hz, chi, Da = _predict_distances(full, z_grid, emus=emus)
+    k, pk = _predict_pk(full, z_grid, kind='linear', emus=emus, as_reference=as_reference)
+    full_d = full if as_reference is None else dict(full, **{'ln10^{10}A_s': as_reference})
+    Hz, chi, Da = _predict_distances(full_d, z_grid, emus=emus)
     R, sigma, dsigma2dR = _compute_sigma(pk)
 
     return CosmoGrids(
@@ -141,21 +154,29 @@ def build(params: dict,
 # Pk emulator (linear / nonlinear) — with low-k extrapolation
 # ===================================================================
 
-def _predict_pk(full: dict, z_grid: jax.Array, kind: str = 'linear', emus=None):
+def _predict_pk(full: dict, z_grid: jax.Array, kind: str = 'linear', emus=None,
+                as_reference=None):
     """Linear or nonlinear matter Pk. k in 1/Mpc, P in Mpc³.
 
     Returns ``(k, pk)`` with shapes ``(n_k,)`` and ``(n_z, n_k)``.
 
     Extends ``k`` below the emulator's native ``kmin = 5e-4`` down to
     ``extrap_kmin = 1e-4`` via ``P(k) ∝ k^n_s`` (valid for k ≪ k_eq), on the
-    emulator's log-k step (see :func:`_k_grids`).
+    emulator's log-k step (see :func:`_k_grids`). ``as_reference``: see
+    :func:`build` (linear P only).
     """
     em = _emu(emus, 'pkl' if kind == 'linear' else 'pknl')
     z_grid = jnp.atleast_1d(jnp.asarray(z_grid, dtype=jnp.float64))
+    if as_reference is not None and kind != 'linear':
+        raise ValueError("as_reference applies to the linear P(k) only")
 
     inputs = {kn: full[kn] for kn in em.parameters if kn != 'z_pk_save_nonclass'}
     inputs['z_pk_save_nonclass'] = z_grid
+    if as_reference is not None:
+        inputs['ln10^{10}A_s'] = as_reference
     log10pk = em.predict(inputs)                                # (n_z, n_k_emu)
+    if as_reference is not None:                                # P_lin ∝ A_s
+        log10pk = log10pk + (full['ln10^{10}A_s'] - as_reference) / np.log(10.0)
     if kind != 'linear':
         # P_nl = P_lin above PKNL_ZMAX
         log10pk_lin = _emu(emus, 'pkl').predict(inputs)
@@ -247,29 +268,46 @@ def omega_cdm_from_Omega_m(Omega_m, params: dict, include_nu: bool = True):
     return om
 
 
-def sigma8_der(params: dict, emus: dict | None = None):
-    """σ8 from the DER emulator (output index 1), as :func:`classy_szlite.derived`."""
+def sigma8_der(params: dict, emus: dict | None = None, as_reference: float | None = None):
+    """σ8 from the DER emulator (output index 1), as :func:`classy_szlite.derived`.
+
+    ``as_reference``: evaluate at ln(10¹⁰A_s) = as_reference and scale by
+    √(A_s / A_s,ref), exact in linear theory (see :func:`build`).
+    """
     em = _emu(emus, 'der')
     full = dict(DEFAULT_COSMO)
     full.update(params)
-    out = em.predict({kn: full[kn] for kn in em.parameters})[0]
+    inp = {kn: full[kn] for kn in em.parameters}
+    if as_reference is not None:
+        inp['ln10^{10}A_s'] = as_reference
+    out = em.predict(inp)[0]
     if output_is_log10('der'):
         out = 10.0 ** out
-    return out[1]
+    s8 = out[1]
+    if as_reference is not None:
+        s8 = s8 * jnp.exp(0.5 * (full['ln10^{10}A_s'] - as_reference))
+    return s8
 
 
 def ln10As_from_sigma8(params: dict, sigma8, emus: dict | None = None,
-                       n_newton: int = 8):
+                       n_newton: int = 8, as_reference: float | None = None):
     """ln(10¹⁰ A_s) giving the DER-emulator σ8 = ``sigma8`` at fixed other
     parameters. Traceable and vmap-able.
 
-    First step: A_s ∝ σ8², from the A_s in ``params`` (default 3.047). Then
+    Default: A_s ∝ σ8² from the A_s in ``params`` (default 3.047), then
     ``n_newton`` Newton steps with the exact (autodiff) derivative through the
     DER network, as in cosmocnc_jax's solver (8 fixed iterations).
+
+    ``as_reference``: closed form under the linear-theory scaling,
+    ln A_s = ref + 2 ln(σ8 / σ8_DER(ref)); valid for any σ8, including those
+    that map outside the emulators' A_s training box.
     """
     full = dict(DEFAULT_COSMO)
     full.update(params)
     key = 'ln10^{10}A_s'
+    if as_reference is not None:
+        s8_ref = sigma8_der(dict(full, **{key: as_reference}), emus)
+        return as_reference + 2.0 * jnp.log(sigma8 / s8_ref)
 
     def s8(x):
         return sigma8_der(dict(full, **{key: x}), emus)

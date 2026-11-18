@@ -15,7 +15,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from ..cosmology import build, ln10As_from_sigma8
+from ..cosmology import build, ln10As_from_sigma8, LN10AS_REFERENCE
 from . import instrument as ins
 from . import halos as hl
 from . import paint as pt
@@ -90,8 +90,10 @@ def cosmology_stage(theta: Theta, cells: hl.CellGrid):
     """λ cells and the cosmology grids on the cell z edges (traceable)."""
     p = {"omega_cdm": theta.omega_cdm, "H0": 100.0 * theta.h, "omega_b": theta.omega_b,
          "n_s": theta.n_s}
-    p["ln10^{10}A_s"] = ln10As_from_sigma8(p, theta.sigma8)
-    cg = build(p, z_grid=cells.z_edges)
+    # A_s by the linear-theory scaling about ln(10^10 A_s) = 3.0: exact, and safe
+    # at the prior corners, which map outside the emulators' A_s box (2.5-3.5)
+    p["ln10^{10}A_s"] = ln10As_from_sigma8(p, theta.sigma8, as_reference=LN10AS_REFERENCE)
+    cg = build(p, z_grid=cells.z_edges, as_reference=LN10AS_REFERENCE)
     lam = hl.lambda_cells(cg, p, cells)
     return lam, cg
 
