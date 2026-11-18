@@ -3,7 +3,8 @@
     python benchmarks/mapsim/diagnostics_data.py
 
 Reads the outputs of counts_modes.py, paper_sigma.py, optbias.py,
-hmf_compare.py, prior_corners.py and mask_check.py under $MAPSIM_OUT,
+hmf_compare.py, prior_corners.py, mask_check.py, lens_check.py and the MSS2
+noise check (Perlmutter job, copied to $MAPSIM_OUT/mss2) under $MAPSIM_OUT,
 simulates one goal-depth tile at the fiducial point for a picture (with the
 masking iteration), and writes $MAPSIM_OUT/diagnostics/diagnostics.json.
 
@@ -178,6 +179,49 @@ def masking_part():
     return out
 
 
+def lensing_part():
+    """σ_κ(θ500): ours on the tSZ-deprojected curves (production, baseline and goal), the
+    paper's baseline table, and ours on the standard (deproj0) curve; the 32-tile stacked p."""
+    import lens_table as lt
+    from classy_szlite.sim import lens_tables
+    D = os.path.join(os.environ.get("MAPSIM_REF", "/mnt/ceph/users/bbolliet/mapsim/ref"), "so_lensing_noise")
+    ref = np.load(os.path.join(D, "so_sim_lensing_mf_noise.npy"))
+    th_ref = ref[0] / lt.ARCMIN
+    d0 = np.loadtxt(os.path.join(D, "nlkk_v3_1_0_deproj0_SENS1_fsky0p4_qe_lT30-3000_lP30-5000.dat"))
+    sel = (d0[:, 0] >= lt.LMIN) & (d0[:, 0] <= lt.LMAX)
+    s0 = [lt.sigma_kappa(t, d0[sel, 0], d0[sel, 7]) for t in th_ref]
+    keep = (lens_tables.THETA500_ARCMIN >= 0.3) & (lens_tables.THETA500_ARCMIN <= 15.0)
+    return dict(theta=lens_tables.THETA500_ARCMIN[keep].tolist(),
+                baseline=lens_tables.SIGMA_KAPPA["baseline"][keep].tolist(),
+                goal=lens_tables.SIGMA_KAPPA["goal"][keep].tolist(),
+                ref_theta=th_ref.tolist(), ref_sigma=ref[1].tolist(), deproj0_theta=th_ref.tolist(),
+                deproj0_baseline=s0, stacked=json.load(open(f"{OUT}/lensing/lens_check.json")))
+
+
+def mss2_part():
+    """MSS2 noise maps on Perlmutter: white depth per band from the noise spectra and from
+    the inverse-variance maps (coadd, split 0), SO's 5-year levels, and the mnms simulations
+    against the raw split-0 spectra (job output copied to $MAPSIM_OUT/mss2)."""
+    from classy_szlite.sim import instrument as ins
+    m = json.load(open(f"{OUT}/mss2/mss2_noise_check.json"))
+    edges = np.asarray(m["ell_edges"])
+    lc = np.sqrt(edges[1:] * edges[:-1])
+    out = dict(bands=m["bands"], freqs=ins.SO_LAT["freqs"].tolist(), so_baseline=ins.SO_LAT["white"]["baseline"].tolist(),
+               so_goal=ins.SO_LAT["white"]["goal"].tolist(), patches=len(m["patches"]), per_band={})
+    for b in m["bands"]:
+        d = {}
+        for split in ("coadd", "split0"):
+            sp = m["spectra"][f"{b}_{split}"]
+            d[f"{split}_spectra"] = [x["white_measured"] for x in sp]
+            d[f"{split}_ivar"] = [x["white_from_ivar"] for x in sp]
+        raw = np.mean([x["cl"] for x in m["spectra"][f"{b}_split0"]], axis=0)
+        sim = np.mean([x["cl"] for x in m["sims"][b]], axis=0)
+        d["sim_over_raw"] = {f"{lo}-{hi}": float(np.mean(sim[(lc >= lo) & (lc < hi)] / raw[(lc >= lo) & (lc < hi)]))
+                             for lo, hi in ((300, 1000), (1000, 3000), (3000, 5000), (5000, 6000))}
+        out["per_band"][b] = d
+    return out
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -286,7 +330,7 @@ def tile_part(width=240):
 
 def main():
     out = dict(hmf=hmf_part(), counts=counts_part(), optbias=optbias_part(), priors=priors_part(),
-               masking=masking_part())
+               masking=masking_part(), lensing=lensing_part(), mss2=mss2_part())
     out["tile"] = tile_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"

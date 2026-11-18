@@ -494,3 +494,14 @@ The peak buffer with masking:
   - The lensing tests pass, with the table matching the reference to 1%.
   - Ruled out along the way: deproj2 (CIB deprojected), v3.1.0, the TT and
     polarisation-only columns, and the lensing power spectrum in the noise.
+
+## 2026-11-18: progress page, version 6
+
+- Added: the data vector marked complete; the measured GPU time (9.4 ms per
+  tile with masking); a "Since the last update" section; five new checks
+  (GPU against CPU, 400-tile masking, lensing table, stacked lensing, MSS2
+  depth); a lensing-filter figure; an MSS2 depth figure.
+- Next steps updated: the MSS2-calibrated noise generator, the real
+  footprint and mask, SZiFi on identical maps, inference.
+- Data: `diagnostics_data.py` now also reads `lensing/lens_check.json`, the
+  lensing tables and the MSS2 check (`mss2/mss2_noise_check.json`).
