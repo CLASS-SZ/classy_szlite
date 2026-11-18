@@ -269,7 +269,9 @@ Data:
 
 ## 7. Budget
 
-Set after the M0 spike. Expected FFT work per tile is ~60–75 transforms over both passes, the masking and the simulation: ~10 ms on an A100. The painter (~1e8 contributions at 0.25′) and the matching probably dominate.
+Set by the M0 spike (`M0_LOG.md`, 2026-11-18).
+- **Per tile, fiducial halo load, one finder pass:** 6.8 ms on an RTX PRO 6000 Blackwell and 14.4 ms on an A100 (batch 16, 8 GiB). Painting is ~70% of that; the FFTs of the maps and the filter take ~2 ms.
+- **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~6 GPU-hours with the prior-averaged halo load (×~1.3, from 0.26× to 2.7× of the fiducial across the prior) and the masking pass (×~1.4, M5). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
 
 CPU fallback and cross-check: our szsim pipeline needs ~3,000–6,600 CPU-hours for 10⁴ simulations; SZiFi would need ~50,000. The GPU total must also count the coverage mocks, the 10%-sky runs, compile time, development jobs and capacity padding.
 
