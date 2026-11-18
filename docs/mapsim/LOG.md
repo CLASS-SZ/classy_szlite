@@ -112,3 +112,53 @@ to −0.04. In full simulated tiles the unmasked tSZ raises σ by 14–29%
 **False peaks on these tiles:** 43–48 kept peaks with q > 4 per 100 deg²
 (true covariance) and 29–34 (tile covariance) with no injection within
 1.5′. The earlier project found 0.80–0.85 per 100 deg² at q > 5.
+
+## 2026-11-18: halo mass function against cosmocnc_jax and colossus
+
+Script `benchmarks/mapsim/hmf_compare.py`; tables in
+`/mnt/ceph/users/bbolliet/mapsim/hmf/report.txt`. classy_szlite is the
+reference, with the production conventions: Tinker08 at 500c, linear in Δ,
+and no neutrinos in ρ_m or Ω_m(z). Each code uses its own P(k):
+- cosmocnc_jax: CAMB backend, one 0.06 eV neutrino, P_tot normalised to σ8;
+- colossus 1.4: EH98, no massive neutrinos.
+
+Halos per 10° × 10° tile, M ≥ 5e13, 0.01 < z < 3:
+
+| point (σ8, ω_c, h) | classy_szlite | cosmocnc_jax | colossus | classy_szlite defaults |
+|---|---|---|---|---|
+| fiducial (0.811, 0.121, 0.674) | 4,398 | 1.0002 | 0.981 | 1.007 |
+| low corner (0.7, 0.0804, 0.704) | 695 | 1.0005 | 0.995 | 1.011 |
+| high corner (0.9, 0.204, 0.644) | 16,652 | 1.0002 | 0.973 | 1.000 |
+
+The paper's five redshift bins agree as well: cosmocnc_jax to within 0.1%,
+colossus 0.97–1.003.
+
+**dn/dlnM, fiducial point:**
+- cosmocnc_jax agrees to within 0.2% for M ≤ 1e14. Above that it differs by
+  0.3–1.5% at 1e15 and 1–4.5% at 3e15, where there are under one halo per
+  tile.
+- Those differences multiply out of:
+  - the emulator's P(k) against CLASS (within 0.2% for 0.01 < k < 2 /Mpc);
+  - the neutrino set-up;
+  - CAMB against CLASS.
+- Conventions and numerics add about 0.1%.
+- colossus differs by −1.5% to +4% at z ≤ 1, up to −10% at 1e14 and z = 3.
+  All of it is its EH98 σ(M).
+
+**Other checks:**
+- **Tinker f(σ)** at identical σ, z and integer Δ: the three codes agree to
+  7e-16.
+- **σ(M) and its slope from a shared P(k)**, against direct quadrature:
+  - classy_szlite is within 2.7e-4. The residual is a ripple from
+    finite-differencing a piecewise-linear σ(M); using the FFTLog dσ²/dR
+    would remove it.
+  - cosmocnc_jax is within 7e-4 to 1.1e-3.
+  - Neither meets the 1e-4 code-test tolerance in the plan. The physics
+    agreement is at the percent level, as expected.
+- **ω_c = 0.204,** outside the emulators' box (0.0801–0.2000): the emulator
+  stays as close to CLASS there as at the fiducial point (≤ 0.1% in
+  dn/dlnM up to 3e14, ≤ 1% at 1e15). The extrapolation is harmless.
+- **classy_szlite's defaults against production:**
+  - interpolating in log10 Δ gives −0.3% to −2.3% at 1e13;
+  - including neutrinos in ρ_m and Ω_m(z) gives +0.6% to +1.9%;
+  - net, up to +1.8% in counts.
