@@ -131,7 +131,7 @@ Halos per 10° × 10° tile, M ≥ 5e13, 0.01 < z < 3:
 | high corner (0.9, 0.204, 0.644) | 16,652 | 1.0002 | 0.973 | 1.000 |
 
 The paper's five redshift bins agree as well: cosmocnc_jax to within 0.1%,
-colossus 0.97–1.003.
+colossus 0.966–1.003.
 
 **dn/dlnM, fiducial point:**
 - cosmocnc_jax agrees to within 0.2% for M ≤ 1e14. Above that it differs by
@@ -142,8 +142,8 @@ colossus 0.97–1.003.
   - the neutrino set-up;
   - CAMB against CLASS.
 - Conventions and numerics add about 0.1%.
-- colossus differs by −1.5% to +4% at z ≤ 1, up to −10% at 1e14 and z = 3.
-  All of it is its EH98 σ(M).
+- colossus differs by −2% to +9% at z ≤ 1 (the +9% at 3e15) and up to
+  −10% at 1e14 and z = 3. All of it is its EH98 σ(M).
 
 **Other checks:**
 - **Tinker f(σ)** at identical σ, z and integer Δ: the three codes agree to
