@@ -107,8 +107,8 @@ def test_confirm_takes_largest_y0():
 @pytest.fixture(scope="module")
 def fid_lambda():
     cells = hl.default_cells()
-    lam, cg = jax.jit(lambda th: simu.cosmology_stage(th, cells))(simu.THETA_FID)
-    return cells, lam, cg
+    cs = jax.jit(lambda th: simu.cosmology_stage(th, cells))(simu.THETA_FID)
+    return cells, cs
 
 
 def test_halo_counts_are_poisson(fid_lambda):
@@ -117,7 +117,8 @@ def test_halo_counts_are_poisson(fid_lambda):
     the 150 mass cells, over 16 tiles. A fixed seed makes the test
     deterministic; the thresholds are p ≲ 1e-4 for a correct sampler (checked
     with four other seeds, 8 and 64 tiles: χ²_z = 1.3-8.5)."""
-    cells, lam, cg = fid_lambda
+    cells, cs = fid_lambda
+    lam, cg = cs.lam, cs.cg
     th = simu.THETA_FID
     lam_np = np.asarray(lam)
     lam_tot = float(lam_np.sum())
@@ -148,6 +149,58 @@ def test_halo_counts_are_poisson(fid_lambda):
     keep = mexp > 5
     chi2 = np.sum((mgot[keep] - mexp[keep]) ** 2 / mexp[keep])
     assert chi2 < keep.sum() + 6 * np.sqrt(2 * keep.sum()), (chi2, keep.sum())
+
+
+def _bilinear_marginal_cdfs(d2N, cells):
+    """Exact marginal CDFs in z and ln M of the bilinear interpolant of the
+    corner densities (piecewise quadratic)."""
+    ze, me = cells.z_edges, cells.lnM_edges
+    dz, dm = np.diff(ze), np.diff(me)
+
+    def make(edges, d, lo, hi):
+        mass = 0.5 * (lo + hi) * d
+        cum = np.concatenate([[0.0], np.cumsum(mass)])
+
+        def cdf(x):
+            i = np.clip(np.searchsorted(edges, x, side="right") - 1, 0, d.size - 1)
+            u = (x - edges[i]) / d[i]
+            return (cum[i] + d[i] * (lo[i] * (u - u * u / 2) + hi[i] * u * u / 2)) / cum[-1]
+        return cdf, cum[-1]
+    # z: density integrated over ln M at the lower / upper z edge of each z cell
+    Az = 0.5 * ((d2N[:-1, :-1] + d2N[:-1, 1:]) * dm[None, :]).sum(1)
+    Bz = 0.5 * ((d2N[1:, :-1] + d2N[1:, 1:]) * dm[None, :]).sum(1)
+    Am = 0.5 * ((d2N[:-1, :-1] + d2N[1:, :-1]) * dz[:, None]).sum(0)
+    Bm = 0.5 * ((d2N[:-1, 1:] + d2N[1:, 1:]) * dz[:, None]).sum(0)
+    return make(ze, dz, Az, Bz), make(me, dm, Am, Bm)
+
+
+def test_bilinear_sampler_ks(fid_lambda):
+    """With the corner densities, (z, ln M) follow the bilinear interpolant
+    exactly: KS tests of both marginals against their exact CDFs."""
+    from scipy import stats
+    cells, cs = fid_lambda
+    th = simu.THETA_FID
+    lam_np, d2N = np.asarray(cs.lam), np.asarray(cs.d2N)
+    (cdf_z, tot_z), (cdf_m, tot_m) = _bilinear_marginal_cdfs(d2N, cells)
+    assert abs(tot_z / lam_np.sum() - 1) < 1e-12 and abs(tot_m / lam_np.sum() - 1) < 1e-12
+    cap = int(lam_np.sum() + 8 * np.sqrt(lam_np.sum()) + 1000)
+    res = {}
+    for name, dd in (("bilinear", cs.d2N), ("uniform", None)):
+        draw = jax.jit(jax.vmap(lambda k: hl.sample_halos(
+            k, cs.lam, cells, cap, cs.cg, th.h, th.A_SZ, th.alpha_SZ, th.sigma_lnq,
+            th.one_minus_b, d2N=dd)))
+        zs, ms = [], []
+        for r0 in (0, 8):
+            h = draw(jax.random.split(jax.random.key(4242 + r0), 8))
+            v = np.asarray(h.valid)
+            zs.append(np.asarray(h.z, np.float64)[v])
+            ms.append(np.asarray(h.lnM, np.float64)[v])
+        zs, ms = np.concatenate(zs), np.concatenate(ms)
+        res[name] = (stats.kstest(cdf_z(zs), "uniform").pvalue,
+                     stats.kstest(cdf_m(ms), "uniform").pvalue, zs.size)
+    print("KS p-values (z, lnM, N):", res)
+    pz, pm, _ = res["bilinear"]
+    assert pz > 1e-3 and pm > 1e-3
 
 
 # ---- filter statistics -------------------------------------------------------------------

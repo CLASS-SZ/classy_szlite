@@ -6,9 +6,9 @@
 
 from the corner values of the cell (exact for the bilinear interpolant).
 Sampling: Poisson counts per cell, then each buffer slot s < Σ counts is
-assigned to its cell through the cumulative counts. First version (M0 spike):
-z and ln M uniform inside the cell. M2 replaces this by exact sampling of the
-bilinear interpolant.
+assigned to its cell through the cumulative counts; inside the cell, (z, ln M)
+are drawn exactly from the bilinear interpolant of the corner densities (or
+uniformly, without them).
 
 Positions are uniform on the tile, stored as an int32 painting-grid pixel plus
 a float32 offset in [0, 1) pixel units. Overflow (Σ counts > capacity) is
@@ -41,23 +41,37 @@ def default_cells(zmin=0.01, zmax=3.0, n_z=300, Mmin=1e13, Mmax=1e16, n_m=150):
                     np.linspace(np.log(Mmin), np.log(Mmax), n_m + 1))
 
 
-def lambda_cells(cg, params, cells: CellGrid, hmf_kwargs=None):
-    """Expected counts per cell for one tile, shape (n_z, n_m), float64.
+def corner_density(cg, params, cells: CellGrid, hmf_kwargs=None):
+    """d²N/dz dlnM of one tile at the cell corners, shape (n_z + 1, n_m + 1).
 
-    ``cg`` must be a ``CosmoGrids`` built on z = ``cells.z_edges``; the HMF is
-    evaluated at the cell corners. ``hmf_kwargs`` go to ``build_halo_grids``
-    (production: ``tinker_interp='linear', nu_in_rho_m=False``).
+    ``cg`` must be a ``CosmoGrids`` built on z = ``cells.z_edges``.
+    ``hmf_kwargs`` go to ``build_halo_grids`` (production:
+    ``tinker_interp='linear', nu_in_rho_m=False``).
     """
     kw = dict(delta_crit=500.0, tinker_interp="linear", nu_in_rho_m=False)
     kw.update(hmf_kwargs or {})
     n_m = cells.lnM_edges.size
     hg = build_halo_grids(cg, params, m_min=float(np.exp(cells.lnM_edges[0])),
                           m_max=float(np.exp(cells.lnM_edges[-1])), n_m=n_m, **kw)
-    d2N = hg.dndlnm * (cg.chi ** 2 / cg.Hz)[:, None] * OMEGA_TILE     # per dz dlnM
+    return hg.dndlnm * (cg.chi ** 2 / cg.Hz)[:, None] * OMEGA_TILE
+
+
+def lambda_from_corners(d2N, cells: CellGrid):
+    """Cell integrals of the bilinear interpolant: corner mean × cell area."""
     corner = 0.25 * (d2N[:-1, :-1] + d2N[1:, :-1] + d2N[:-1, 1:] + d2N[1:, 1:])
-    dz = np.diff(cells.z_edges)[:, None]
-    dlnM = np.diff(cells.lnM_edges)[None, :]
-    return corner * dz * dlnM
+    return corner * np.diff(cells.z_edges)[:, None] * np.diff(cells.lnM_edges)[None, :]
+
+
+def lambda_cells(cg, params, cells: CellGrid, hmf_kwargs=None):
+    """Expected counts per cell for one tile, shape (n_z, n_m), float64."""
+    return lambda_from_corners(corner_density(cg, params, cells, hmf_kwargs), cells)
+
+
+def _inv_linear_cdf(r, a, b):
+    """x in [0, 1] with F(x) = r for the density ∝ (1-x) a + x b (a, b ≥ 0).
+    Cancellation-free form of the quadratic root."""
+    return 2.0 * r * (a + b) / (2.0 * a + 2.0 * jnp.sqrt(jnp.maximum(a * a + r * (b * b - a * a), 0.0))
+                                  + 1e-300)
 
 
 class Halos(NamedTuple):
@@ -76,8 +90,14 @@ class Halos(NamedTuple):
 
 
 def sample_halos(key, lam, cells: CellGrid, capacity: int, cg, h, A_SZ, alpha_SZ,
-                 sigma_lnq, one_minus_b):
-    """Draw the halos of one tile into a buffer of ``capacity`` slots."""
+                 sigma_lnq, one_minus_b, d2N=None):
+    """Draw the halos of one tile into a buffer of ``capacity`` slots.
+
+    With ``d2N`` (the corner densities, :func:`corner_density`), (z, ln M) are
+    drawn exactly from the bilinear interpolant inside each cell: z from its
+    linear marginal, then ln M from the linear conditional (closed-form
+    inverse CDFs, as szsim's sampler). Without it, uniformly in the cell.
+    """
     k_pois, k_z, k_m, k_py, k_px, k_oy, k_ox, k_sc = jax.random.split(key, 8)
     n_z, n_m = lam.shape
     counts = jax.random.poisson(k_pois, lam.ravel(), dtype=jnp.int32)
@@ -93,6 +113,12 @@ def sample_halos(key, lam, cells: CellGrid, capacity: int, cg, h, A_SZ, alpha_SZ
     me = jnp.asarray(cells.lnM_edges)
     u_z = jax.random.uniform(k_z, (capacity,), dtype=jnp.float64)
     u_m = jax.random.uniform(k_m, (capacity,), dtype=jnp.float64)
+    if d2N is not None:
+        f00, f10 = d2N[iz, im], d2N[iz + 1, im]            # (z, M) corners
+        f01, f11 = d2N[iz, im + 1], d2N[iz + 1, im + 1]
+        tz = _inv_linear_cdf(u_z, f00 + f01, f10 + f11)     # marginal in z
+        tm = _inv_linear_cdf(u_m, (1 - tz) * f00 + tz * f10, (1 - tz) * f01 + tz * f11)
+        u_z, u_m = jnp.clip(tz, 0.0, 1.0), jnp.clip(tm, 0.0, 1.0)
     z = ze[iz] + u_z * (ze[iz + 1] - ze[iz])
     lnM = me[im] + u_m * (me[im + 1] - me[im])
 
