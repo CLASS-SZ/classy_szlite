@@ -181,24 +181,32 @@ colossus 0.966–1.003.
 ## 2026-11-18: priors: halo load at the edges of narrower boxes
 
 Script `benchmarks/mapsim/prior_corners.py`; output
-`/mnt/ceph/users/bbolliet/mapsim/priors/prior_corners.json`. The proposed
-boxes put each edge a fixed number of the paper's posterior widths from the
-fiducial value. The widths are the likelihood standard deviations in Table 1
-of arXiv:2504.10230: 0.0051 in σ8, 0.0060 in ω_c and 0.028 in A_SZ.
-- **narrow (40% of the sky): 6 widths.** That is 3 for where the posterior
-  can land from mock to mock, 2 for the 95% half-width, and 1 of margin.
-- **wide (10% of the sky): 8 widths.** Posteriors there are about 1.3×
-  the paper's, with a quarter of our clusters.
+`/mnt/ceph/users/bbolliet/mapsim/priors/prior_corners.json`. These numbers use
+the mass function interpolated in log10 Δ, the production setting from today
+(next section).
+
+The proposed boxes put each edge a fixed number of the paper's posterior
+widths from the fiducial value. The widths are the likelihood standard
+deviations in Table 1 of arXiv:2504.10230: 0.0051 in σ8, 0.0060 in ω_c and
+0.028 in A_SZ.
+- **wide: 8 widths, adopted for all map-level runs.** Posteriors at 10% of
+  the sky are about 1.3× the paper's, with a quarter of our clusters.
+- **narrow: 6 widths, an option for the 40%-sky runs.** That is 3 for where
+  the posterior can land from mock to mock, 2 for the 95% half-width, and 1
+  of margin.
 - **Edges and other parameters.** ω_c is clipped at the paper's lower edge.
   α_SZ and the Gaussian priors are unchanged.
 
 h is at ±3σ of N(0.674, 0.01). Halos are per 10° tile.
 
-| box | σ8 | ω_c | A_SZ | halos ≥ 1e13, relative to the fiducial 73,419 | halos ≥ 5e13 | ln(10¹⁰A_s) |
-|---|---|---|---|---|---|---|
-| paper | 0.700–0.900 | 0.0804–0.204 | −4.41 to −4.21 | 0.26–2.69 | 691–16,592 | 2.12–3.81 |
-| wide | 0.770–0.852 | 0.0804–0.169 | −4.53 to −4.08 | 0.42–1.94 | 1,400–10,580 | 2.51–3.70 |
-| narrow | 0.780–0.842 | 0.085–0.157 | −4.48 to −4.13 | 0.48–1.73 | 1,665–9,122 | 2.62–3.60 |
+| box | σ8 | ω_c | A_SZ | halos ≥ 1e13, relative to the fiducial 73,030 | average over the prior | halos ≥ 5e13 | ln(10¹⁰A_s) |
+|---|---|---|---|---|---|---|---|
+| paper | 0.700–0.900 | 0.0804–0.204 | −4.41 to −4.21 | 0.26–2.68 | 1.17 | 683–16,477 | 2.12–3.81 |
+| wide | 0.770–0.852 | 0.0804–0.169 | −4.53 to −4.08 | 0.42–1.94 | 1.05 | 1,386–10,516 | 2.51–3.70 |
+| narrow | 0.780–0.842 | 0.085–0.157 | −4.48 to −4.13 | 0.48–1.73 | 1.01 | 1,649–9,069 | 2.62–3.60 |
+
+The averages come from 256 random draws from each prior, with the Gaussian
+priors truncated at ±4σ.
 
 Four goal-depth tiles were run at each box's heaviest corner (high σ8, high
 ω_c, low h), with the most peaks: A_SZ at the top of the box, α_SZ = 1 and
@@ -206,13 +214,34 @@ Four goal-depth tiles were run at each box's heaviest corner (high σ8, high
 
 | box | peaks with q > 4 (buffer 2,048) | detections in the data vector (fiducial 237) | buffer overflows | CPU s per tile |
 |---|---|---|---|---|
-| paper | 1,628–1,713 | 793–884 | confirmation buffer (16,384 halos ≥ 5e13) | 7.6 |
-| wide | 1,444–1,559 | 774–838 | none | 5.8 |
-| narrow | 1,227–1,303 | 663–738 | none | 5.2 |
+| paper | 1,625–1,701 | 807–878 | confirmation buffer (16,384 halos ≥ 5e13) | 7.5 |
+| wide | 1,454–1,542 | 797–833 | none | 5.9 |
+| narrow | 1,210–1,335 | 634–736 | none | 5.2 |
 
 - **ω_c stays inside the emulators' training range** (0.0801–0.2000) in
   both new boxes, so the extrapolation question disappears.
 - **ln(10¹⁰A_s) still leaves the emulators' range** (2.5–3.5) at the top.
   The linear rescaling handles that exactly, as before.
-- **The heaviest load falls** from 2.7× the fiducial to 1.9× (wide) and
-  1.7× (narrow).
+- **The heaviest load falls** from 2.7× the fiducial to 1.9× (wide). The
+  average falls from 1.17× to 1.05×.
+
+## 2026-11-18: decisions
+
+- **Priors:** the wide box above for all map-level runs, recorded in PLAN.md.
+  - Narrowing to the 6-width box for the 40%-sky runs waits for the first
+    map-level posteriors.
+  - Catalogue-level analyses of map-level mocks keep the paper's priors, with
+    A_SZ widened to −4.53 to −4.08.
+- **Mass function:** Tinker08 is now interpolated in log10 Δ
+  (`sim/halos.corner_density`).
+  - Against linear in Δ, it lowers the fiducial halo count by 0.53%
+    (M ≥ 1e13) and 0.63% (M ≥ 5e13).
+  - cosmocnc_jax's linear default now gives more halos above 5e13: 0.65% at
+    the fiducial point, 1.25% at the paper's low corner and 0.73% at its high
+    corner (`hmf_compare.py` data). In dn/dlnM the difference reaches 2.3% at
+    1e13. That difference is accepted.
+  - Numbers earlier in this log used linear in Δ.
+  - The simulator tests pass (37 passed).
+- **Stacked lensing:** at SO goal depth, to match the tSZ maps. σ_κ(θ500)
+  will come from the goal lensing noise curve with our own filter, checked
+  against cosmocnc_jax's baseline table.

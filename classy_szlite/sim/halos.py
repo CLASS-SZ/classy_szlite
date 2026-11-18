@@ -46,9 +46,11 @@ def corner_density(cg, params, cells: CellGrid, hmf_kwargs=None):
 
     ``cg`` must be a ``CosmoGrids`` built on z = ``cells.z_edges``.
     ``hmf_kwargs`` go to ``build_halo_grids`` (production:
-    ``tinker_interp='linear', nu_in_rho_m=False``).
+    ``tinker_interp='log10', nu_in_rho_m=False``). Tinker08 is interpolated
+    in log10 Δ since 2026-11-18; cosmocnc_jax's linear default gives up to
+    2.3% more halos at 1e13 M_sun.
     """
-    kw = dict(delta_crit=500.0, tinker_interp="linear", nu_in_rho_m=False)
+    kw = dict(delta_crit=500.0, tinker_interp="log10", nu_in_rho_m=False)
     kw.update(hmf_kwargs or {})
     n_m = cells.lnM_edges.size
     hg = build_halo_grids(cg, params, m_min=float(np.exp(cells.lnM_edges[0])),

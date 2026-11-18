@@ -17,7 +17,8 @@ For every corner: ln(10^10 A_s), expected halos per tile with M ≥ 1e13 and
 M ≥ 5e13, and the painter's load. At each box's heaviest corner, with A_SZ at
 the top of the box, α_SZ = 1 and σ_lnq at +3σ (the most peaks), a few
 goal-depth tiles are simulated, recording peaks, merged peaks, confirmed
-detections and buffer overflows.
+detections and buffer overflows. Each box is also averaged over random draws
+from its prior (Gaussian priors truncated at ±4σ), for the cost.
 """
 from __future__ import annotations
 
@@ -58,6 +59,7 @@ def log(*a):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tiles", type=int, default=4)
+    ap.add_argument("--n-average", type=int, default=256)
     args = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     cells = hl.default_cells()
@@ -79,6 +81,19 @@ def main():
                     direct=float(occ[-1]))
 
     fid = load(base)
+    cs0 = stage(base)
+    p0 = {"omega_cdm": base.omega_cdm, "H0": 100.0 * base.h, "omega_b": base.omega_b,
+          "n_s": base.n_s,
+          "ln10^{10}A_s": ln10As_from_sigma8({"omega_cdm": base.omega_cdm, "H0": 100.0 * base.h,
+                                               "omega_b": base.omega_b, "n_s": base.n_s},
+                                              base.sigma8, as_reference=simu.LN10AS_REFERENCE)}
+    lam_lin = np.asarray(hl.lambda_cells(cs0.cg, p0, cells, hmf_kwargs={"tinker_interp": "linear"}))
+    lam_log = np.asarray(cs0.lam)
+    big = lnMc >= np.log(5e13)
+    fid["linear_over_log10"] = dict(halos=float(lam_lin.sum() / lam_log.sum()),
+                                    halos_5e13=float(lam_lin[:, big].sum() / lam_log[:, big].sum()))
+    log(f"Tinker08 linear in Delta / log10 Delta at the fiducial point: halos "
+        f"{fid['linear_over_log10']['halos']:.4f}, M >= 5e13 {fid['linear_over_log10']['halos_5e13']:.4f}")
     log(f"fiducial: ln10As {fid['ln10As']:.3f}, halos {fid['halos']:.0f}, M >= 5e13 "
         f"{fid['halos_5e13']:.0f}, footprint {fid['footprint']:.3e}, direct {fid['direct']:.0f}")
     res = dict(fiducial=fid, boxes={}, tiles=args.tiles, h_edges=H_EDGES,
@@ -121,6 +136,24 @@ def main():
             f"{sim['n_conf']}, in the data vector {sim['detections']}")
         log(f"   overflow flags (halos, painter classes..., peaks, confirmation): {sim['overflow']}; "
             f"{sim['per_tile_s']:.1f} s per tile after {sim['compile_and_first_s']:.0f} s")
+        rng = np.random.default_rng(20261118)
+        avg = []
+        for _ in range(args.n_average):
+            th_a = base._replace(sigma8=rng.uniform(*box["sigma8"]),
+                                 omega_cdm=rng.uniform(*box["omega_cdm"]),
+                                 h=float(np.clip(rng.normal(0.674, 0.01), 0.634, 0.714)),
+                                 omega_b=float(np.clip(rng.normal(0.0222, 0.00015), 0.0216, 0.0228)),
+                                 n_s=float(np.clip(rng.normal(0.96, 0.0042), 0.9432, 0.9768)))
+            r = load(th_a)
+            avg.append((r["halos"], r["footprint"]))
+        avg = np.asarray(avg)
+        sim["prior_average"] = dict(n=args.n_average,
+                                    halos_rel=float(avg[:, 0].mean() / fid["halos"]),
+                                    footprint_rel=float(avg[:, 1].mean() / fid["footprint"]),
+                                    halos_rel_p99=float(np.quantile(avg[:, 0], 0.99) / fid["halos"]))
+        log(f"   prior average over {args.n_average} draws: halos {sim['prior_average']['halos_rel']:.2f}x, "
+            f"painter load {sim['prior_average']['footprint_rel']:.2f}x the fiducial; "
+            f"99th percentile of halos {sim['prior_average']['halos_rel_p99']:.2f}x")
         res["boxes"][name] = dict(box=box, corners=rows, heaviest=sim)
     with open(os.path.join(OUT, "prior_corners.json"), "w") as fh:
         json.dump(res, fh, indent=1)

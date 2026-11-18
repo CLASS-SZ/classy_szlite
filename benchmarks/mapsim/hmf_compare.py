@@ -7,13 +7,15 @@ cross-feeds below attribute each difference to its cause.
 Codes
 -----
 classy_szlite (reference)
-    Production conventions, as in ``sim/halos.corner_density``:
+    The production conventions up to 2026-11-18, which match cosmocnc_jax's defaults:
     - ede-v3 emulator P_tot(k), with neutrinos as 3 x 0.02 eV;
     - A_s from sigma8 with ``as_reference=3.0``;
     - FFTLog sigma(R);
     - Tinker08 interpolated linearly in Delta;
     - rho_m and Omega_m(z) without neutrinos.
     Also its defaults: interpolation in log10 Delta, and neutrinos in rho_m and Omega_m(z).
+    Since 2026-11-18, production (``sim/halos.corner_density``) interpolates in
+    log10 Delta and still excludes neutrinos; the log10 variant here shows that case.
 cosmocnc_jax
     The CAMB backend (``cosmology_tool='camb'``, ``cosmo_model='mnu'``): one massive
     state of 0.06 eV, with P_tot rescaled exactly to sigma8. It runs through the
