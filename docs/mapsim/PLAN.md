@@ -257,6 +257,11 @@ Data:
 - Port szsim's whitened masked-covariance estimator. The literal binary estimator is biased (`analysis/realistic/step3/RESULTS.md:93-96`). *Done: on one of our tiles, szsim's own code gives the same mask and σ_j to 3e-8.*
 - **Identity** with `data_real/step3/tiles/tile_PID.npz` iteration 1, in the szsim-compatible mode: |Δq| ≤ 1e-9. *Open: needs the szsim-compatible filter mode.*
 - **Statistics** in legacy mode over ≥ 400 tiles, in SE units: r(θ) and the noise-only σ ratios. Poisson tests for the false-detection counts. *Open (GPU); 16 CPU tiles per depth so far.*
+- **Follow-ups from the GMaster and szifi_jax studies** (`LOG.md`, 2026-11-18), in order:
+  - the residual tSZ in σ after one iteration (3.7–7.6% at goal): a minimum disc radius following the beams (2′, 4′), and a second iteration;
+  - a many-tile no-cluster test (≥ 80 tiles × several masks, including real first-pass masks) in place of the 2-tile test;
+  - the finite-sample correction (n − p − 1)/n per bin, then, optionally, in-band coupling row sums instead of the kept fraction (3 FFTs per tile).
+  - No NaMaster and no full coupling matrix for the periodic tiles.
 
 **M6. Data vector, legacy reproduction, timing.**
 - The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing.
