@@ -156,3 +156,41 @@ def test_sigma8_der_vs_pk_tophat():
     s8_der = float(sigma8_der(full))
     print(f"sigma8: DER {s8_der:.6f}, PKL+FFTLog {s8_pk:.6f}, ratio-1 = {s8_pk/s8_der-1:.2e}")
     assert abs(s8_pk / s8_der - 1.0) < 5e-3
+
+
+# ---- A_s reference scaling (any σ8 in the prior, inside or outside the box) ------
+
+def test_as_reference_matches_direct_inside_box():
+    """Inside the emulators' A_s box, evaluating at ln A_s = 3 and rescaling
+    agrees with direct evaluation to the emulators' accuracy along A_s."""
+    from classy_szlite.cosmology import LN10AS_REFERENCE
+    p = dict(P_FID, **{"ln10^{10}A_s": 3.2})
+    z = jnp.array([0.1, 1.0, 2.5])
+    a = build(p, z_grid=z)
+    b = build(p, z_grid=z, as_reference=LN10AS_REFERENCE)
+    for k in ("Hz", "chi", "Da"):
+        np.testing.assert_allclose(np.asarray(getattr(a, k)), np.asarray(getattr(b, k)), rtol=2e-3)
+    r_pk = np.max(np.abs(np.asarray(b.pk) / np.asarray(a.pk) - 1))
+    r_s8 = float(sigma8_der(p, as_reference=LN10AS_REFERENCE) / sigma8_der(p) - 1)
+    print(f"as_reference vs direct at ln A_s = 3.2: P(k) {r_pk:.1e}, sigma8 {r_s8:+.1e}")
+    assert r_pk < 5e-3 and abs(r_s8) < 2e-3
+
+
+def test_as_reference_sigma8_map_closed_form():
+    from classy_szlite.cosmology import LN10AS_REFERENCE
+    for s8, oc in ((0.9, 0.0804), (0.7, 0.204), (0.811, 0.121)):
+        p = dict(P_FID, omega_cdm=oc)
+        x = ln10As_from_sigma8(p, s8, as_reference=LN10AS_REFERENCE)
+        got = sigma8_der(dict(p, **{"ln10^{10}A_s": x}), as_reference=LN10AS_REFERENCE)
+        assert abs(float(got) / s8 - 1) < 1e-14
+        # P(k) at that A_s is exactly ∝ A_s about the reference
+        z = jnp.array([0.5])
+        cg = build(dict(p, **{"ln10^{10}A_s": x}), z_grid=z, as_reference=LN10AS_REFERENCE)
+        cg0 = build(dict(p, **{"ln10^{10}A_s": LN10AS_REFERENCE}), z_grid=z,
+                    as_reference=LN10AS_REFERENCE)
+        np.testing.assert_allclose(np.asarray(cg.pk / cg0.pk),
+                                   np.exp(float(x) - LN10AS_REFERENCE), rtol=1e-12)
+    # the inside-box Newton solution agrees with the closed form
+    x_n = float(ln10As_from_sigma8(P_FID, 0.811))
+    x_c = float(ln10As_from_sigma8(P_FID, 0.811, as_reference=LN10AS_REFERENCE))
+    assert abs(x_n - x_c) < 4e-3, (x_n, x_c)
