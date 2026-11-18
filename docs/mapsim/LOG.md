@@ -435,3 +435,10 @@ The peak buffer with masking:
   - 32 goal tiles: 324.9 ± 3.3 detections per tile (326.1 ± 3.4 before) and
     73,056 halos (λ = 73,030).
   - Realisations differ from earlier runs, which stay statistically valid.
+- **Confirmed on the GPU** (job 7496298, snapshot 6073cc5, default and
+  deterministic ops):
+  - Tile 0 still draws one more halo on the GPU: M = 1.2e13, z = 0.62, the
+    same cell as before. Nothing else differs.
+  - The maps differ in 4 pixels around it, σ_j by ≤ 2e-6, the first-pass
+    peaks are equal (503) and the data vector is equal (361).
+  - Tile 1 agrees to round-off.
