@@ -86,16 +86,23 @@ def tile_static(cmb_cl, tables: pt.PaintTables, mode="goal"):
     )
 
 
-def cosmology_stage(theta: Theta, cells: hl.CellGrid):
-    """λ cells and the cosmology grids on the cell z edges (traceable)."""
+class CosmoStage(NamedTuple):
+    lam: jax.Array          # (n_z, n_m) expected halos per cell, one tile
+    cg: object              # CosmoGrids on the cell z edges
+    d2N: jax.Array          # (n_z + 1, n_m + 1) corner densities d²N/dz dlnM
+
+
+def cosmology_stage(theta: Theta, cells: hl.CellGrid) -> CosmoStage:
+    """λ cells, corner densities and the cosmology grids on the cell z edges
+    (traceable)."""
     p = {"omega_cdm": theta.omega_cdm, "H0": 100.0 * theta.h, "omega_b": theta.omega_b,
          "n_s": theta.n_s}
     # A_s by the linear-theory scaling about ln(10^10 A_s) = 3.0: exact, and safe
     # at the prior corners, which map outside the emulators' A_s box (2.5-3.5)
     p["ln10^{10}A_s"] = ln10As_from_sigma8(p, theta.sigma8, as_reference=LN10AS_REFERENCE)
     cg = build(p, z_grid=cells.z_edges, as_reference=LN10AS_REFERENCE)
-    lam = hl.lambda_cells(cg, p, cells)
-    return lam, cg
+    d2N = hl.corner_density(cg, p, cells)
+    return CosmoStage(lam=hl.lambda_from_corners(d2N, cells), cg=cg, d2N=d2N)
 
 
 def channel_maps(key, yk, st: TileStatic):
@@ -117,12 +124,12 @@ def channel_maps(key, yk, st: TileStatic):
     return st.a_full * yk[None] + st.B_full * cmb[None] + white + atm
 
 
-def simulate_tile(key, lam, cg, theta: Theta, st: TileStatic, tables: pt.PaintTables,
+def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
                   cells: hl.CellGrid, cfg: TileConfig):
     """Data vector and diagnostics of one tile."""
     k_h, k_m = jax.random.split(key)
-    halos = hl.sample_halos(k_h, lam, cells, cfg.halo_cap, cg, theta.h, theta.A_SZ,
-                            theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b)
+    halos = hl.sample_halos(k_h, cs.lam, cells, cfg.halo_cap, cs.cg, theta.h, theta.A_SZ,
+                            theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b, d2N=cs.d2N)
     tabs = tables._replace(tab=st.paint_tab, rP=st.paint_rP)
     yk, ovf_paint = pt.paint_y(halos, tabs, cfg.paint, st.T_tab)
     X = channel_maps(k_m, yk, st)

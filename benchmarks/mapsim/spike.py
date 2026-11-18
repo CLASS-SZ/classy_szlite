@@ -69,7 +69,8 @@ def expected_occupation(lam, cg, theta, cells, tb):
 def setup(theta=simu.THETA_FID, margin=1.5):
     cells = hl.default_cells()
     tb = tables()
-    lam, cg = jax.jit(lambda th: simu.cosmology_stage(th, cells))(theta)
+    cs = jax.jit(lambda th: simu.cosmology_stage(th, cells))(theta)
+    lam, cg = cs.lam, cs.cg
     occ = expected_occupation(lam, cg, theta, cells, tb)
     lam_tot = float(np.sum(lam))
     halo_cap = int(np.ceil((lam_tot + 6 * np.sqrt(lam_tot) + 1024) / 4096) * 4096)
@@ -81,17 +82,17 @@ def setup(theta=simu.THETA_FID, margin=1.5):
     info = dict(lambda_total=lam_tot, halo_cap=halo_cap, occupation=occ.round(1).tolist(),
                 caps=list(pcfg.caps), blocks=list(pcfg.blocks), cap_big=cap_big,
                 contributions=float(sum(o * s * s for o, s in zip(occ[:-1], pt.SIDES))))
-    return cells, tb, lam, cg, cfg, st, info
+    return cells, tb, cs, cfg, st, info
 
 
 def cmd_check(args):
     """Painter (scheme A) against exact synthesis, on one tile's halos."""
     theta = simu.THETA_FID
-    cells, tb, lam, cg, cfg, st, info = setup(theta)
+    cells, tb, cs, cfg, st, info = setup(theta)
     log(json.dumps(info))
-    h = jax.jit(lambda k: hl.sample_halos(k, lam, cells, cfg.halo_cap, cg, theta.h, theta.A_SZ,
+    h = jax.jit(lambda k: hl.sample_halos(k, cs.lam, cells, cfg.halo_cap, cs.cg, theta.h, theta.A_SZ,
                                           theta.alpha_SZ, theta.sigma_lnq,
-                                          theta.one_minus_b))(jax.random.key(1))
+                                          theta.one_minus_b, d2N=cs.d2N))(jax.random.key(1))
     log(f"halos drawn: {int(h.count)} (lambda {info['lambda_total']:.0f}), overflow {bool(h.overflow)}")
     # a subset: every halo class, ~400 halos, painted alone by both methods
     rng = np.random.default_rng(0)
@@ -141,10 +142,10 @@ def cmd_invariance(args):
     """Same tile keys at several batch sizes: integer outputs must be identical
     (run with XLA_FLAGS=--xla_gpu_deterministic_ops=true on GPUs)."""
     theta = simu.THETA_FID
-    cells, tb, lam, cg, cfg, st, info = setup(theta)
+    cells, tb, cs, cfg, st, info = setup(theta)
 
     def tile(key):
-        return simu.simulate_tile(key, lam, cg, theta, st, tb, cells, cfg)
+        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
     f = jax.jit(jax.vmap(tile))
     Bmax = max(args.batch)
     outs = {}
@@ -172,15 +173,15 @@ def cmd_invariance(args):
 def cmd_run(args):
     theta = simu.THETA_FID
     t0 = time.time()
-    cells, tb, lam, cg, cfg, st, info = setup(theta)
+    cells, tb, cs, cfg, st, info = setup(theta)
     log(f"setup {time.time() - t0:.1f} s; backend {jax.default_backend()}, devices {jax.devices()}")
     log(json.dumps(info))
     tabs = tb._replace(tab=st.paint_tab, rP=st.paint_rP)
 
     # stage functions (one tile), for per-stage timing
     def s_halos(key):
-        return hl.sample_halos(key, lam, cells, cfg.halo_cap, cg, theta.h, theta.A_SZ,
-                               theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b)
+        return hl.sample_halos(key, cs.lam, cells, cfg.halo_cap, cs.cg, theta.h, theta.A_SZ,
+                               theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b, d2N=cs.d2N)
 
     def s_paint(h):
         return pt.paint_y(h, tabs, cfg.paint, st.T_tab)
@@ -199,7 +200,7 @@ def cmd_run(args):
         return sm.histogram(pk.q, cf.z, keep & cf.ok), pk.count
 
     def tile(key):
-        return simu.simulate_tile(key, lam, cg, theta, st, tb, cells, cfg)
+        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
 
     res = dict(info=info, backend=jax.default_backend(), device=str(jax.devices()[0]),
                xla_flags=os.environ.get("XLA_FLAGS", ""), runs=[])
