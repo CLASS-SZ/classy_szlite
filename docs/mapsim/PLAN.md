@@ -90,7 +90,16 @@ Headline tests, each on map-level mock data at a known cosmology:
   | (1−b) | 0.8 (the paper's β_SZ; cosmocnc_jax's `bias_sz`) |
   | Σmν | 0.06 eV (3 × 0.02 eV, as the ede-v3 emulators assume) |
 
-  Note that cosmocnc_jax's default `bias_sz` is 0.62, and its `beta_szifi` is a different parameter (an E(z) exponent, unused). The SBI priors follow the paper's Table 1.
+  Note that cosmocnc_jax's default `bias_sz` is 0.62, and its `beta_szifi` is a different parameter (an E(z) exponent, unused).
+- **SBI priors** (decided 2026-11-18; numbers in LOG.md, "priors: halo load at the edges of narrower boxes"):
+  - Map-level runs use one box, sized for the 10%-sky runs:
+    - σ8 U(0.770, 0.852), ω_c U(0.0804, 0.169), A_SZ U(−4.53, −4.08) and α_SZ U(1, 1.24);
+    - the paper's Gaussian priors for h, ω_b, n_s, σ_lnq, β_CMBlens and σ_CMBlens.
+  - **The rule:** each edge is 8 of the paper's posterior widths (its likelihood standard deviations) from the fiducial, clipped at the paper's prior.
+    - Posteriors at 10% of the sky are about 1.3× the paper's, so the 95% intervals stay inside with room for the mock-to-mock scatter.
+    - Compared with the paper, σ8 and ω_c are narrower and A_SZ is wider. The paper's A_SZ 95% interval ended less than 2 widths from its edges.
+  - **The 40%-sky runs** may narrow to 6 widths once the first map-level posteriors show their real widths: σ8 U(0.780, 0.842), ω_c U(0.085, 0.157), A_SZ U(−4.48, −4.13).
+  - **Catalogue-level analyses of map-level mocks** use the paper's Table 1 priors with A_SZ widened to U(−4.53, −4.08). Their posteriors are expected to shift, and a tight box would hide the shift.
 - **Pressure profile** (`profiles.py`, kept separate from `cl_yy`'s defaults):
   - The Arnaud et al. 2010 eq. 12 set, as in SZiFi and szsim: P0 = 8.403 h70^(−3/2), c500 = 1.177, γ = 0.3081, α = 1.0510, β = 5.4905.
   - Truncated at 5 R500 in 3D, and normalised to unit central value before the beam.
@@ -101,13 +110,20 @@ Headline tests, each on map-level mock data at a known cosmology:
   - the neutrino treatment in ρ_m and in Δ_mean = 500/Ω_m(z);
   - rounding Δ_m to an integer, as colossus does (used only for the colossus code test);
   - P_tot or P_cb in σ(M).
-  - Production adopts cosmocnc_jax's defaults: linear in Δ, ν excluded from Ω_m, P_tot. We assume these match the paper, which does not state them; to confirm with its authors.
+  - Production (decided 2026-11-18): Tinker08 interpolated in log10 Δ, ν excluded from Ω_m, P_tot.
+    - The paper does not state its choices.
+    - cosmocnc_jax's default, linear in Δ, gives 0.3–2.3% more halos at 1e13. That difference is accepted.
+    - Until 2026-11-18 production used linear in Δ, so earlier logged numbers carry it.
   - **classy_szlite bug, fixed in M0:** `hmf.py:222` adds m_ncdm/(93.14h²) to Ω_m, but m_ncdm is the per-species mass (0.02 eV × 3). The HMF therefore holds a third of Σmν, while `derived()` (`api.py:59`) uses all three; Ω_m in the HMF is about 0.3% low.
 - **Halos:** M500c ≥ 1e13 M_sun, which matters for confusion, and 0.01 < z < 3. The data vector counts only detections.
 - **CMB:** lensed TT, held fixed at the fiducial for the headline tests. A cosmology-dependent CMB is a separate test.
 - **Lensing observable** (catalogue level, for the matched halo; cosmocnc_jax's `p_so_sim` model):
   - parameters: β_CMBlens = 0.92, σ_lnp = 0.22, corr(ln q, ln p) = 0 (the paper's r = 0), a_lens = 1;
-  - σ_κ(θ) from cosmocnc_jax's cubic log-log fit to its SO table. cosmocnc_jax extrapolates that fit. We deliberately hold it at its end values outside the table (0.739′–5.87′), because SO_sim_0's mean p favours that (0.297 against 0.307 extrapolated; observed 0.2986 ± 0.0080);
+  - **σ_κ(θ) at SO goal lensing depth** (decided 2026-11-18, to match the goal tSZ maps).
+    - **Source:** the minimum-variance quadratic-estimator noise curve of the SO noise models, goal version. That is the SENS2 sibling of the paper's `nlkk_v3_1_0_deproj0_SENS1_fsky0p4_qe_lT30-3000_lP30-5000.dat`.
+    - **Filter:** our own truncated-NFW matched filter (c500 = 3, 5 R500), as the paper describes.
+    - **Check:** the same code on the SENS1 curve must reproduce cosmocnc_jax's baseline table (`so_sim_lensing_mf_noise.npy`).
+    - **Baseline comparisons:** the paper comparison and SO_sim_0 keep cosmocnc_jax's cubic log-log fit to its baseline table. We hold that fit at its end values outside the table (0.739′–5.87′), because SO_sim_0's mean p favours that (0.297 against 0.307 extrapolated; observed 0.2986 ± 0.0080);
   - a detection without a matched halo gets p ~ N(0,1);
   - the summary is the mean p over the data-vector sample;
   - blending and mis-centring of the lensing signal are not modelled in v1.
@@ -271,7 +287,7 @@ Data:
 
 Set by the M0 spike (`M0_LOG.md`, 2026-11-18).
 - **Per tile, fiducial halo load, one finder pass:** 6.8 ms on an RTX PRO 6000 Blackwell and 14.4 ms on an A100 (batch 16, 8 GiB). Painting is ~70% of that; the FFTs of the maps and the filter take ~2 ms.
-- **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~6 GPU-hours with the prior-averaged halo load (×~1.3, from 0.26× to 2.7× of the fiducial across the prior) and the masking pass (×~1.4, M5). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
+- **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~4.6 GPU-hours with the prior-averaged halo load (×1.05 over the wide box, from 0.42× to 1.94× of the fiducial; ×1.17 over the paper's prior) and the masking pass (×~1.4, M5). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
 
 CPU fallback and cross-check: our szsim pipeline needs ~3,000–6,600 CPU-hours for 10⁴ simulations; SZiFi would need ~50,000. The GPU total must also count the coverage mocks, the 10%-sky runs, compile time, development jobs and capacity padding.
 
