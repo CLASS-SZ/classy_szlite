@@ -15,6 +15,20 @@ from classy_szlite.sim import mmf, paint as pt, summaries as sm, instrument as i
 from classy_szlite.sim import halos as hl, simulator as simu  # noqa: E402
 
 
+# ---- compaction ---------------------------------------------------------------------
+
+@pytest.mark.parametrize("p,size", [(0.0, 8), (1e-4, 64), (0.002, 64), (0.5, 64), (1.0, 16)])
+def test_compact_matches_nonzero(p, size):
+    """Same indices as jnp.nonzero, including empty masks and overflow."""
+    from classy_szlite.sim._util import compact
+    rng = np.random.default_rng(int(1e6 * p) + size)
+    m = jnp.asarray(rng.random(200_000) < p)
+    idx, cnt = jax.jit(lambda m: compact(m, size, 7))(m)
+    ref = jnp.nonzero(m, size=size, fill_value=7)[0]
+    np.testing.assert_array_equal(np.asarray(idx), np.asarray(ref))
+    assert int(cnt) == int(m.sum())
+
+
 # ---- grid -------------------------------------------------------------------------
 
 def test_grid_bookkeeping():
