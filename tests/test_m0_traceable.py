@@ -121,3 +121,28 @@ def test_sigma_R_matches_direct_quadrature():
         var_f = np.interp(np.log(R_test), np.log(np.asarray(cg.R)),
                           np.log(np.asarray(cg.sigma)[iz] ** 2))
         np.testing.assert_allclose(np.exp(var_f), var_q, rtol=1e-4)
+
+
+@pytest.mark.gpu
+def test_cpu_gpu_parity(tmp_path):
+    """The cosmology stage on CPU and GPU agrees to ≤ 1e-10 on the used domain."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_m0", os.path.join(HERE, "_m0_jit_first.py"))
+    m0 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m0)
+    out = {}
+    for plat in ("cpu", "cuda"):
+        path = str(tmp_path / f"{plat}.npz")
+        res = _run_script("_m0_jit_first.py", "--save", path, env={"JAX_PLATFORMS": plat})
+        assert res["backend"] == ("gpu" if plat == "cuda" else "cpu")
+        out[plat] = dict(np.load(path))
+    worst = {}
+    for i in range(out["cpu"]["thetas"].shape[0]):
+        a = {k: v[i] for k, v in out["cuda"].items() if k != "thetas"}
+        b = {k: v[i] for k, v in out["cpu"].items() if k != "thetas"}
+        used, _ = m0.compare(a, b)
+        for k, d in used.items():
+            worst[k] = max(worst.get(k, 0.0), d)
+    print("CPU vs GPU, used domain:", {k: f"{v:.1e}" for k, v in worst.items()})
+    bad = {k: d for k, d in worst.items() if not d <= 1e-10}
+    assert not bad, f"CPU vs GPU above 1e-10: {bad}"
