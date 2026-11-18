@@ -54,6 +54,21 @@ The halo model therefore agrees with the paper's; its noise model is what
 differs. Our analytic σ gives 59,300 (goal) and 38,000 (baseline) with the
 same cuts.
 
+**How the paper's table was made.** The cosmocnc paper (arXiv:2403.09589)
+describes it:
+- SZiFi's standard matched filter, with no foreground deprojection;
+- run on 10 Websky tiles holding the CMB, tSZ, kSZ and cosmic infrared
+  background;
+- SO baseline white noise, the same levels as ours, and no atmospheric
+  noise.
+
+Our maps have atmospheric noise but no foregrounds yet (PLAN.md, "simple
+problem first"). The likely culprit is the infrared background, which is
+brightest at 225 and 278 GHz and on small scales. That fits a ratio that
+grows from 1× at 15′ to 3–4× at 0.5′, but the ratio has not been split into
+its parts. SO's own forecast, 16,000 clusters at baseline depth
+(arXiv:1808.07445), agrees with the paper's count.
+
 For comparison, the earlier project's analytic counts (legacy population,
 full sky, q > 5, no blending) give goal / baseline = 128,167 / 81,705 =
 1.57. Here the same kind of calculation gives 1.54.
@@ -162,3 +177,42 @@ colossus 0.966–1.003.
   - interpolating in log10 Δ gives −0.3% to −2.3% at 1e13;
   - including neutrinos in ρ_m and Ω_m(z) gives +0.6% to +1.9%;
   - net, up to +1.8% in counts.
+
+## 2026-11-18: priors: halo load at the edges of narrower boxes
+
+Script `benchmarks/mapsim/prior_corners.py`; output
+`/mnt/ceph/users/bbolliet/mapsim/priors/prior_corners.json`. The proposed
+boxes put each edge a fixed number of the paper's posterior widths from the
+fiducial value. The widths are the likelihood standard deviations in Table 1
+of arXiv:2504.10230: 0.0051 in σ8, 0.0060 in ω_c and 0.028 in A_SZ.
+- **narrow (40% of the sky): 6 widths.** That is 3 for where the posterior
+  can land from mock to mock, 2 for the 95% half-width, and 1 of margin.
+- **wide (10% of the sky): 8 widths.** Posteriors there are about 1.3×
+  the paper's, with a quarter of our clusters.
+- **Edges and other parameters.** ω_c is clipped at the paper's lower edge.
+  α_SZ and the Gaussian priors are unchanged.
+
+h is at ±3σ of N(0.674, 0.01). Halos are per 10° tile.
+
+| box | σ8 | ω_c | A_SZ | halos ≥ 1e13, relative to the fiducial 73,419 | halos ≥ 5e13 | ln(10¹⁰A_s) |
+|---|---|---|---|---|---|---|
+| paper | 0.700–0.900 | 0.0804–0.204 | −4.41 to −4.21 | 0.26–2.69 | 691–16,592 | 2.12–3.81 |
+| wide | 0.770–0.852 | 0.0804–0.169 | −4.53 to −4.08 | 0.42–1.94 | 1,400–10,580 | 2.51–3.70 |
+| narrow | 0.780–0.842 | 0.085–0.157 | −4.48 to −4.13 | 0.48–1.73 | 1,665–9,122 | 2.62–3.60 |
+
+Four goal-depth tiles were run at each box's heaviest corner (high σ8, high
+ω_c, low h), with the most peaks: A_SZ at the top of the box, α_SZ = 1 and
+σ_lnq = 0.323 (+3σ).
+
+| box | peaks with q > 4 (buffer 2,048) | detections in the data vector (fiducial 237) | buffer overflows | CPU s per tile |
+|---|---|---|---|---|
+| paper | 1,628–1,713 | 793–884 | confirmation buffer (16,384 halos ≥ 5e13) | 7.6 |
+| wide | 1,444–1,559 | 774–838 | none | 5.8 |
+| narrow | 1,227–1,303 | 663–738 | none | 5.2 |
+
+- **ω_c stays inside the emulators' training range** (0.0801–0.2000) in
+  both new boxes, so the extrapolation question disappears.
+- **ln(10¹⁰A_s) still leaves the emulators' range** (2.5–3.5) at the top.
+  The linear rescaling handles that exactly, as before.
+- **The heaviest load falls** from 2.7× the fiducial to 1.9× (wide) and
+  1.7× (narrow).
