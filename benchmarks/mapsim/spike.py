@@ -144,6 +144,10 @@ def cmd_invariance(args):
     theta = simu.THETA_FID
     cells, tb, cs, cfg, st, info = setup(theta)
 
+    def s_finder(X):
+        # first pass plus the masking iteration (cfg.n_iter), up to the final peaks
+        return simu.find_clusters(X, st.fs, cfg)[0].count
+
     def tile(key):
         return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
     f = jax.jit(jax.vmap(tile))
@@ -199,6 +203,10 @@ def cmd_run(args):
         cf = sm.confirm(pk, keep, h, cfg.M_conf, cfg.r_conf, cfg.conf_cap)
         return sm.histogram(pk.q, cf.z, keep & cf.ok), pk.count
 
+    def s_finder(X):
+        # first pass plus the masking iteration (cfg.n_iter), up to the final peaks
+        return simu.find_clusters(X, st.fs, cfg)[0].count
+
     def tile(key):
         return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
 
@@ -212,6 +220,7 @@ def cmd_run(args):
             maps=jax.jit(jax.vmap(s_maps)),
             filter=jax.jit(jax.vmap(s_filter)),
             peaks=jax.jit(jax.vmap(s_peaks)),
+            finder=jax.jit(jax.vmap(s_finder)),
             full=jax.jit(jax.vmap(tile)),
         )
         timings = {}
@@ -235,6 +244,7 @@ def cmd_run(args):
         X = timed("maps", stages["maps"], keys, yk)
         q, sig = timed("filter", stages["filter"], X)
         counts, npk = timed("peaks", stages["peaks"], q, h)
+        timed("finder", stages["finder"], X)
         out = timed("full", stages["full"], keys)
         res["runs"].append(dict(batch=B, timings=timings,
                                 n_halos=np.asarray(out["n_halos"]).tolist(),

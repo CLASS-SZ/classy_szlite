@@ -3,9 +3,14 @@
     python benchmarks/mapsim/diagnostics_data.py
 
 Reads the outputs of counts_modes.py, paper_sigma.py, optbias.py,
-hmf_compare.py and prior_corners.py under $MAPSIM_OUT, simulates one
-goal-depth tile at the fiducial point for a picture, and writes
-$MAPSIM_OUT/diagnostics/diagnostics.json.
+hmf_compare.py, prior_corners.py and mask_check.py under $MAPSIM_OUT,
+simulates one goal-depth tile at the fiducial point for a picture (with the
+masking iteration), and writes $MAPSIM_OUT/diagnostics/diagnostics.json.
+
+The earlier project's noise ratios quoted for comparison (sz-poisson-blending,
+analysis/realistic/step3/t05_analysis.log, 324 tiles per depth, its own halo
+model) are σ_finder/σ_analytic per filter scale before and after the same
+masking iteration (whitened estimate).
 
 The pixel-loss estimate quoted for comparison is an independent calculation
 from the curvature of the matched filter's response at its peak, averaged over
@@ -29,6 +34,19 @@ OUT = os.environ.get("MAPSIM_OUT", ".")
 PIXLOSS_THETA = [0.50, 1.04, 2.15, 4.45, 9.23, 15.0]          # arcmin
 PIXLOSS = {"baseline": [2.65, 2.16, 1.64, 1.17, 0.75, 0.52],   # percent
            "goal": [2.97, 2.43, 1.85, 1.32, 0.86, 0.61]}
+
+EARLIER = {   # t05_analysis.log (4a), same 15 scales
+    "goal": dict(before=[1.1597, 1.1684, 1.1779, 1.1883, 1.2001, 1.2122, 1.2235, 1.2331, 1.2395, 1.2416,
+                         1.2383, 1.2291, 1.2144, 1.1953, 1.1734],
+                 after=[1.0531, 1.0555, 1.0580, 1.0606, 1.0635, 1.0661, 1.0682, 1.0693, 1.0691, 1.0674,
+                        1.0638, 1.0584, 1.0515, 1.0436, 1.0352],
+                 masked=0.239, masked_range=[0.153, 0.347], tiles=324),
+    "baseline": dict(before=[1.1179, 1.1241, 1.1307, 1.1379, 1.1460, 1.1545, 1.1624, 1.1692, 1.1739, 1.1756,
+                             1.1735, 1.1674, 1.1573, 1.1439, 1.1282],
+                     after=[1.0394, 1.0412, 1.0430, 1.0449, 1.0469, 1.0488, 1.0503, 1.0511, 1.0510, 1.0496,
+                            1.0468, 1.0426, 1.0371, 1.0308, 1.0240],
+                     masked=0.212, masked_range=[0.134, 0.314], tiles=324),
+}
 
 
 def rnd(x, sig=5):
@@ -138,6 +156,25 @@ def optbias_part():
     return out
 
 
+def masking_part():
+    from classy_szlite.sim import mmf
+    mk = json.load(open(f"{OUT}/mask/mask_tiles.json"))
+    out = dict(theta=list(mmf.THETAS15), tiles=mk["tiles"], earlier=EARLIER,
+               finder_seconds=mk["finder_seconds"], modes={})
+    for mode in ("goal", "baseline"):
+        m = mk["modes"][mode]
+        P = m["passes"]
+        tot = [np.asarray(p["total"], float) for p in P]
+        out["modes"][mode] = dict(
+            ratio=[p["sigma_ratio_mean"] for p in P], sem=[p["sigma_ratio_sem"] for p in P],
+            f_masked=P[1]["f_masked"], n_masked=P[1]["n_masked"], f_masked_2=P[2]["f_masked"],
+            totals=[float(t.mean()) for t in tot],
+            totals_sem=[float(t.std(ddof=1) / np.sqrt(t.size)) for t in tot],
+            iter2_sigma_maxdev=m["iter2_vs_iter1_sigma_maxdev"],
+            iter2_count_diffs=m["counts_change"]["iter2_minus_iter1_per_tile"])
+    return out
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -173,17 +210,21 @@ def tile_part(width=240):
         tabs = tb._replace(tab=st.paint_tab, rP=st.paint_rP)
         yk, _ = pt.paint_y(halos, tabs, cfg.paint, st.T_tab)
         X = simu.channel_maps(k_m, yk, st)
-        q, sigma, _ = mmf.q_cube(X, st.fs)
+        # first pass, then one masking iteration (as simulator.find_clusters), keeping the mask
+        q, _, C0 = mmf.q_cube(X, st.fs)
+        mask, _ = mmf.cluster_mask(mmf.find_peaks(q, cfg.peak_cap), st.fs, cfg.q_mask)
+        C1, _ = mmf.masked_cov(X, mask, C0, st.fs)
+        q, sigma, _ = mmf.q_cube(X, st.fs, C=C1)
         pk = mmf.find_peaks(q, cfg.peak_cap)
         keep = sm.merge_local_max(pk, cfg.r_merge)
         cf = sm.confirm(pk, keep, halos, cfg.M_conf, cfg.r_conf, cfg.conf_cap)
         ymap = jnp.fft.irfft2(yk * st.B_full[3], s=(N, N))      # 145 GHz beam, 1.4'
         t145 = jnp.fft.irfft2(X[3], s=(N, N))                    # 145 GHz map [μK]
         counts = sm.histogram(pk.q, cf.z, keep & cf.ok)
-        return halos, ymap, t145, q.max(0), sigma, pk, keep, cf, counts
+        return halos, ymap, t145, q.max(0), sigma, pk, keep, cf, counts, mask
 
     key = spike.tile_keys(1)[0]                                   # tile 0 of counts_modes.py
-    halos, ymap, t145, qmax, sigma, pk, keep, cf, counts = jax.device_get(run(key))
+    halos, ymap, t145, qmax, sigma, pk, keep, cf, counts, mask = jax.device_get(run(key))
     valid = np.asarray(halos.valid)
     lnM = np.asarray(halos.lnM)
     big = np.flatnonzero(valid & (lnM >= np.log(5e13)))
@@ -234,13 +275,15 @@ def tile_part(width=240):
                        top=y_top, max=float(y.max())),
                 t145=dict(data=u8(0.5 + 0.5 * np.clip(t / t_lim, -1, 1)), lim=t_lim),
                 q=dict(data=u8(np.clip(qm, 0, q_lim) / q_lim), lim=q_lim),
+                mask=dict(data=u8(1.0 - cut(mask)), masked_tile=float(1.0 - np.asarray(mask).mean())),
                 halos=halo_list, peaks=peak_list,
                 tile=dict(halos=int(valid.sum()), halos_5e13=int(big.size), kept=int(ok.sum()),
                           in_data_vector=int(np.asarray(counts).sum())))
 
 
 def main():
-    out = dict(hmf=hmf_part(), counts=counts_part(), optbias=optbias_part(), priors=priors_part())
+    out = dict(hmf=hmf_part(), counts=counts_part(), optbias=optbias_part(), priors=priors_part(),
+               masking=masking_part())
     out["tile"] = tile_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"
