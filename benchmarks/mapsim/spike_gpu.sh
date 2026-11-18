@@ -30,6 +30,10 @@ step "4. throughput"
 python benchmarks/mapsim/spike.py run --batch $BATCHES --reps 3 --tag $TAG --trace 2>&1 | grep -v -i warn
 step "5. batch invariance, deterministic ops"
 XLA_FLAGS=--xla_gpu_deterministic_ops=true python benchmarks/mapsim/spike.py invariance --batch 1 4 16 2>&1 | grep -v -i warn | tail -24
-step "6. throughput with deterministic ops"
-XLA_FLAGS=--xla_gpu_deterministic_ops=true python benchmarks/mapsim/spike.py run --batch 8 --reps 2 --tag ${TAG}_det 2>&1 | grep -v -i warn | tail -9
+step "6. batch invariance, default (atomic) ops: how often round-off changes an integer output"
+python benchmarks/mapsim/spike.py invariance --batch 1 4 16 2>&1 | grep -v -i warn | tail -24
+if [ -n "${DET_THROUGHPUT:-}" ]; then
+  step "7. throughput with deterministic ops"
+  XLA_FLAGS=--xla_gpu_deterministic_ops=true python benchmarks/mapsim/spike.py run --batch 8 --reps 2 --tag ${TAG}_det 2>&1 | grep -v -i warn | tail -9
+fi
 step "done"
