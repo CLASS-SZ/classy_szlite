@@ -287,3 +287,38 @@ def test_injection_noise_free_painter(static):
         y0_hat = float(q[j, 301, 699] * sig[j])
         print(f"painter, scale {j}: y0_hat/y0 - 1 = {y0_hat / 1e-4 - 1:+.2e}")
         assert abs(y0_hat / 1e-4 - 1.0) < 3e-5, (j, y0_hat)
+
+
+def test_halos_keyed_by_cell(fid_lambda):
+    """Each halo's random numbers belong to its (cell, index in cell): changing
+    one cell's expected count leaves every halo of every other cell identical
+    (positions, offsets, z, ln M, y0). Before, one extra count reshuffled all
+    later buffer slots, and a last-bit difference in the Poisson sampler
+    between CPU and GPU (λ ≥ 10) turned a tile into a different realisation."""
+    cells, cs = fid_lambda
+    lam, cg, d2N = cs.lam, cs.cg, cs.d2N
+    lam2 = np.asarray(lam).copy()
+    n_m = lam2.shape[1]
+    c0 = int(np.argmax(lam2.ravel() * (lam2.ravel() < 30)))        # a busy cell
+    lam2.ravel()[c0] *= 2.0
+    cap = int(np.ceil((lam2.sum() + 8 * np.sqrt(lam2.sum()) + 512) / 1024) * 1024)
+    key = jax.random.key(11)
+    th = simu.THETA_FID
+
+    def run(l):
+        h = hl.sample_halos(key, jnp.asarray(l), cells, cap, cg, th.h, th.A_SZ, th.alpha_SZ,
+                            th.sigma_lnq, th.one_minus_b, d2N=d2N)
+        v = np.asarray(h.valid)
+        cz = np.searchsorted(cells.z_edges, np.asarray(h.z, np.float64)[v]) - 1
+        cm = np.searchsorted(cells.lnM_edges, np.asarray(h.lnM, np.float64)[v]) - 1
+        rows = np.stack([np.asarray(getattr(h, f))[v].astype(np.float64)
+                         for f in ("iy", "ix", "oy", "ox", "z", "lnM", "y0")], 1)
+        return rows, cz * n_m + cm
+
+    a, ca = run(lam)
+    b, cb = run(lam2)
+    ra = {tuple(r) for r in a[ca != c0]}
+    rb = {tuple(r) for r in b[cb != c0]}
+    print(f"cell {c0}: {int((ca == c0).sum())} -> {int((cb == c0).sum())} halos; others {len(ra)} vs {len(rb)}")
+    assert (cb == c0).sum() > (ca == c0).sum()
+    assert ra == rb

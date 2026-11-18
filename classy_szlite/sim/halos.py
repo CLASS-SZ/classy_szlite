@@ -99,8 +99,15 @@ def sample_halos(key, lam, cells: CellGrid, capacity: int, cg, h, A_SZ, alpha_SZ
     drawn exactly from the bilinear interpolant inside each cell: z from its
     linear marginal, then ln M from the linear conditional (closed-form
     inverse CDFs, as szsim's sampler). Without it, uniformly in the cell.
+
+    Each halo's random numbers (position, offsets, z, ln M, scatter) come from a
+    key folded with its cell and its index within the cell, not from its buffer
+    slot. A count that changes in one cell (a different θ, or a last-bit
+    difference in the Poisson sampler between CPU and GPU, which happens for
+    λ ≥ 10) then adds or removes halos in that cell only; every other halo is
+    unchanged.
     """
-    k_pois, k_z, k_m, k_py, k_px, k_oy, k_ox, k_sc = jax.random.split(key, 8)
+    k_pois, k_attr = jax.random.split(key)
     n_z, n_m = lam.shape
     counts = jax.random.poisson(k_pois, lam.ravel(), dtype=jnp.int32)
     csum = jnp.cumsum(counts)
@@ -110,11 +117,18 @@ def sample_halos(key, lam, cells: CellGrid, capacity: int, cg, h, A_SZ, alpha_SZ
     cell = jnp.searchsorted(csum, slot, side="right").astype(jnp.int32)
     cell = jnp.minimum(cell, n_z * n_m - 1)
     iz, im = cell // n_m, cell % n_m
+    j_in_cell = slot - (csum[cell] - counts[cell])
+
+    def draws(c, j):
+        k = jax.random.fold_in(jax.random.fold_in(k_attr, c), j)
+        ku, kn = jax.random.split(k)
+        return (jax.random.uniform(ku, (6,), dtype=jnp.float64),
+                jax.random.normal(kn, (), dtype=jnp.float64))
+    U, G = jax.vmap(draws)(cell, j_in_cell)               # (C, 6), (C,)
 
     ze = jnp.asarray(cells.z_edges)
     me = jnp.asarray(cells.lnM_edges)
-    u_z = jax.random.uniform(k_z, (capacity,), dtype=jnp.float64)
-    u_m = jax.random.uniform(k_m, (capacity,), dtype=jnp.float64)
+    u_z, u_m = U[:, 0], U[:, 1]
     if d2N is not None:
         f00, f10 = d2N[iz, im], d2N[iz + 1, im]            # (z, M) corners
         f01, f11 = d2N[iz, im + 1], d2N[iz + 1, im + 1]
@@ -130,13 +144,13 @@ def sample_halos(key, lam, cells: CellGrid, capacity: int, cg, h, A_SZ, alpha_SZ
     DA = jnp.interp(z, cg.z, cg.Da)
     M = jnp.exp(lnM)
     y0 = y0_median(M, Ez, h, A_SZ, alpha_SZ, one_minus_b)
-    y0 = y0 * jnp.exp(sigma_lnq * jax.random.normal(k_sc, (capacity,), dtype=jnp.float64))
+    y0 = y0 * jnp.exp(sigma_lnq * G)
     th = theta500_arcmin(M, Ez, DA, h, one_minus_b)
 
-    iy = jax.random.randint(k_py, (capacity,), 0, NF, dtype=jnp.int32)
-    ix = jax.random.randint(k_px, (capacity,), 0, NF, dtype=jnp.int32)
-    oy = jax.random.uniform(k_oy, (capacity,), dtype=jnp.float32)
-    ox = jax.random.uniform(k_ox, (capacity,), dtype=jnp.float32)
+    iy = jnp.minimum(jnp.floor(U[:, 2] * NF), NF - 1).astype(jnp.int32)
+    ix = jnp.minimum(jnp.floor(U[:, 3] * NF), NF - 1).astype(jnp.int32)
+    oy = U[:, 4].astype(jnp.float32)
+    ox = U[:, 5].astype(jnp.float32)
     f32 = jnp.float32
     return Halos(iy=iy, ix=ix, oy=oy, ox=ox, z=z.astype(f32), lnM=lnM.astype(f32),
                  y0=jnp.where(valid, y0, 0.0).astype(f32), theta500=th.astype(f32),
