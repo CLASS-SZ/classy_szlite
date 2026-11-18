@@ -31,15 +31,20 @@ def log(*a):
     print(*a, flush=True)
 
 
+DLN = float(os.environ.get("MAPSIM_PAINT_DLN", "0.004"))
+
+
 def tables():
-    path = os.path.join(OUT, "paint_tables.npz")
+    path = os.path.join(OUT, f"paint_tables_dln{DLN:g}.npz")
     if os.path.exists(path):
         d = np.load(path)
         return pt.PaintTables(lnth0=float(d["lnth0"]), dln=float(d["dln"]), rP=d["rP"],
                               tab=d["tab"], th_split=float(d["th_split"]))
     t0 = time.time()
-    tb = pt.build_tables()
-    np.savez(path, **tb._asdict())
+    tb = pt.build_tables(dln=DLN)
+    tmp = path + f".tmp{os.getpid()}.npz"
+    np.savez(tmp, **tb._asdict())
+    os.replace(tmp, path)
     log(f"paint tables built in {time.time() - t0:.1f} s: {tb.tab.shape}")
     return tb
 

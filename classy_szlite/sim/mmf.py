@@ -25,6 +25,7 @@ import jax.numpy as jnp
 from .. import profiles
 from . import instrument as ins
 from .flatsky import N, ARCMIN, grid
+from ._util import compact
 
 THETAS15 = np.geomspace(0.5, 15.0, 15)     # arcmin
 Q_TH = 4.0
@@ -128,17 +129,14 @@ class Peaks(NamedTuple):
 
 def find_peaks(q, capacity: int, qth=Q_TH):
     """Peaks of the S/N cube (see the module docstring)."""
-    nth = q.shape[0]
-    ninf = jnp.full((1,) + q.shape[1:], -jnp.inf, dtype=q.dtype)
-    qm = jnp.concatenate([ninf, q[:-1]], axis=0)
-    qp = jnp.concatenate([q[1:], ninf], axis=0)
+    one = jnp.ones((1,) + q.shape[1:], dtype=bool)
+    above_prev = jnp.concatenate([one, q[1:] > q[:-1]], axis=0)     # q_j > q_{j-1}
+    above_next = jnp.concatenate([q[:-1] >= q[1:], one], axis=0)    # q_j >= q_{j+1}
     m = ((q > qth)
          & (q > jnp.roll(q, 1, axis=1)) & (q > jnp.roll(q, -1, axis=1))
          & (q > jnp.roll(q, 1, axis=2)) & (q > jnp.roll(q, -1, axis=2))
-         & (q > qm) & (q >= qp))
-    flat = m.ravel()
-    count = jnp.sum(flat, dtype=jnp.int32)
-    idx = jnp.nonzero(flat, size=capacity, fill_value=0)[0].astype(jnp.int32)
+         & above_prev & above_next)
+    idx, count = compact(m.ravel(), capacity, 0)
     valid = jnp.arange(capacity) < count
     n2 = q.shape[1] * q.shape[2]
     j = idx // n2

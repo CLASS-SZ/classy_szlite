@@ -28,6 +28,7 @@ from scipy.special import j0
 
 from .. import profiles
 from .flatsky import N, NF, PIXF, ARCMIN, grid, fine_to_coarse_rows
+from ._util import compact
 
 FWHM_PAINT = 0.8                                       # arcmin
 SIG_PAINT = FWHM_PAINT / np.sqrt(8.0 * np.log(2.0))    # arcmin
@@ -64,7 +65,10 @@ def radial_profile(theta, rP, nr):
     return out
 
 
-def build_tables(th_min=0.1, th_split=6.0, dln=0.02, nr=2048) -> PaintTables:
+def build_tables(th_min=0.1, th_split=6.0, dln=0.004, nr=2048) -> PaintTables:
+    """Radial tables on θ nodes from th_min to past th_split. dln = 0.004 keeps
+    the ln θ interpolation error near 7e-6 of the peak (M0: 1.6e-4, 4.1e-5 and
+    1.1e-5 at 0.02, 0.01 and 0.005)."""
     n_th = int(np.ceil(np.log(th_split / th_min) / dln)) + 2
     th = th_min * np.exp(dln * np.arange(n_th))
     rP = R_SIGMAS * SIG_PAINT + 5.0 * th
@@ -185,9 +189,8 @@ def paint_fine(halos, tables, cfg: PaintConfig):
     cap_n = halos.y0.shape[0]
     overflow = []
     for c, (S, cap, B) in enumerate(zip(cfg.sides, cfg.caps, cfg.blocks)):
-        sel = cls == c
-        overflow.append(jnp.sum(sel) > cap)
-        idx = jnp.nonzero(sel, size=cap, fill_value=cap_n)[0]
+        idx, cnt = compact(cls == c, cap, cap_n)
+        overflow.append(cnt > cap)
 
         def take(x, fill=0):
             return jnp.take(x, idx, mode="fill", fill_value=fill)
@@ -213,6 +216,7 @@ def fine_to_coarse(fine):
 # ---------------------------------------------------------------------------
 
 DU_T = 0.005                          # T(u) table step for the direct path
+DIRECT_CHUNK = 16                     # halos per scan step of the direct path
 U_T_MAX = 1600.0                      # covers θ500 ≤ 270′ at |k| ≤ 20000
 
 
@@ -236,8 +240,7 @@ def synth_direct(halos_sel, T_tab, dtype=jnp.float32):
     T_tab = jnp.asarray(T_tab, dtype=dtype)
     twopi_over_NF = dtype(2.0 * np.pi / NF)
 
-    def one(acc, h):
-        iy, ix, oy, ox, y0, th = h
+    def one(iy, ix, oy, ox, y0, th):
         th_rad = th * dtype(ARCMIN)
         u = L * th_rad / dtype(DU_T)
         j = jnp.clip(jnp.floor(u).astype(jnp.int32), 0, T_tab.shape[0] - 2)
@@ -248,14 +251,24 @@ def synth_direct(halos_sel, T_tab, dtype=jnp.float32):
         ph_int = ((i0 * iy) % NF + (i1 * ix) % NF) % NF
         ph = twopi_over_NF * (ph_int.astype(dtype) + i0.astype(dtype) * oy
                               + i1.astype(dtype) * ox)
-        term = amp * (jnp.cos(ph) - 1j * jnp.sin(ph))
-        return acc + jnp.where(sel, term, 0.0), None
+        return amp * (jnp.cos(ph) - 1j * jnp.sin(ph))
+
+    def step(acc, h):
+        terms = jax.vmap(one)(*h)                                   # (CHUNK, N, N/2+1)
+        return acc + jnp.where(sel, jnp.sum(terms, axis=0), 0.0), None
 
     cdtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
     acc0 = jnp.zeros(G.L.shape, dtype=cdtype)
     xs = tuple(jnp.asarray(halos_sel[k]) for k in ("iy", "ix", "oy", "ox", "y0", "theta500"))
     xs = xs[:2] + tuple(x.astype(dtype) for x in xs[2:])
-    acc, _ = jax.lax.scan(one, acc0, xs)
+    n = xs[0].shape[0]
+    c = min(DIRECT_CHUNK, n)
+    pad = (-n) % c
+    if pad:                                         # zero-amplitude padding halos
+        xs = tuple(jnp.concatenate([x, jnp.zeros((pad,), x.dtype) + (1 if i == 5 else 0)])
+                   for i, x in enumerate(xs))
+    xs = tuple(x.reshape(-1, c) for x in xs)
+    acc, _ = jax.lax.scan(step, acc0, xs)
     return acc
 
 
@@ -266,9 +279,9 @@ def paint_y(halos, tables, cfg: PaintConfig, T_tab):
     yk = fine_to_coarse(fine)
     big = halos.valid & (halos.theta500 > tables.th_split)
     cap_n = halos.y0.shape[0]
-    idx = jnp.nonzero(big, size=cfg.cap_big, fill_value=cap_n)[0]
+    idx, nbig = compact(big, cfg.cap_big, cap_n)
     hb = {k: jnp.take(getattr(halos, k), idx, mode="fill", fill_value=0)
           for k in ("iy", "ix", "oy", "ox", "y0")}
     hb["theta500"] = jnp.take(halos.theta500, idx, mode="fill", fill_value=1.0)
     yk = yk + synth_direct(hb, T_tab)
-    return yk, jnp.concatenate([ovf, (jnp.sum(big) > cfg.cap_big)[None]])
+    return yk, jnp.concatenate([ovf, (nbig > cfg.cap_big)[None]])

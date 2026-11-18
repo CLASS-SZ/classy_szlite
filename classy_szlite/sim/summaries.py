@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jnp
 
 from .flatsky import N, NF, PIX, PIXF, LBOX
+from ._util import compact
 
 Q_EDGES = np.logspace(np.log10(5.0), np.log10(40.0), 5)
 Z_EDGES = np.linspace(0.01, 1.5, 6)
@@ -54,7 +55,7 @@ class Confirmed(NamedTuple):
 def confirm(peaks, keep, halos, M_conf: float, r_conf_arcmin: float, capacity: int):
     massive = halos.valid & (halos.lnM >= np.float32(np.log(M_conf)))
     cap_n = halos.y0.shape[0]
-    idx = jnp.nonzero(massive, size=capacity, fill_value=cap_n)[0]
+    idx, n_massive = compact(massive, capacity, cap_n)
 
     def take(x, fill):
         return jnp.take(x, idx, mode="fill", fill_value=fill)
@@ -72,7 +73,7 @@ def confirm(peaks, keep, halos, M_conf: float, r_conf_arcmin: float, capacity: i
     best = jnp.argmax(score, axis=1)
     ok = jnp.any(match, axis=1)
     return Confirmed(ok=ok, z=jnp.where(ok, hz[best], 0.0),
-                     overflow=jnp.sum(massive) > capacity)
+                     overflow=n_massive > capacity)
 
 
 def histogram(q, z, ok):
