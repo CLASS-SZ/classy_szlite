@@ -2,6 +2,7 @@
 
     python benchmarks/mapsim/mask_check.py export
     python benchmarks/mapsim/mask_check.py tiles --tiles 16 --modes goal baseline
+    python benchmarks/mapsim/mask_check.py scatter --tiles 8
 
 ``export``: one fiducial SO-goal tile (tile key 0): its six channel maps and
 first-pass peaks, for benchmarks/mapsim/refgen_szsim_mask.py, which runs
@@ -14,6 +15,10 @@ tSZ), the masked fraction, the number of discs, the peaks, and the confirmed
 counts per pass (data vector: 5 < q < 40, 0.01 < z < 1.5). The second
 iteration checks convergence: SZiFi and production stop after one. Also times
 the finder with and without the masking iteration on one tile (this backend).
+
+``scatter``: the robust scatter (1.4826 × median absolute deviation) of the q
+maps per scale, on the first pass and after one masking iteration, over the
+pixels outside the mask. The catalogue model assumes unit scatter in q.
 """
 from __future__ import annotations
 
@@ -168,6 +173,47 @@ def cmd_tiles(args):
     log(f"saved {path}")
 
 
+def cmd_scatter(args):
+    theta = simu.THETA_FID
+    cells, tb, cs, cfg, st_goal, info = spike.setup(theta)
+    cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
+    statics = {"goal": st_goal, "baseline": simu.tile_static(cmb, tb, mode="baseline")}
+
+    def robust(q, keep):
+        w = keep.ravel() > 0.5
+
+        def one(qj):
+            v = jnp.where(w, qj.ravel(), jnp.nan)
+            return 1.4826 * jnp.nanmedian(jnp.abs(v - jnp.nanmedian(v)))
+        return jax.vmap(one)(q)
+
+    @jax.jit
+    def run(key, st):
+        halos, X, _ = simu.tile_maps(key, cs, theta, st, tb, cells, cfg)
+        q0, _, C0 = mmf.q_cube(X, st.fs)
+        mask, _ = mmf.cluster_mask(mmf.find_peaks(q0, cfg.peak_cap), st.fs, cfg.q_mask)
+        C1, _ = mmf.masked_cov(X, mask, C0, st.fs)
+        q1, _, _ = mmf.q_cube(X, st.fs, C=C1)
+        return robust(q0, mask), robust(q1, mask)
+
+    keys = spike.tile_keys(args.tiles)
+    res = dict(tiles=args.tiles, modes={})
+    for mode, st in statics.items():
+        out = [jax.device_get(run(k, st)) for k in keys]
+        r0 = np.array([o[0] for o in out])
+        r1 = np.array([o[1] for o in out])
+        res["modes"][mode] = dict(first=r0.mean(0).tolist(), masked=r1.mean(0).tolist(),
+                                  first_std=r0.std(0, ddof=1).tolist(), masked_std=r1.std(0, ddof=1).tolist())
+        log(f"=== {mode}: robust scatter of q outside the mask, mean of {args.tiles} tiles (0.5' ... 15')")
+        log("first pass  " + " ".join(f"{v:.3f}" for v in r0.mean(0)))
+        log("after mask  " + " ".join(f"{v:.3f}" for v in r1.mean(0)))
+    os.makedirs(OUT, exist_ok=True)
+    path = os.path.join(OUT, "mask_scatter.json")
+    with open(path, "w") as fh:
+        json.dump(res, fh, indent=1)
+    log(f"saved {path}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -176,8 +222,10 @@ def main():
     t.add_argument("--tiles", type=int, default=16)
     t.add_argument("--batch", type=int, default=1)
     t.add_argument("--modes", nargs="+", default=["goal", "baseline"])
+    sc = sub.add_parser("scatter")
+    sc.add_argument("--tiles", type=int, default=8)
     args = ap.parse_args()
-    {"export": cmd_export, "tiles": cmd_tiles}[args.cmd](args)
+    {"export": cmd_export, "tiles": cmd_tiles, "scatter": cmd_scatter}[args.cmd](args)
 
 
 if __name__ == "__main__":
