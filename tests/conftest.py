@@ -1,5 +1,11 @@
 """Shared test fixtures + emulator-data availability gate."""
 from __future__ import annotations
+import os
+
+# Before JAX initialises a backend: on GPUs, allocate memory on demand so
+# that several test processes can share a device.
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
 import pytest
 
 try:

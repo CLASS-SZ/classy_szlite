@@ -186,7 +186,7 @@ References come from sz-poisson-blending: float64 computations, verified twice. 
 **M0. Environment, refactor, throughput spike, data.**
 
 Refactor:
-- The §5 refactor: `jit(vmap(build))` equals the eager outputs to ≤1e-12 on one device and ≤1e-10 between CPU and GPU. The test runs in a fresh process with the jitted call first, then eager, at batch sizes 1 and 7. That catches the cache-tracer and `squeeze()` hazards.
+- The §5 refactor: `jit(vmap(build))` equals the eager outputs to ≤1e-12 on one device and ≤1e-10 between CPU and GPU, on the domain the simulator uses (σ(R) on R = 0.5–60 Mpc; dn/dlnM where ≥ 1e-12 of its maximum; the FFTLog grid edges and the far HMF tail amplify round-off and are recorded, not tested). The test runs in a fresh process with the jitted call first, then eager, at batch sizes 1 and 7. That catches the cache-tracer and `squeeze()` hazards. Done on CPU 2026-11-18 (`M0_LOG.md`).
 - The m_ncdm fix, with a test that Ω_m in the HMF equals `derived()`.
 - Switchable Tinker and ν conventions.
 

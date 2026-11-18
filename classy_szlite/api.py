@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 from ._registry import get_emulator, DEFAULT_COSMO
 from .params import CosmoParams, ProfileParamsA10
-from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances
+from .cosmology import build as build_cosmo_grids, get_pk, get_pknl, get_distances, Omega_m0
 from .hmf import build_halo_grids
 from .power_spectrum import cl_yy_1h_2h, cl_yy_1h_trispectrum
 
@@ -52,14 +52,11 @@ def derived(cosmo: CosmoParams) -> dict:
     em = get_emulator('der')
     full = dict(DEFAULT_COSMO); full.update(cosmo_to_dict(cosmo))
     p_in = {k: [full[k]] for k in em.parameters}
-    der = 10.0 ** np.asarray(em.predict(p_in)).flatten()
+    der = 10.0 ** np.asarray(em.predict(p_in)).reshape(-1)
 
     sigma_8 = float(der[1])
-    h = float(cosmo.H0) / 100.0
     # Σmν = 3 × m_ncdm for ede ν convention (3 degenerate ν)
-    sum_mnu = 3.0 * float(cosmo.m_ncdm)
-    Omega_m = (float(cosmo.omega_b) + float(cosmo.omega_cdm)
-               + sum_mnu / 93.14) / h ** 2
+    Omega_m = float(Omega_m0(cosmo_to_dict(cosmo), include_nu=True))
     S8 = sigma_8 * (Omega_m / 0.3) ** 0.5
     return {"sigma_8": sigma_8, "Omega_m": Omega_m, "S8": S8, "der_full": der}
 
@@ -122,7 +119,7 @@ def cl_TTTEEE(cosmo: CosmoParams,
     for spec in needed:
         em = get_emulator(spec)
         p_in = {k: [full[k]] for k in em.parameters}
-        pred = np.asarray(em.predict(p_in)).flatten()
+        pred = np.asarray(em.predict(p_in)).reshape(-1)
         if _CMB_LOG_CONVENTION[spec]:
             pred = 10.0 ** pred
         out[spec] = pred

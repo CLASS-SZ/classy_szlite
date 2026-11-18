@@ -42,6 +42,17 @@ where    = ["."]
 include  = ["classy_szlite*"]
 exclude  = ["tests*", "examples*"]
 
+[tool.pytest.ini_options]
+# gpu: needs a GPU (rusty GPU jobs); slow: minutes; refdata: needs the
+# sz-poisson-blending reference data ($MAPSIM_REFDATA). All three are
+# deselected by default and in CI: run them with e.g. -m "gpu or slow".
+markers = [
+    "gpu: needs a GPU",
+    "slow: takes minutes",
+    "refdata: needs the sz-poisson-blending reference data ($MAPSIM_REFDATA)",
+]
+addopts = "-m 'not gpu and not slow and not refdata'"
+
 [tool.coverage.run]
 source = ["classy_szlite"]
 # The cobaya extractors and their CLI need a full cobaya + act_dr6_mflike
