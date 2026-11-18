@@ -82,7 +82,7 @@ def test_sigma_table_matches_reference():
     ours = np.exp(np.interp(np.log(th), np.log(lens_tables.THETA500_ARCMIN), np.log(lens_tables.SIGMA_KAPPA["baseline"])))
     r = ours / ref[1]
     print(f"ours/reference: {r.min():.4f}-{r.max():.4f}")
-    assert np.all(np.abs(r - 1) < 0.015)
+    assert np.all(np.abs(r - 1) < 0.01)
     g = lens_tables.SIGMA_KAPPA["goal"] / lens_tables.SIGMA_KAPPA["baseline"]
     assert np.all((g > 0.8) & (g < 0.95))
 
