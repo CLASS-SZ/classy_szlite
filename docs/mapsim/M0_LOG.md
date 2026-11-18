@@ -184,3 +184,54 @@ The emulator's last range, 9000–9500, is never used: beyond ℓ = 9000 the
 spectrum is a power law fitted on 7000–9000, with slope −3.99. The two codes
 also differ in σ8 by 0.2% (DER 0.81183, CAMB 0.81025). They use different
 neutrino set-ups: three of 0.02 eV in CLASS, one of 0.06 eV in CAMB.
+
+## 2026-11-18: GPU spike, first run (commit 3103321)
+
+Jobs 7493762 (A100-SXM4-80GB, workergpu047) and 7493767 (RTX PRO 6000
+Blackwell, workergpu175) ran `benchmarks/mapsim/spike_gpu.sh`; each took
+18 min.
+
+**Note:** the jobs imported the rusty clone, which was updated during the run
+with additions only (new tests, `cmb_cl_emulator`). From the second run on,
+jobs use frozen snapshots (`mapsim-runs/<sha>`).
+
+| check | A100 | RTX Blackwell |
+|---|---|---|
+| CPU vs GPU, cosmology stage, used domain | ≤ 5.1e-13 | ≤ 3.0e-13 |
+| test suite on GPU | 81 passed | 81 passed |
+| painter vs exact synthesis | identical to CPU (9.33e-5 with 0.02 tables) | same |
+| batch invariance 1/4/16, deterministic ops | integer outputs identical | identical |
+| σ_j, batch 16 vs 1 | 9e-10 | 9e-10 |
+| 16-tile histogram | identical across the two GPU types | |
+
+Per tile in ms at batch 16 (batch 1 in brackets):
+
+| stage | A100 | RTX Blackwell | 16-core CPU (batch 1) |
+|---|---|---|---|
+| halos | 0.23 (1.9) | 0.18 (1.4) | 74 |
+| painting | 11.1 (15.2) | 5.1 (8.0) | 2710 |
+| maps | 1.2 (2.0) | 0.6 (0.9) | 214 |
+| filter | 2.2 (2.3) | 1.4 (1.5) | 96 |
+| peaks + summaries | 19.2 (22.3) | 12.4 (13.1) | 394 |
+| whole tile | 34.3 (38.7) | 19.5 (22.9) | 3460 |
+
+- Peak device memory: 0.84 GiB at batch 1, 9.24 GiB at batch 16.
+- Compiling a whole tile takes 30–40 s.
+- Per-tile time barely changes beyond batch 2: the GPU is already saturated.
+- With deterministic ops (batch 8), painting costs 661 ms (A100) and 294 ms
+  (RTX) per tile: identity tests only.
+
+**Profile** (A100, batch 16; `trace_a100_B16`): of 554 ms of kernel time,
+one scatter kernel took 307 ms (55%). It was the `bincount` inside
+`jnp.nonzero(size=K)` on the 21.6M-element peak mask, heavily contended
+because almost every element hits one bin. Painting scatters took about
+130 ms (8 ms per tile), and the 128-step direct-path scan 27 ms (1.7 ms per
+tile).
+
+**Fixed in 9623b81:**
+- a prefix sum plus a binary search per output slot (`sim/_util.compact`),
+  with the same output as `jnp.nonzero` (tested);
+- boolean scale comparisons;
+- the direct path vectorised 16 halos per step.
+
+The second run measures the effect.
