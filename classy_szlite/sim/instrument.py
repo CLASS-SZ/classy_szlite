@@ -107,3 +107,35 @@ def cmb_cl_from_table(path):
         out[ell < 2] = 0.0
         return out
     return f
+
+
+# Lensed CMB from the classy_szlite TT emulator (production)
+EMU_LMAX_USED = 9000.0                 # the emulator's last decade (9000-9500) is not used
+EMU_FIT = (7000.0, 9000.0)             # power-law fit range for the extension
+
+
+def cmb_cl_emulator(cosmo=None):
+    """C_ℓ^TT [μK²] of the lensed CMB from the TT emulator at ``cosmo``
+    (a CosmoParams; default: the emulator's default point). Returns a function
+    of ℓ: the emulator for 2 ≤ ℓ ≤ 9000, a power law in ln C_ℓ vs ln ℓ fitted
+    on 7000-9000 beyond, 0 below ℓ = 2. Host-side numpy.
+    """
+    from ..api import cl_TTTEEE
+    from ..params import CosmoParams
+    out = cl_TTTEEE(cosmo or CosmoParams(), spectra=("tt",), ell_factor=False)
+    le = np.asarray(out["ell"], float)
+    cl = np.asarray(out["tt"], float) * (T_CMB * 1e6) ** 2
+    keep = le <= EMU_LMAX_USED
+    le, cl = le[keep], cl[keep]
+    fit = (le >= EMU_FIT[0]) & (le <= EMU_FIT[1])
+    slope, lnamp = np.polyfit(np.log(le[fit]), np.log(cl[fit]), 1)
+
+    def f(ell):
+        ell = np.asarray(ell, float)
+        res = np.interp(ell, le, cl)
+        hi = ell > le[-1]
+        res[hi] = np.exp(lnamp + slope * np.log(ell[hi]))
+        res[ell < 2] = 0.0
+        return res
+    f.slope, f.lnamp = slope, lnamp
+    return f

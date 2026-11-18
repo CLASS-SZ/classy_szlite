@@ -114,12 +114,41 @@ def projected_shape(s, n_nodes=2000):
 U_SPLIT, U_MAX = 20.0, 3000.0
 
 
+_T_TABLE_VERSION = "a10eq12_x5_v1"
+
+
+def _cache_dir():
+    import os
+    d = os.environ.get("CLASSY_SZLITE_CACHE", os.path.expanduser("~/.cache/classy_szlite"))
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 @lru_cache(maxsize=None)
 def T_table():
-    """(u, T(u)) on the default nodes, float64 (cached)."""
+    """(u, T(u)) on the default nodes, float64.
+
+    Cached in memory and on disk ($CLASSY_SZLITE_CACHE, default
+    ~/.cache/classy_szlite): the quadrature takes ~50 s. The disk copy is used
+    only if its nodes and profile parameters match exactly.
+    """
+    import os
     u = np.concatenate([[0.0], np.geomspace(1e-4, U_SPLIT, 2400)[:-1],
                         np.arange(U_SPLIT, U_MAX + 0.05, 0.1)])
-    return u, hankel_T(u)
+    pars = np.array([A10_EQ12[k] for k in ("c500", "gamma", "alpha", "beta")] + [X_TRUNC])
+    path = os.path.join(_cache_dir(), f"T_table_{_T_TABLE_VERSION}.npz")
+    try:
+        d = np.load(path)
+        if np.array_equal(d["u"], u) and np.array_equal(d["pars"], pars):
+            return u, d["T"]
+    except (OSError, KeyError, ValueError):
+        pass
+    T = hankel_T(u)
+    tmp = path + f".tmp{os.getpid()}"
+    with open(tmp, "wb") as f:
+        np.savez(f, u=u, T=T, pars=pars)
+    os.replace(tmp, path)
+    return u, T
 
 
 @lru_cache(maxsize=None)
