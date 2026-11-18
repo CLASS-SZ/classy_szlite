@@ -235,3 +235,81 @@ tile).
 - the direct path vectorised 16 halos per step.
 
 The second run measures the effect.
+
+## 2026-11-18: GPU spike, second run (snapshot 49a5e50)
+
+Jobs 7493804 (A100) and 7493807 (RTX PRO 6000 Blackwell) ran from the frozen
+snapshot `mapsim-runs/49a5e50`; the log confirms the import path. The run
+used `sim/_util.compact` and the 0.004 paint tables.
+
+| check | result |
+|---|---|
+| CPU vs GPU parity | pass |
+| test suite on GPU | 94 passed, 5 skipped (including the new simulator tests) |
+| painter vs exact synthesis (RTX) | 4.69e-6 (CPU: 4.63e-6) |
+
+Per tile in ms, before → after the fix:
+
+| stage | A100, batch 16 | RTX, batch 16 | RTX, batch 64 |
+|---|---|---|---|
+| halos | 0.23 → 0.24 | 0.18 → 0.19 | 0.11 |
+| painting | 11.1 → 10.1 | 5.1 → 4.6 | 4.7 |
+| maps | 1.2 → 1.1 | 0.6 → 0.6 | 0.6 |
+| filter | 2.2 → 2.2 | 1.4 → 1.4 | 1.3 |
+| peaks + summaries | 19.2 → 0.5 | 12.4 → 0.34 | 0.30 |
+| whole tile | 34.3 → 14.4 | 19.5 → 6.8 | 6.8 |
+| peak memory | 9.2 → 7.9 GiB | → 7.9 GiB | 30.4 GiB |
+
+- Painting is now about 70% of a tile.
+- The RTX paints 2.2× faster than the A100 (scatter-add and gathers), and
+  the whole tile runs 2.1× faster.
+- Throughput saturates from batch 4. Compiling a whole tile takes about 33 s.
+
+### Prior corners (paper Table 1)
+
+The SO-like priors: σ8 U(0.7, 0.9), ω_c U(0.0804, 0.204), A_SZ
+U(−4.41, −4.21), α_SZ U(1, 1.24), h N(0.674, 0.01), ω_b N(0.0222, 0.00015),
+n_s N(0.96, 0.0042), σ_SZ N(0.173, 0.05), β_CMBlens N(0.92, 0.01),
+σ_CMBlens N(0.22, 0.05). Fixed: (1−b) = 0.8, r = 0. 40% of the sky, about
+16,000 clusters at q > 5.
+
+Halos with M ≥ 1e13 per tile (h at ±3σ):
+
+| corner | halos | M ≥ 5e13 | footprint pixels | direct path | relative to fiducial |
+|---|---|---|---|---|---|
+| low (σ8 0.7, ω_c 0.0804, h 0.704) | 19.2k | 0.7k | 5.4e7 | | 0.26× |
+| fiducial | 73.4k | 4.5k | 2.0e8 | 28 | 1× |
+| high (σ8 0.9, ω_c 0.204, h 0.644) | 197k | 16.6k | 5.1e8 | 95 | 2.7× |
+
+The capacity classes (M2) must span these. The conf_cap of 16,384 used in
+the spike would overflow at the high corner.
+
+**Emulator range.** The ede-v3 training box, inferred from the input
+standardisation, is ln(10¹⁰A_s) 2.50–3.50 and ω_cdm 0.0801–0.2000. The prior
+corners map to ln A_s = 2.12–3.81.
+- `build(..., as_reference=3.0)` evaluates the emulators at ln A_s = 3 and
+  rescales the linear P(k) by A_s/A_s,ref, and σ8 by √(A_s/A_s,ref). This is
+  exact in linear theory, and the simulator uses it.
+- Inside the box it agrees with direct evaluation to 1.0e-4 (P) and 2.0e-5
+  (σ8). At the corners the halo counts differ by ≤ 6.4e-4: the networks
+  extrapolate gracefully in A_s.
+- ω_c > 0.2000 (2% of the prior) is still an extrapolation, to be checked in
+  M2.
+
+### Counts
+
+- At SO goal with no foregrounds, the 16 spike tiles average 237 confirmed
+  detections per tile at 5 < q < 40, 0.01 < z < 1.5: about 39,000 over 40%
+  of the sky, 2.4× the paper's ~16,000.
+- Expected contributors: goal depth and no foregrounds against the paper's σ
+  table (Websky-based, a different noise model), and the finder's search
+  lift. M7 quantifies this.
+
+### M0 decisions
+
+- **Painter:** scheme A (scatter-add of radial tables, θ500 ≤ 6′; exact
+  synthesis above). It meets the budget by a wide margin, so the
+  Fourier-deposit scheme and a Pallas kernel are not needed now.
+- **Production GPU:** RTX PRO 6000 Blackwell, batch 16 (8 GiB).
+- **Deterministic ops** only for identity tests: painting is 20–60× slower
+  with them.
