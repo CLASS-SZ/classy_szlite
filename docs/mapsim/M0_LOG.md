@@ -313,3 +313,15 @@ corners map to ln A_s = 2.12–3.81.
 - **Production GPU:** RTX PRO 6000 Blackwell, batch 16 (8 GiB).
 - **Deterministic ops** only for identity tests: painting is 20–60× slower
   with them.
+
+**Batch invariance, second run** (16 tiles; batch sizes 1, 4 and 16):
+
+| ops | A100 | RTX Blackwell |
+|---|---|---|
+| deterministic | integer outputs identical | identical |
+| default (atomic scatter-add) | identical | identical |
+| σ_j, max difference | ≤ 1.2e-9 | ≤ 1.2e-9 |
+
+- The 16-tile histogram is bit-identical across the two GPU types and to the
+  first run: the 0.004 paint tables and the compaction moved no detection.
+- Both jobs took about 14 min.
