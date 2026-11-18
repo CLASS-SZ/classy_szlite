@@ -330,3 +330,29 @@ Counts and the scatter of q, with masking:
 - **Progress page:** updated with a masking figure, the masked discs on the
   patch and the new checks (artifact version 2; data from
   `diagnostics_data.py`).
+
+The peak buffer with masking:
+
+- **Masking raises the final-pass peak count.** At the adopted box's heaviest
+  corner, the first pass gives 1,454–1,542 peaks with q > 4. After masking
+  the final pass gives 2,745–2,859, which overflowed the 2,048 buffer in all
+  three boxes (`prior_corners.py`).
+- **Fix 1: the final pass keeps only q > 5** (`TileConfig.q_final`, the data
+  vector's lower edge). This is exact.
+  - A peak is kept unless a neighbour within 1.5′ has a higher q, so peaks
+    with q ≤ 5 never remove a q > 5 peak. Confirmation works peak by peak,
+    and the histogram counts q > 5 only.
+  - Checked by a unit test on a dense synthetic catalogue, and on 4 fiducial
+    tiles, where the data vectors are bit-identical. The final-pass peaks drop
+    from ~640 to ~360 per tile.
+  - Passes that build a mask still keep every q > 4 peak.
+  - `n_peaks` in the tile output now counts the final pass's q > 5 peaks.
+- **Fix 2: the buffer is raised to 3,072.** Heaviest corners with masking:
+  - adopted box: 1,819–1,890 final-pass peaks, no overflow, the same data
+    vectors as with 2,048;
+  - 6-width box: 1,463–1,545;
+  - the paper's box: 2,039–2,142, with its confirmation buffer (16,384 halos
+    ≥ 5e13) still overflowing, as before.
+- `priors/prior_corners.json` now holds the masked runs. The first-pass-only
+  version is kept as `prior_corners_first_pass_only.json`.
+- 55 tests pass.
