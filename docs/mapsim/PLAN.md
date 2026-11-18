@@ -264,7 +264,7 @@ Data:
   - No NaMaster and no full coupling matrix for the periodic tiles.
 
 **M6. Data vector, legacy reproduction, timing.**
-- The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing.
+- The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing. *Lensing done 2026-11-18 (`LOG.md`, "stacked CMB lensing"); σ_κ carries an unexplained constant 1.450 to match the paper's baseline table.*
 - **Legacy credit rule**, the lean version (candidates within 30′; exact lattice sums only for near-ties), on a fixed-capacity cell grid.
   - Route (a), first: the counting step on exported tiles with the stored kernel files (`data_real/step3b/kernel_prod_goal.npz`, `halos_prod_goal.npz`, `arbiter/datavec_pooled_goal.npz`). Credited counts must be identical except documented near-ties, and R_p must agree to round-off.
   - Route (b), later: port the virtual-cluster kernel machinery in legacy mode, and match the SO goal deficit of −2.10% within ~0.25%.

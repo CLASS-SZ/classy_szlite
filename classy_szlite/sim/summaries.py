@@ -50,6 +50,7 @@ class Confirmed(NamedTuple):
     ok: jax.Array          # (K,) bool
     z: jax.Array           # (K,) float32 (0 where not confirmed)
     overflow: jax.Array    # () bool: more massive halos than the buffer holds
+    halo: jax.Array        # (K,) int32 slot of the matched halo in the halo buffer (0 if none)
 
 
 def confirm(peaks, keep, halos, M_conf: float, r_conf_arcmin: float, capacity: int):
@@ -73,14 +74,22 @@ def confirm(peaks, keep, halos, M_conf: float, r_conf_arcmin: float, capacity: i
     best = jnp.argmax(score, axis=1)
     ok = jnp.any(match, axis=1)
     return Confirmed(ok=ok, z=jnp.where(ok, hz[best], 0.0),
-                     overflow=n_massive > capacity)
+                     overflow=n_massive > capacity,
+                     halo=jnp.where(ok, idx[best], 0).astype(jnp.int32))
+
+
+def in_data_vector(q, z, ok):
+    """Detections counted by :func:`histogram` (same open intervals)."""
+    qe = jnp.asarray(Q_EDGES, dtype=jnp.float32)
+    ze = jnp.asarray(Z_EDGES, dtype=jnp.float32)
+    return ok & (q > qe[0]) & (q < qe[-1]) & (z > ze[0]) & (z < ze[-1])
 
 
 def histogram(q, z, ok):
     """(4, 5) int32 counts in the paper's q and z bins."""
     qe = jnp.asarray(Q_EDGES, dtype=jnp.float32)
     ze = jnp.asarray(Z_EDGES, dtype=jnp.float32)
-    inside = ok & (q > qe[0]) & (q < qe[-1]) & (z > ze[0]) & (z < ze[-1])
+    inside = in_data_vector(q, z, ok)
     iq = jnp.sum(q[:, None] > qe[None, 1:-1], axis=1)
     iz = jnp.sum(z[:, None] > ze[None, 1:-1], axis=1)
     return jnp.zeros((4, 5), dtype=jnp.int32).at[iq, iz].add(inside.astype(jnp.int32))
