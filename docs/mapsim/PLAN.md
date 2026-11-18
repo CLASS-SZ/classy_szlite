@@ -142,7 +142,7 @@ The finder's template τ_θ(ℓ) is the exact Fourier transform of the same trun
 
 ### 3.4 Data vector (production)
 
-- **Detections:** 3D local maxima of q over position and the 15 scales (geomspace 0.5′–15′), with q > 4, from the final pass after masking. Entries within a merge radius of 1.5′ merge into the highest-q entry, across scales.
+- **Detections:** 3D local maxima of q over position and the 15 scales (geomspace 0.5′–15′), with q > 4, from the final pass after masking. Entries within a merge radius of 1.5′ merge into the highest-q entry, across scales. The final pass's buffer keeps only q > 5, the data vector's lower edge: merging makes this exact, and it holds ~45% fewer peaks (buffer 3,072, enough for the adopted box's heaviest corner with 1.6× to spare).
 - **Confirmation and redshift**, which mimics follow-up. This is the one step that uses the true halos, standing in for optical confirmation; everything else uses only the maps.
   - A detection is confirmed if a halo with M500 ≥ M_conf lies within r_conf of it. It takes the redshift of the matched halo with the largest y0.
   - Unconfirmed detections are dropped, as in a real survey.

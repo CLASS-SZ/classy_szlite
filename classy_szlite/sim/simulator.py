@@ -47,13 +47,18 @@ class TileConfig(NamedTuple):
     """Static configuration (hashable)."""
     halo_cap: int
     paint: pt.PaintConfig
-    peak_cap: int = 2048
+    peak_cap: int = 3072     # final-pass peaks reach ~1,900 at the wide prior box's heaviest corner
     conf_cap: int = 16384
     M_conf: float = 5e13
     r_conf: float = 1.5
     r_merge: float = 1.5
     n_iter: int = 1          # masking iterations (SZiFi's max_it); 0 = one unmasked pass
     q_mask: float = mmf.Q_MASK
+    # Peak threshold of the final pass: the data vector's lower q edge. Merging keeps
+    # a peak unless a neighbour has a higher q, so peaks with q ≤ 5 never remove a
+    # q > 5 peak, and the histogram counts q > 5 only: the data vector is identical
+    # to keeping every q > 4 peak, with ~40% fewer peaks in the buffer.
+    q_final: float = float(sm.Q_EDGES[0])
 
 
 class TileStatic(NamedTuple):
@@ -156,19 +161,21 @@ def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.
 
 
 def find_clusters(X, fs: mmf.FilterStatic, cfg: TileConfig):
-    """Matched filter with the masking iteration: the final pass's peaks,
-    its σ_j and diagnostics (first-pass σ_j, masked fraction and number of
-    discs of the last iteration, and a peak-buffer overflow flag over all
-    passes, since an overflowing pass masks only the peaks it holds)."""
+    """Matched filter with the masking iteration: the final pass's peaks
+    (q > cfg.q_final), its σ_j and diagnostics (first-pass σ_j, masked fraction
+    and number of discs of the last iteration, and a peak-buffer overflow flag
+    over all passes, since an overflowing pass masks only the peaks it holds).
+    Passes that feed a mask keep every peak with q > cfg.q_mask."""
     q, sigma, C0 = mmf.q_cube(X, fs)
-    pk = mmf.find_peaks(q, cfg.peak_cap)
+    pk = mmf.find_peaks(q, cfg.peak_cap, cfg.q_mask if cfg.n_iter else cfg.q_final)
     sigma0, ovf = sigma, pk.overflow
     f, n_masked = jnp.float64(1.0), jnp.int32(0)
-    for _ in range(cfg.n_iter):
+    for it in range(cfg.n_iter):
         mask, n_masked = mmf.cluster_mask(pk, fs, cfg.q_mask)
         C, f = mmf.masked_cov(X, mask, C0, fs)
         q, sigma, _ = mmf.q_cube(X, fs, C=C)
-        pk = mmf.find_peaks(q, cfg.peak_cap)
+        last = it == cfg.n_iter - 1
+        pk = mmf.find_peaks(q, cfg.peak_cap, cfg.q_final if last else cfg.q_mask)
         ovf = ovf | pk.overflow
     return pk, sigma, dict(sigma0=sigma0, f_masked=1.0 - f, n_masked=n_masked,
                            peak_overflow=ovf)
