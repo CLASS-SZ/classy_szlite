@@ -7,7 +7,8 @@ iteration (discs around the q > 4 peaks, covariance re-estimated outside
 them, filter run again; ``TileConfig.n_iter`` times, 1 by default as SZiFi)
 → merging → confirmation → (q, z) histogram.
 
-No lensing summary yet (M6).
+Stacked CMB lensing: the catalogue-level observable p of each data-vector detection,
+from its matched halo (lensing.py); each tile returns Σ p and the count.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from . import halos as hl
 from . import paint as pt
 from . import mmf
 from . import summaries as sm
+from . import lensing
 from .flatsky import N, PIX, grid
 
 
@@ -37,6 +39,8 @@ class Theta(NamedTuple):
     alpha_SZ: float
     sigma_lnq: float
     one_minus_b: float
+    beta_lens: float = 0.92      # CMB-lensing mass bias β_CMBlens
+    sigma_lnp: float = 0.22      # intrinsic scatter of the lensing observable σ_CMBlens
 
 
 THETA_FID = Theta(sigma8=0.811, omega_cdm=0.121, h=0.674, omega_b=0.0222, n_s=0.96,
@@ -72,6 +76,8 @@ class TileStatic(NamedTuple):
     paint_tab: jax.Array    # (n_th, nr) f32
     paint_rP: jax.Array     # (n_th,) f32
     T_tab: jax.Array        # direct-path T(u) table, f32
+    lens_lnth: jax.Array    # ln θ500 [arcmin] of the σ_κ table
+    lens_lnsig: jax.Array   # ln σ_κ (SO lensing depth of ``mode``)
 
 
 def tile_static(cmb_cl, tables: pt.PaintTables, mode="goal"):
@@ -92,6 +98,8 @@ def tile_static(cmb_cl, tables: pt.PaintTables, mode="goal"):
         paint_tab=jnp.asarray(tables.tab.astype(f32)),
         paint_rP=jnp.asarray(tables.rP.astype(f32)),
         T_tab=jnp.asarray(pt.T_uniform_table().astype(f32)),
+        lens_lnth=jnp.asarray(lensing.table(mode)[0]),
+        lens_lnsig=jnp.asarray(lensing.table(mode)[1]),
     )
 
 
@@ -99,6 +107,7 @@ class CosmoStage(NamedTuple):
     lam: jax.Array          # (n_z, n_m) expected halos per cell, one tile
     cg: object              # CosmoGrids on the cell z edges
     d2N: jax.Array          # (n_z + 1, n_m + 1) corner densities d²N/dz dlnM
+    chi_star: jax.Array     # () comoving distance to last scattering [Mpc]
 
 
 def cosmology_stage(theta: Theta, cells: hl.CellGrid) -> CosmoStage:
@@ -111,7 +120,8 @@ def cosmology_stage(theta: Theta, cells: hl.CellGrid) -> CosmoStage:
     p["ln10^{10}A_s"] = ln10As_from_sigma8(p, theta.sigma8, as_reference=LN10AS_REFERENCE)
     cg = build(p, z_grid=cells.z_edges, as_reference=LN10AS_REFERENCE)
     d2N = hl.corner_density(cg, p, cells)
-    return CosmoStage(lam=hl.lambda_from_corners(d2N, cells), cg=cg, d2N=d2N)
+    return CosmoStage(lam=hl.lambda_from_corners(d2N, cells), cg=cg, d2N=d2N,
+                      chi_star=lensing.chi_star(theta.h, theta.omega_cdm, theta.omega_b))
 
 
 def channel_maps(key, yk, st: TileStatic):
@@ -154,10 +164,23 @@ def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.
     counts = sm.histogram(pk.q, cf.z, keep & cf.ok)
     overflow = jnp.concatenate([halos.overflow[None], ovf_paint, mk["peak_overflow"][None],
                                 cf.overflow[None]])
+    p_sum, n_p = stacked_lensing(jax.random.fold_in(key, 7), pk, keep, cf, halos, cs, theta, st)
     return dict(counts=counts, n_halos=halos.count, n_peaks=pk.count,
                 n_kept=jnp.sum(keep), n_conf=jnp.sum(keep & cf.ok),
                 overflow=overflow, sigma=sigma, sigma0=mk["sigma0"],
-                f_masked=mk["f_masked"], n_masked=mk["n_masked"])
+                f_masked=mk["f_masked"], n_masked=mk["n_masked"],
+                p_sum=p_sum, n_p=n_p)
+
+
+def stacked_lensing(key, pk, keep, cf, halos, cs: CosmoStage, theta: Theta, st: TileStatic):
+    """Sum of the lensing observable p over the data-vector detections of one
+    tile, and their number (the survey's stacked mean is Σ p_sum / Σ n_p)."""
+    sel = sm.in_data_vector(pk.q, cf.z, keep & cf.ok)
+    M = jnp.exp(halos.lnM[cf.halo].astype(jnp.float64))
+    z = halos.z[cf.halo].astype(jnp.float64)
+    pbar = lensing.p_mean(M, z, cs.cg, theta.h, theta.beta_lens, cs.chi_star, st.lens_lnth, st.lens_lnsig)
+    p = lensing.draw_p(key, jnp.where(sel, pbar, 1.0), theta.sigma_lnp)
+    return jnp.sum(jnp.where(sel, p, 0.0)), jnp.sum(sel.astype(jnp.int32))
 
 
 def find_clusters(X, fs: mmf.FilterStatic, cfg: TileConfig):

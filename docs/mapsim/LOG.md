@@ -442,3 +442,39 @@ The peak buffer with masking:
   - The maps differ in 4 pixels around it, σ_j by ≤ 2e-6, the first-pass
     peaks are equal (503) and the data vector is equal (361).
   - Tile 1 agrees to round-off.
+
+## 2026-11-18: stacked CMB lensing (the 21st number)
+
+- **Model** (`sim/lensing.py`; the paper's catalogue-level model):
+  - For each data-vector detection, from its matched halo:
+    p̄ = κ(r_s; 0.92 M500, z)/σ_κ(θ500(0.92 M500)), with log-normal
+    scatter 0.22, then unit Gaussian noise.
+  - The tile returns Σ p and the count, and the summary is the mean.
+  - `summaries.confirm` now returns the matched halo's slot.
+  - `Theta` gains `beta_lens` = 0.92 and `sigma_lnp` = 0.22.
+  - κ(r_s) = 4π(G/c²) Σ(r_s) D_l (1 − χ_l/χ*), for an NFW halo with
+    c500 = 3 truncated in 3D at 5 R500 (Zubeldia & Challinor 2019, Eqs.
+    18–20). Σ(r_s) = 0.66259 ρ0 r_s, and χ* = 13,836 Mpc at the fiducial
+    point.
+- **σ_κ(θ500)** (`benchmarks/mapsim/lens_table.py` → `sim/lens_tables.py`):
+  - Our own matched filter: that template normalised at the scale radius,
+    the SO v3.1.1 minimum-variance curve, reconstruction noise only,
+    2 ≤ ℓ ≤ 3000.
+  - On the baseline curve it reproduces the shape of cosmocnc_jax's table to
+    1.2% over 0.74′–5.87′.
+  - But the table is larger by a constant factor 1.450 that no variant
+    explains. Tried: truncation in projection, other estimator columns,
+    adding the lensing power spectrum to the noise (much worse), other
+    multipole ranges.
+  - Both tables carry that constant, to stay consistent with the paper's
+    mocks. At goal depth σ_κ is 13–14% lower than at baseline.
+  - The constant is still to be explained, by asking the paper's authors.
+- **Checks:**
+  - `tests/test_sim_lensing.py`: the NFW constants against quadrature;
+    κ(r_s) against an independent route via Σ_crit, to 2e-5; the table
+    against the reference to 1.5%; the moments of p; the stacked selection
+    equal to the histogram count. 62 tests pass.
+  - 32 fiducial tiles (`benchmarks/mapsim/lens_check.py`): stacked p = 0.236
+    ± 0.011 at goal and 0.235 ± 0.014 at baseline. The catalogue model with
+    the finder's own noise gives 0.241 and 0.236.
+  - Over 40% of the sky the error on the mean would be ±0.004–0.005 (2%).
