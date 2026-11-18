@@ -105,7 +105,7 @@ def counts_part():
             map_total_sem=m["map_total_sem"],
             cat_analytic_k0=m["catalogue"]["analytic_k0"], cat_map_k0=m["catalogue"]["map_k0"],
             cat_map_k1=m["catalogue"]["map_k1"],
-            totals={k: m["catalogue_total"][k] for k in ("analytic_k0", "map_k0", "map_k1")})
+            totals={k: m["catalogue_total"][k] for k in ("analytic_k0", "map_k0", "map_k1", "map_k2")})
     return out
 
 
@@ -172,6 +172,9 @@ def masking_part():
             totals_sem=[float(t.std(ddof=1) / np.sqrt(t.size)) for t in tot],
             iter2_sigma_maxdev=m["iter2_vs_iter1_sigma_maxdev"],
             iter2_count_diffs=m["counts_change"]["iter2_minus_iter1_per_tile"])
+    sc = json.load(open(f"{OUT}/mask/mask_scatter.json"))
+    out["scatter"] = dict(tiles=sc["tiles"], modes={k: dict(first=v["first"], masked=v["masked"])
+                                                    for k, v in sc["modes"].items()})
     return out
 
 

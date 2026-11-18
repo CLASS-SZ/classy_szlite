@@ -307,3 +307,26 @@ noise columns give σ_finder/σ_analytic over the 15 sizes, 0.5′ to 15′:
 - **CPU time of the finder on one tile:** 0.15 s for one pass and 0.38 s
   with the masking iteration (×2.5). `spike.py` now times a "finder" stage
   for the GPU measurement.
+
+Counts and the scatter of q, with masking:
+
+- **Counts against the catalogue model** (`counts_modes.py`, 32 tiles,
+  masking on by default):
+  - 326.1 ± 3.4 per tile at goal and 221.7 ± 2.8 at baseline, or 53,800 and
+    36,600 clusters in 40% of the sky. Goal over baseline is 1.47.
+  - Against the catalogue model with the finder's own σ, simulation over
+    model is 1.029 (goal) and 1.050 (baseline) for k = 1, and 0.974 and 0.989
+    for k = 2. Before masking, the k = 1 values were 0.966 and 0.992.
+- **Scatter of q away from clusters** (`mask_check.py scatter`, 8 tiles,
+  1.4826 × MAD over the pixels outside the mask):
+  - First pass: 0.84–0.90 (goal) and 0.88–0.92 (baseline). The first pass's
+    noise estimate holds the bright clusters' power, so q is
+    under-normalised.
+  - After masking: 0.989–0.997 and 0.994–1.000, the unit scatter that the
+    catalogue model assumes.
+  - The shift in simulation over model goes the way this predicts. The
+    remaining +3–5% at k = 1 is not yet explained. Candidates are blending,
+    fragments of large clusters and chance alignments with massive halos.
+- **Progress page:** updated with a masking figure, the masked discs on the
+  patch and the new checks (artifact version 2; data from
+  `diagnostics_data.py`).
