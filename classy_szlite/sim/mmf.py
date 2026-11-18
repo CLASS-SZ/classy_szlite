@@ -13,6 +13,18 @@
   q_j > q_{j-1} and q_j ≥ q_{j+1} along the scale axis (SZiFi's rules, as
   szsim). Compacted in catalogue order (scale, then row-major pixel) into a
   fixed-capacity buffer, with an overflow flag.
+* Masking iteration (SZiFi's, as szsim's step-3 finder): every peak with
+  q > 4 is masked with a binary disc of radius 3 θ_j (pixel centres at
+  distance ≤ r, periodic). The discs are built as FFTs of per-scale peak
+  maps times integer-disc kernels, which reproduces "distance ≤ r" exactly.
+  The covariance is re-estimated outside the discs and the filter is run
+  again on the unmasked maps. Estimator (szsim's 'whitened'): each in-band
+  mode is whitened with the first-pass covariance of its bin,
+  Z = C0^(-1/2) X; the whitened maps are masked; their binned spectra are
+  divided by the kept fraction f and un-whitened, C0^(1/2) C_w C0^(1/2).
+  The whitened field is nearly white, so the disc edges do not leak the steep
+  low-ℓ CMB and atmosphere power to high ℓ (the literal binary-mask estimate
+  inflates σ by 16-47% on noise-only tiles).
 """
 from __future__ import annotations
 
@@ -24,11 +36,13 @@ import jax.numpy as jnp
 
 from .. import profiles
 from . import instrument as ins
-from .flatsky import N, ARCMIN, grid
+from .flatsky import N, PIX, ARCMIN, grid
 from ._util import compact
 
 THETAS15 = np.geomspace(0.5, 15.0, 15)     # arcmin
 Q_TH = 4.0
+Q_MASK = 4.0          # peaks above this are masked (SZiFi's q_th_noise)
+MASK_RADIUS = 3.0     # disc radius in units of the peak's scale θ_j (SZiFi's mask_radius)
 
 
 class FilterStatic(NamedTuple):
@@ -41,9 +55,24 @@ class FilterStatic(NamedTuple):
     a: jax.Array            # (n_modes, 6) float64, f_i B_i(|k|)
     tau_m: jax.Array        # (n_th, n_modes) float64, τ_j on the mode list
     tau_full: jax.Array     # (n_th, N, N/2+1) float32, τ_j on the rfft grid (0 out of band)
+    disc_k: jax.Array       # (n_th, N, N/2+1) float32, rfft of the masking disc of scale j (real)
 
 
-def filter_static(thetas=THETAS15) -> FilterStatic:
+def disc_kernels(thetas=THETAS15, radius=MASK_RADIUS):
+    """rfft2 of the binary discs (1 at pixel offsets with dy² + dx² ≤ R_j²,
+    R_j = radius θ_j / PIX, periodic, centred on pixel 0), (n_th, N, N/2+1)
+    float64. The discs are symmetric, so their transforms are real."""
+    d = np.fft.fftfreq(N, d=1.0 / N).round().astype(np.int64)
+    d2 = d[:, None] ** 2 + d[None, :] ** 2
+    out = np.empty((len(thetas), N, N // 2 + 1))
+    for j, t in enumerate(thetas):
+        R = radius * float(t) / PIX
+        assert R < N // 2
+        out[j] = np.fft.rfft2((d2 <= R * R).astype(np.float64)).real
+    return out
+
+
+def filter_static(thetas=THETAS15, mask_radius=MASK_RADIUS) -> FilterStatic:
     G = grid()
     f = ins.tsz_f_uK(ins.SO_LAT["freqs"])
     a = (ins.beams(G.m_L) * f[:, None]).T                              # (n_modes, 6)
@@ -57,7 +86,8 @@ def filter_static(thetas=THETAS15) -> FilterStatic:
         m_binpos=jnp.asarray(G.m_binpos, dtype=jnp.int32),
         bin_pad=jnp.asarray(G.bin_pad, dtype=jnp.int32),
         bin_count=jnp.asarray(G.bin_count), a=jnp.asarray(a), tau_m=jnp.asarray(tau_m),
-        tau_full=jnp.asarray(tau_full))
+        tau_full=jnp.asarray(tau_full),
+        disc_k=jnp.asarray(disc_kernels(thetas, mask_radius).astype(np.float32)))
 
 
 _PAIRS = [(i, j) for i in range(6) for j in range(i, 6)]
@@ -144,3 +174,46 @@ def find_peaks(q, capacity: int, qth=Q_TH):
     iy, ix = rem // q.shape[2], rem % q.shape[2]
     qv = jnp.where(valid, q.ravel()[idx], -jnp.inf)
     return Peaks(j=j, iy=iy, ix=ix, q=qv, valid=valid, count=count, overflow=count > capacity)
+
+
+# ---- masking iteration ------------------------------------------------------------------
+
+def cluster_mask(peaks: Peaks, fs: FilterStatic, q_mask=Q_MASK):
+    """Binary mask (N, N) float32, 1 = kept, and the number of discs: 0 within
+    MASK_RADIUS θ_j of every valid peak with q > q_mask (see the module
+    docstring). Peaks beyond the buffer (overflow) are not masked."""
+    n_th = fs.disc_k.shape[0]
+    sel = peaks.valid & (peaks.q > q_mask)
+    j = jnp.where(sel, peaks.j, n_th)                          # out of range: dropped
+    pts = jnp.zeros((n_th, N, N), jnp.float32).at[j, peaks.iy, peaks.ix].add(
+        jnp.float32(1.0), mode="drop")
+    cover = jnp.fft.irfft2(jnp.sum(fs.disc_k * jnp.fft.rfft2(pts), axis=0), s=(N, N))
+    return (cover < 0.5).astype(jnp.float32), jnp.sum(sel.astype(jnp.int32))
+
+
+def whitening(C):
+    """C^(-1/2) and C^(1/2) per bin (symmetric square roots, float64)."""
+    ev, U = jnp.linalg.eigh(C)
+    Wm = jnp.einsum("bij,bj,bkj->bik", U, ev ** -0.5, U)
+    Wi = jnp.einsum("bij,bj,bkj->bik", U, ev ** 0.5, U)
+    return Wm, Wi
+
+
+def masked_cov(X, mask, C0, fs: FilterStatic):
+    """Binned covariance of the tile outside the mask (szsim's 'whitened'
+    estimate, see the module docstring) and the kept fraction f.
+
+    ``X``: channel maps (6, N, N/2+1) in rfft units; ``mask``: (N, N), 1 = kept;
+    ``C0``: the unmasked binned covariance of the same maps (whitening)."""
+    G = grid()
+    Wm, Wi = whitening(C0)
+    Xm = X.reshape(6, -1)[:, fs.m_idx]
+    b = fs.m_binpos
+    Wm32 = Wm.astype(jnp.float32)
+    Zm = jnp.stack([sum(Wm32[b, i, j] * Xm[j] for j in range(6)) for i in range(6)])
+    Z = jnp.zeros((6, G.L.size), Zm.dtype).at[:, fs.m_idx].set(Zm).reshape((6,) + G.L.shape)
+    z = jnp.fft.irfft2(Z, s=(N, N)) * mask[None]
+    Zk = jnp.fft.rfft2(z).reshape(6, -1)[:, fs.m_idx]
+    f = jnp.mean(mask.astype(jnp.float64))
+    Cw = binned_cov(Zk, fs) / f
+    return jnp.einsum("bij,bjk,bkl->bil", Wi, Cw, Wi), f

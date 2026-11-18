@@ -245,3 +245,65 @@ Four goal-depth tiles were run at each box's heaviest corner (high σ8, high
 - **Stacked lensing:** at SO goal depth, to match the tSZ maps. σ_κ(θ500)
   will come from the goal lensing noise curve with our own filter, checked
   against cosmocnc_jax's baseline table.
+
+## 2026-11-18: the masking pass in the finder
+
+What it does (`sim/mmf.py`: `cluster_mask`, `masked_cov`; `sim/simulator.find_clusters`):
+
+- After the first pass, every peak with q > 4 is masked with a disc of radius
+  3θ_j, where θ_j is the filter size at which the peak was found. The discs
+  are built as FFTs of per-size peak maps times integer-disc kernels, which
+  reproduces "distance ≤ r" exactly. Peaks are masked before merging and
+  confirmation.
+- The covariance is re-estimated outside the discs with the earlier project's
+  whitened estimator. Each mode is whitened with the first-pass covariance of
+  its bin. The whitened maps are masked, and their binned spectra are divided
+  by the kept fraction and un-whitened.
+- The filter then runs again on the unmasked maps. There is one iteration by
+  default (`TileConfig.n_iter = 1`, as in SZiFi). Merging and confirmation use
+  the final pass.
+- The tile output now also carries the first-pass σ_j (`sigma0`), the masked
+  fraction and the number of discs. The peak-overflow flag covers all passes.
+
+Checks (`tests/test_sim_mask.py`; 54 tests pass over all simulator test files):
+
+- **Discs:** the FFT discs equal a direct construction, for 300 random peaks
+  of all sizes, some at the tile edges.
+- **Nothing masked:** the estimator returns the input covariance to 9e-7 (in
+  units of that covariance; float32 FFTs).
+- **No clusters:** on CMB + noise tiles with ~60 random discs (18–19% masked),
+  σ_j from the masked estimate is 0.992–0.995 (goal) and 0.993–0.996
+  (baseline) of the analytic σ_j. The unmasked estimate gives 0.995–0.996.
+  The earlier project measured 0.990–0.995.
+- **Against the earlier project's own code** (szsim, float64): on one of our
+  fiducial goal tiles with 487 first-pass peaks, the mask is the same pixel
+  for pixel (28.0% masked). The masked covariance agrees to 1.3e-6 in
+  whitened units, and σ_j to 3e-8. The reference is
+  `$MAPSIM_REF/szsim_mask.npz`, from `benchmarks/mapsim/refgen_szsim_mask.py`.
+
+16 fiducial tiles per depth (`benchmarks/mapsim/mask_check.py tiles`). The
+noise columns give σ_finder/σ_analytic over the 15 sizes, 0.5′ to 15′:
+
+| | first pass | after one iteration | after two | masked fraction, one iteration | data vector per tile: first pass, one, two |
+|---|---|---|---|---|---|
+| goal | 1.184–1.276 | 1.037–1.076 | 1.028–1.064 | 24.1% (19.5–30.0%) | 240.6, 323.2, 329.4 |
+| baseline | 1.137–1.201 | 1.026–1.056 | 1.018–1.047 | 21.2% (18.0–26.5%) | 173.2, 222.5, 227.2 |
+| earlier project, goal (324 tiles) | 1.160–1.242 | 1.035–1.069 | | 23.9% (15.3–34.7%) | |
+| earlier project, baseline | 1.118–1.176 | 1.024–1.051 | | 21.2% (13.4–31.4%) | |
+
+- After one iteration our noise is within 0.01 of the earlier project's at
+  every size. That holds even though our first pass is 0.02–0.03 higher (more
+  tSZ from our halo model). The masked fractions match.
+- **Masking raises the data vector** by 34% at goal and 28% at baseline over
+  the first pass. Goal over baseline is now 1.45.
+- **One iteration is not converged.**
+  - A second iteration lowers σ_j by a further 0.8–1.5% and raises the data
+    vector by 1.9% (goal) and 2.1% (baseline).
+  - It masks 37% (goal) and 33% (baseline) of the tile, because more peaks
+    pass q > 4.
+  - We keep one iteration, as SZiFi and the paper's pipeline do. The
+    simulator applies the same finder that will be applied to the data, so
+    the stopping point is part of the forward model, not a bias.
+- **CPU time of the finder on one tile:** 0.15 s for one pass and 0.38 s
+  with the masking iteration (×2.5). `spike.py` now times a "finder" stage
+  for the GPU measurement.

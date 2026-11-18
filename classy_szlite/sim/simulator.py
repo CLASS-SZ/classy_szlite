@@ -2,10 +2,12 @@
 
 θ → cosmology → λ cells (once per θ), then per tile:
 halos → y(k) → six channel maps (tSZ + lensed CMB + white and atmospheric
-noise) → matched filter (covariance from the maps, one pass) → peaks →
-merging → confirmation → (q, z) histogram.
+noise) → matched filter (covariance from the maps) → peaks → masking
+iteration (discs around the q > 4 peaks, covariance re-estimated outside
+them, filter run again; ``TileConfig.n_iter`` times, 1 by default as SZiFi)
+→ merging → confirmation → (q, z) histogram.
 
-No masking iteration yet (M5), no lensing summary yet (M6).
+No lensing summary yet (M6).
 """
 from __future__ import annotations
 
@@ -50,6 +52,8 @@ class TileConfig(NamedTuple):
     M_conf: float = 5e13
     r_conf: float = 1.5
     r_merge: float = 1.5
+    n_iter: int = 1          # masking iterations (SZiFi's max_it); 0 = one unmasked pass
+    q_mask: float = mmf.Q_MASK
 
 
 class TileStatic(NamedTuple):
@@ -124,22 +128,47 @@ def channel_maps(key, yk, st: TileStatic):
     return st.a_full * yk[None] + st.B_full * cmb[None] + white + atm
 
 
-def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
-                  cells: hl.CellGrid, cfg: TileConfig):
-    """Data vector and diagnostics of one tile."""
+def tile_maps(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
+              cells: hl.CellGrid, cfg: TileConfig):
+    """Halos, the six channel maps and the painter's overflow flags of one tile."""
     k_h, k_m = jax.random.split(key)
     halos = hl.sample_halos(k_h, cs.lam, cells, cfg.halo_cap, cs.cg, theta.h, theta.A_SZ,
                             theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b, d2N=cs.d2N)
     tabs = tables._replace(tab=st.paint_tab, rP=st.paint_rP)
     yk, ovf_paint = pt.paint_y(halos, tabs, cfg.paint, st.T_tab)
-    X = channel_maps(k_m, yk, st)
-    q, sigma, _ = mmf.q_cube(X, st.fs)
-    pk = mmf.find_peaks(q, cfg.peak_cap)
+    return halos, channel_maps(k_m, yk, st), ovf_paint
+
+
+def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
+                  cells: hl.CellGrid, cfg: TileConfig):
+    """Data vector and diagnostics of one tile."""
+    halos, X, ovf_paint = tile_maps(key, cs, theta, st, tables, cells, cfg)
+    pk, sigma, mk = find_clusters(X, st.fs, cfg)
     keep = sm.merge_local_max(pk, cfg.r_merge)
     cf = sm.confirm(pk, keep, halos, cfg.M_conf, cfg.r_conf, cfg.conf_cap)
     counts = sm.histogram(pk.q, cf.z, keep & cf.ok)
-    overflow = jnp.concatenate([halos.overflow[None], ovf_paint, pk.overflow[None],
+    overflow = jnp.concatenate([halos.overflow[None], ovf_paint, mk["peak_overflow"][None],
                                 cf.overflow[None]])
     return dict(counts=counts, n_halos=halos.count, n_peaks=pk.count,
                 n_kept=jnp.sum(keep), n_conf=jnp.sum(keep & cf.ok),
-                overflow=overflow, sigma=sigma)
+                overflow=overflow, sigma=sigma, sigma0=mk["sigma0"],
+                f_masked=mk["f_masked"], n_masked=mk["n_masked"])
+
+
+def find_clusters(X, fs: mmf.FilterStatic, cfg: TileConfig):
+    """Matched filter with the masking iteration: the final pass's peaks,
+    its σ_j and diagnostics (first-pass σ_j, masked fraction and number of
+    discs of the last iteration, and a peak-buffer overflow flag over all
+    passes, since an overflowing pass masks only the peaks it holds)."""
+    q, sigma, C0 = mmf.q_cube(X, fs)
+    pk = mmf.find_peaks(q, cfg.peak_cap)
+    sigma0, ovf = sigma, pk.overflow
+    f, n_masked = jnp.float64(1.0), jnp.int32(0)
+    for _ in range(cfg.n_iter):
+        mask, n_masked = mmf.cluster_mask(pk, fs, cfg.q_mask)
+        C, f = mmf.masked_cov(X, mask, C0, fs)
+        q, sigma, _ = mmf.q_cube(X, fs, C=C)
+        pk = mmf.find_peaks(q, cfg.peak_cap)
+        ovf = ovf | pk.overflow
+    return pk, sigma, dict(sigma0=sigma0, f_masked=1.0 - f, n_masked=n_masked,
+                           peak_overflow=ovf)

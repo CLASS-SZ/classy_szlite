@@ -19,7 +19,7 @@ We extend the simulation-based inference (SBI) of cluster counts in Zubeldia, Bo
 The map-level simulator captures two things the paper's catalogue-level model leaves out:
 
 - **Blending of close clusters.**
-- **The finder's own selection.** Its search over position and 15 scales lifts faint clusters (optimisation bias). Its noise level, estimated from the maps, includes unmasked tSZ (confusion): at SO goal, σ_finder/σ_analytic = 1.035–1.07 over 0.5′–15′ after masking.
+- **The finder's own selection.** Its search over position and 15 scales lifts faint clusters (optimisation bias). Its noise level, estimated from the maps, includes unmasked tSZ (confusion): at SO goal, σ_finder/σ_analytic = 1.035–1.07 over 0.5′–15′ after masking in the earlier project, and 1.04–1.08 in our simulator (2026-11-18, 16 tiles).
 
 Our step 3b showed that the second effect dominates for an analytic selection. With q_obs = q_true + N(0,1) (the paper's dof = 0) and the finder-calibrated noise σ_eff = r̄σ_Y, the selection model's own error is +15.6σ / +17.8σ in S8 (baseline / goal) in config a, where the Y–M relation is fixed. An analytic σ_y0 would add the noise-level error on top. Blending there is −2.1σ / −4.0σ. Config d frees (1−b), α and σlnY and absorbs most of it: −1.2σ / −1.9σ against +0.3σ / +0.4σ (sz-poisson-blending `analysis/realistic/step3b/RESULTS.md:42,327-328,345`; production finder, credit limit, 40% of the sky).
 
@@ -252,11 +252,11 @@ Data:
 - **σ_y0 against `analytic_sigma.npz`** (setup S0; covariance per mode = `analytic_shells.npz`, which holds CAMB lensed TT plus SO noise, inverted with Ci[0] = 0; not the emulator's TT): ~1e-5, following a written emulation recipe. Against `it0_sigvec`: scales 1–14, in the 129 isotropic / none / [100, 20000] runs.
 - **Float32 against float64:** measure the error budget on exported tiles, then apply the relative tolerances.
 
-**M5. The masking iteration.**
-- q > 4 discs of radius 3θ_det, built as FFTs of per-scale indicator maps times integer-disc kernels. This reproduces "distance ≤ r" exactly.
-- Port szsim's whitened masked-covariance estimator. The literal binary estimator is biased (`analysis/realistic/step3/RESULTS.md:93-96`).
-- **Identity** with `data_real/step3/tiles/tile_PID.npz` iteration 1, in the szsim-compatible mode: |Δq| ≤ 1e-9.
-- **Statistics** in legacy mode over ≥ 400 tiles, in SE units: r(θ) and the noise-only σ ratios. Poisson tests for the false-detection counts.
+**M5. The masking iteration.** Built 2026-11-18 (`LOG.md`, "the masking pass"); one iteration by default (`TileConfig.n_iter = 1`).
+- q > 4 discs of radius 3θ_det, built as FFTs of per-scale indicator maps times integer-disc kernels. This reproduces "distance ≤ r" exactly. *Done: identical to a direct construction.*
+- Port szsim's whitened masked-covariance estimator. The literal binary estimator is biased (`analysis/realistic/step3/RESULTS.md:93-96`). *Done: on one of our tiles, szsim's own code gives the same mask and σ_j to 3e-8.*
+- **Identity** with `data_real/step3/tiles/tile_PID.npz` iteration 1, in the szsim-compatible mode: |Δq| ≤ 1e-9. *Open: needs the szsim-compatible filter mode.*
+- **Statistics** in legacy mode over ≥ 400 tiles, in SE units: r(θ) and the noise-only σ ratios. Poisson tests for the false-detection counts. *Open (GPU); 16 CPU tiles per depth so far.*
 
 **M6. Data vector, legacy reproduction, timing.**
 - The production reduction (§3.4) with unit tests: merging, confirmation, edges, overflow, lensing.
@@ -287,7 +287,7 @@ Data:
 
 Set by the M0 spike (`M0_LOG.md`, 2026-11-18).
 - **Per tile, fiducial halo load, one finder pass:** 6.8 ms on an RTX PRO 6000 Blackwell and 14.4 ms on an A100 (batch 16, 8 GiB). Painting is ~70% of that; the FFTs of the maps and the filter take ~2 ms.
-- **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~4.6 GPU-hours with the prior-averaged halo load (×1.05 over the wide box, from 0.42× to 1.94× of the fiducial; ×1.17 over the paper's prior) and the masking pass (×~1.4, M5). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
+- **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~4.6 GPU-hours with the prior-averaged halo load (×1.05 over the wide box, from 0.42× to 1.94× of the fiducial; ×1.17 over the paper's prior) and the masking pass (×~1.4, M5; on the CPU the finder takes 2.5× longer with it, and the finder is ~2 ms of the 6.8 ms on the GPU, to be measured). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
 
 CPU fallback and cross-check: our szsim pipeline needs ~3,000–6,600 CPU-hours for 10⁴ simulations; SZiFi would need ~50,000. The GPU total must also count the coverage mocks, the 10%-sky runs, compile time, development jobs and capacity padding.
 
