@@ -356,3 +356,54 @@ The peak buffer with masking:
 - `priors/prior_corners.json` now holds the masked runs. The first-pass-only
   version is kept as `prior_corners_first_pass_only.json`.
 - 55 tests pass.
+
+## 2026-11-18: NaMaster, GMaster and szifi_jax
+
+- **NaMaster is not used** anywhere in mapsim or in the earlier finder. It is
+  pinned only in the separate environment that runs SZiFi itself.
+- **Coupling corrections are not needed for the periodic-tile finder.** A
+  Monte Carlo of our whitened masked estimator ran on 80 CMB-plus-noise tiles
+  × 4 random-disc masks (16–20% masked, SO goal), with our own scratch code
+  from the standard flat-sky formulas.
+  - The mask lowers σ_j by 0.09% (0.5′) to 0.21% (15′), relative to the
+    unmasked estimate of the same tiles.
+  - Dividing the whitened pseudo-spectra by each bin's in-band coupling row
+    sum instead of the kept fraction (3 more FFTs per tile) removes only ~0.02
+    points of that. That part is the leakage at the band edges: 2–9% in the
+    first and last bins, ~0.1% elsewhere.
+  - A full per-tile coupling inversion has the same mean as the row sums, but
+    it adds scatter and makes the σ deficit larger. It can also break the
+    per-bin Cholesky, because the inverse coupling has negative off-diagonal
+    terms. And it would make the finder ~7–12× slower.
+  - The rest is finite-sample scatter from whitening with a noisy per-bin
+    estimate. This is the same effect that puts the unmasked estimate 0.4–0.5%
+    below the analytic one. A zero-cost fix to test: scale each bin's inverse
+    covariance by (n − p − 1)/n, with n modes per bin and p = 6.
+  - All of these are at least 20× smaller than the 3.7–7.6% σ excess that
+    unmasked cluster signal leaves after one masking iteration. They also act
+    identically on data and simulations.
+- **GMaster** (a GPU re-implementation of NaMaster in JAX + CUDA; no licence):
+  - Its strength is fast float32 HEALPix transforms and curved-sky coupling,
+    12–22× faster than NaMaster on 96 cores.
+  - Its flat-sky path is an interface port that cannot run at 1200² as
+    written.
+  - Nothing to take now. For the full-sky stage we would write our own:
+    - fixed-window coupling per tile geometry, still with a per-tile
+      normalisation for the cluster discs, which multiply the fixed window;
+    - curved-sky quadrature, to validate simulated spectra.
+- **szifi_jax** (a near-literal JAX port of SZiFi; no licence):
+  - It inherits SZiFi's known problems: the masking iteration never runs a
+    second pass, positions are shifted by half a pixel, the inpaint-and-blend
+    noise estimate is biased, and out-of-band round-off is amplified. Some
+    merge modes are broken, and it still needs NaMaster.
+  - Our finder already has its speed-ups and is roughly 20–75× faster per
+    tile.
+  - Ideas to write ourselves:
+    - the CIB-deprojected filter, for the foreground stage (two more per-bin
+      dot products in the weights; quantify its signal-to-noise cost first);
+    - greedy highest-q-first merging, as a candidate fix for merge chains
+      (time it on the GPU first);
+    - a minimum disc radius that follows the beams (SZiFi's
+      min_radius_mask_arcmin).
+- **Progress page:** the masked discs are now drawn as shaded vector shapes
+  with a toggle; markers sit on pixel centres (artifact version 5).
