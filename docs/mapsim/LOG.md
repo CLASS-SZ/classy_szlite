@@ -407,3 +407,31 @@ The peak buffer with masking:
       min_radius_mask_arcmin).
 - **Progress page:** the masked discs are now drawn as shaded vector shapes
   with a toggle; markers sit on pixel centres (artifact version 5).
+
+## 2026-11-18: GPU tile 0 — halos now keyed by cell
+
+- **Symptom:** in the 400-tile GPU masking run, tiles 1–15 matched the CPU
+  run exactly, but tile 0 had 7 more first-pass peaks and 368 detections
+  against 348.
+- **Cause, found by a stage-by-stage comparison** (`diag_tile.py`; GPU with
+  default and deterministic ops):
+  - The GPU drew one more halo (73,830 against 73,829).
+  - In cell (z ≈ 0.6, M ≈ 1.3e13), with λ = 22.5, the CPU drew 17 and the GPU
+    18. For λ ≥ 10, JAX's Poisson sampler uses rejection with log-gamma
+    functions, whose last bits differ between CPU and GPU, so an accept
+    decision occasionally flips.
+  - Halo attributes were drawn per buffer slot. So that one extra count moved
+    every later slot to a different cell, and the rest of the tile became a
+    different realisation.
+  - Statistically harmless, but not reproducible across hardware, and it
+    stopped seeds being reused smoothly across θ.
+- **Fix** (`sim/halos.sample_halos`): each halo's random numbers (position,
+  offsets, z, ln M, scatter) come from a key folded with its cell and its
+  index within the cell. A changed count now adds or removes halos in that
+  cell only.
+  - New test `test_halos_keyed_by_cell`: doubling one cell's λ (39 → 72
+    halos) leaves all 72,399 other halos identical.
+  - The Poisson and bilinear-sampler tests pass, and so do all 56 tests.
+  - 32 goal tiles: 324.9 ± 3.3 detections per tile (326.1 ± 3.4 before) and
+    73,056 halos (λ = 73,030).
+  - Realisations differ from earlier runs, which stay statistically valid.
