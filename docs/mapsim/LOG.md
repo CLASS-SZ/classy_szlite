@@ -505,3 +505,140 @@ The peak buffer with masking:
   footprint and mask, SZiFi on identical maps, inference.
 - Data: `diagnostics_data.py` now also reads `lensing/lens_check.json`, the
   lensing tables and the MSS2 check (`mss2/mss2_noise_check.json`).
+
+## 2026-11-19: MSS2 noise through the finder
+
+- **Data at Flatiron.** The MSS2 noise maps (4 splits × 6 bands), the six coadd
+  inverse-variance maps, 60 mnms simulations (sims 0–4 of each split and tube)
+  and Kaper's 70% Galactic mask: 91 files, 142.6 GB, in
+  `/mnt/ceph/users/bbolliet/mapsim/mss2/raw`. Copied from NERSC through the
+  data-transfer node at 2–3 MB/s; every file's size matches its FITS header,
+  and rsync checked every file.
+- **Tiles** (`benchmarks/mapsim/mss2_tiles.py`, 12 minutes on 16 cores):
+  - 32 tiles of 10° at dec −40° to +10°, fully observed in all bands and ≥ 90%
+    inside the mask, stored with a 2° margin, for the finder test; 64 tiles
+    for the statistics of the maps.
+  - The 2′ cut-outs now come from the 0.5′ rows with integer arithmetic.
+    Rounding the tile's mean declination, which sits on a 2′ pixel edge, had
+    put them one 2′ row south in four of the five declination bands.
+- **The maps' non-Gaussianity** (90 and 150 GHz, each map against a Gaussian
+  copy of itself, after removing scales above ~30′; mean over 64 tiles):
+  - mnms matches the MSS2 band power to 0.3–0.8% at ℓ = 300–5000.
+  - With the depth changes included, MSS2's excess kurtosis at 150 GHz and
+    ℓ = 1000–3000 is +0.54 ± 0.07; mnms reproduces +0.27 ± 0.03. At 90 GHz:
+    +0.16 against +0.11.
+  - After dividing by the local noise level: +0.055 ± 0.006 at 150 GHz and
+    ℓ = 1000–3000, with twice the Gaussian rate of 4σ excursions; mnms has
+    none (−0.005 ± 0.001). Smaller at 90 GHz (+0.013 ± 0.003), none at
+    ℓ = 3000–5000. No skewness anywhere.
+  - The splits differ: at 150 GHz split 3 has 0.26–0.72× the band power of
+    split 0, and mnms copies this.
+- **Streaks.** The maps with the most false peaks have one narrow streak of
+  2–3.7× the median noise, in one split only, at the same place at 90 and
+  150 GHz (one tube), along the scan direction, and absent from the coadd
+  depth map: a single noisy observation that the map-maker did not
+  down-weight. In the three worst maps, 83–97% of the false peaks above
+  q = 5 sit where the noise is above 1.3× its median.
+- **Finder test** (`benchmarks/mapsim/mss2_finder_test.py`; 32 tiles, about
+  25 minutes per run on 16 cores):
+  - Five kinds of noise, at one-split depth and at four-split depth (the plain
+    mean of the splits: a proxy for the coadd, about 20% noisier than the MSS2
+    coadd at 150 GHz because the splits differ):
+    - MSS2 itself;
+    - mnms, upsampled from 2′ after apodising its margin. Above ℓ = 4000–4800
+      on the sky it crosses over to a Gaussian copy of the matching MSS2 map's
+      own noise, because mnms stops at ℓ = 5400 and the finder uses 90–280 GHz
+      up to ℓ ≈ 8000. Those multipoles are therefore an oracle, not a model;
+    - Gaussian noise with MSS2's 2D spectra (phases randomised on the cut-out
+      with its margin, then cropped);
+    - the same with MSS2's depth pattern (coadd inverse variance, 8′
+      smoothing);
+    - isotropic Gaussian noise with MSS2's azimuthally averaged spectra and
+      band correlations: the simulator's kind of noise.
+  - Every map gets its tile's lensed-CMB realisation and the finder's 30′
+    taper. The finder runs as in production (masking pass, merging within
+    1.5′). 64 clusters per tile (θ500 = 0.5′–6′, q = 2–10) are injected at
+    four-split depth.
+  - Noise peaks per 64 deg² above q = 4 / 4.5 / 5, on the simulator's q scale
+    (next item), with the masking at the equivalent threshold:
+    - one split: MSS2 37.2 / 7.7 / 1.27. As fractions of MSS2: mnms 0.93 /
+      0.82 / 0.66; Gaussian with the depth pattern 0.84 / 0.68 / 0.48;
+      Gaussian with the 2D spectra 0.75 / 0.57 / 0.34; isotropic Gaussian 0.74
+      / 0.56 / 0.35 (errors 0.02–0.08).
+    - four splits: MSS2 41.5 / 8.1 / 1.59. Fractions: mnms 0.88 / 0.72 /
+      0.53; depth pattern 0.84 / 0.66 / 0.48; 2D spectra 0.72 / 0.54 / 0.34;
+      isotropic 0.72 / 0.53 / 0.27 (errors 0.04–0.2).
+    - The excess is largest at dec +5°, where the depth changes fast across
+      the tile, and at −15°. By cluster size, mnms matches MSS2's false peaks
+      for θ500 ≥ 1′ (0.96–1.02 at one-split depth) and gives 0.8 below, where
+      its high multipoles are the stitched copy.
+  - The finder's noise level σ_j:
+    - Before the masking pass, every model is within 0.2% of MSS2.
+    - After it, MSS2's σ_j is 0.2–0.7% lower than the Gaussian models' (0.4–0.9%
+      when the pass masks twice as much), because the pass removes its noisiest
+      patches. mnms is within 0.1–0.6%.
+    - The same injected clusters get q 0.2% higher in MSS2 noise (0.4% with
+      the heavier masking).
+  - Completeness of the injected clusters (detected with q > 5, in bins of
+    noiseless q) agrees between all kinds to within 0.03. The noise part of q
+    at the clusters has an rms of 1.08–1.11 for every kind.
+- **The q scale of tapered cut-outs** (the same isotropic Gaussian noise as a
+  tapered cut-out and as a periodic tile, same CMB, 32 tiles):
+  - σ_j is 7.6% lower on the cut-out for θ500 ≤ 2′, 7.3% at 5.7′ and
+    5.2–5.5% at 15′. The finder estimates the noise from the tapered map, whose
+    mean square is 0.879 of the interior's.
+  - Interior q has an rms of 1.08 on the cut-out, against 1.00–1.01 on the
+    periodic tile.
+  - Noise peaks above q = 4 / 4.5 / 5 are 2.6 / 3.5–3.7 / 5.2–5.7× more
+    frequent, and the masked fraction rises from 0.09–0.10 to 0.16.
+  - The same injected clusters get q 7.0–7.2% higher.
+  - All the noise-model comparisons share the cut-out geometry. Their counts
+    are converted with the σ_j ratio per scale and a threshold calibrated on
+    the isotropic noise.
+  - For the real data, the finder's noise estimate must be corrected for the
+    taper, or the simulator must make the same tapered cut-outs.
+- **Review.** Five independent reviews, each checked by a sceptic, covered
+  the tile geometry, the statistics, how the noise kinds are built, how the
+  finder is used, and the test's design. They changed the test:
+  - The Gaussian copies were first made from the untapered tile, which spread
+    the edge jumps' power over the whole tile (σ 1.4–2× too high). They are
+    now made from the cut-out with its margin, tapered there, then cropped.
+  - Their random phases come from a real white field, so the rfft symmetry
+    holds.
+  - The mnms stitch is now in true ℓ: on CAR pixels mnms's limit along RA is
+    5400 cos(dec), 4420 at dec −35°, which had left a hole. It now goes to
+    the split's own high-ℓ noise: at 150 GHz MSS2 is not white at
+    ℓ = 5000–8000, and white noise at the ℓ = 8000–14000 level overshot by
+    1.3–1.7×. It is applied before cropping, which removed 10% extra power at
+    the join.
+  - Other changes: peaks merged as in production, CMB in every map, the
+    four-split kinds, errors paired by tile, the isotropic kind and the
+    geometry run.
+  - The maps' statistics now use a local high-pass and a Gaussian copy of
+    each map.
+- **What it means for the noise generator.**
+  - For the clusters, Gaussian noise with MSS2's spectra is nearly enough:
+    the finder's noise level comes out within 0.2–0.9% and the completeness
+    exactly.
+  - The residual is the masking pass's response to MSS2's streaks: cluster q
+    0.2–0.4% higher. That is probably 0.5–1% in counts above a threshold,
+    near the Poisson error over 40% of the sky. It needs either streaks in
+    the generator or a calibrated correction.
+  - False peaks are 3× the Gaussian rate but few: about 1.3–1.6 per 64 deg²
+    above q = 5. They enter the data vector only by chance alignment with a
+    massive halo.
+  - mnms reproduces half to two thirds of the excess false peaks and roughly
+    halves the σ_j offset, because it is fitted to MSS2 itself. It stops at
+    ℓ = 5400.
+- **Next:**
+  - Build our own GPU generator: Gaussian noise with MSS2's 2D spectra per
+    declination band, the band correlations and the depth pattern. Validate
+    it with this test.
+  - Measure what the residual does to the data vector: the same simulated
+    sky with MSS2 noise and with the generator's noise.
+  - Decide on streaks from that number: a scattering-transform model, or a
+    streak injector calibrated on MSS2.
+  - Add the taper correction for real data.
+- **Progress page, version 7:** the MSS2 test (false peaks per noise model,
+  the streak picture), five new checks, an updated "Since the last update",
+  and the generator and taper correction in "Next".

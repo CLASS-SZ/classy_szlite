@@ -3,8 +3,10 @@
     python benchmarks/mapsim/diagnostics_data.py
 
 Reads the outputs of counts_modes.py, paper_sigma.py, optbias.py,
-hmf_compare.py, prior_corners.py, mask_check.py, lens_check.py and the MSS2
-noise check (Perlmutter job, copied to $MAPSIM_OUT/mss2) under $MAPSIM_OUT,
+hmf_compare.py, prior_corners.py, mask_check.py, lens_check.py, the MSS2
+noise check (Perlmutter job, copied to $MAPSIM_OUT/mss2), and the MSS2 noise
+tests on rusty (mss2_tiles.py: tile_diagnostics.json and the tiles;
+mss2_finder_test.py --summary: finder_test/summary.json) under $MAPSIM_OUT,
 simulates one goal-depth tile at the fiducial point for a picture (with the
 masking iteration), and writes $MAPSIM_OUT/diagnostics/diagnostics.json.
 
@@ -21,6 +23,7 @@ with no simulation.
 from __future__ import annotations
 
 import base64
+import glob
 import json
 import os
 import sys
@@ -222,6 +225,122 @@ def mss2_part():
     return out
 
 
+def noise_test_part(streak_tile=79, streak_split=1):
+    """MSS2 noise through the finder against mnms and Gaussian noise (mss2_finder_test.py
+    --summary writes finder_test/summary.json), the noise maps' non-Gaussianity (mss2_tiles.py,
+    tile_diagnostics.json: each map against its own Gaussian copy, paired by tile), and one
+    split's local noise level with its noise peaks, for the picture of a streak."""
+    from scipy.ndimage import gaussian_filter
+    from classy_szlite.sim.flatsky import N, ARCMIN
+    s = json.load(open(f"{OUT}/mss2/finder_test/summary.json"))
+    td = json.load(open(f"{OUT}/mss2/tile_diagnostics.json"))
+    stats = td["stats"]
+    ng = {}
+    for b in ("f090", "f150"):
+        for li, (lo, hi) in enumerate(td["lbands"]):
+            row = {}
+            for name in ("K", "tail", "K0"):
+                si = stats.index(name)
+                per = {src: np.array([np.mean([r[li][si] for r in t["diag"][b][src]]) for t in td["tiles"]])
+                       for src in ("raw", "mnms", "gauss_raw", "gauss_mnms")}
+                for lab, x in (("raw", per["raw"] - per["gauss_raw"]), ("mnms", per["mnms"] - per["gauss_mnms"])):
+                    row[f"{name}_{lab}"] = [float(x.mean()), float(x.std(ddof=1) / np.sqrt(x.size))]
+                row[f"{name}_ref"] = float(per["gauss_raw"].mean())
+            si = stats.index("bp")
+            ratio = np.array([np.mean([r[li][si] for r in t["diag"][b]["mnms"]]) / np.mean([r[li][si] for r in t["diag"][b]["raw"]])
+                              for t in td["tiles"]])
+            row["power_mnms_over_raw"] = [float(ratio.mean()), float(ratio.std(ddof=1) / np.sqrt(ratio.size))]
+            ng[f"{b}_{lo}-{hi}"] = row
+    # the streak picture: local noise level (ell 1000-5000, 30' smoothing) of one split and of the coadd depth
+    d = np.load(f"{OUT}/mss2/tiles/tile_{streak_tile:03d}.npz")
+    meta = json.loads(str(d["meta"]))
+    mh = meta["margin_hf"]
+    k = 2 * np.pi * np.fft.fftfreq(N, d=0.5 * ARCMIN)
+    L = np.hypot(k[:, None], 2 * np.pi * np.fft.rfftfreq(N, d=0.5 * ARCMIN)[None, :])
+    tp = np.outer(*(2 * [np.minimum(1.0, np.minimum(np.arange(N) + 0.5, N - 0.5 - np.arange(N)) / 60.0)]))
+
+    def local(m):
+        f = np.fft.irfft2(np.fft.rfft2((m - m.mean()) * tp) * ((L > 1000) & (L < 5000)), s=(N, N))
+        r = np.sqrt(gaussian_filter(f * f, 30.0 / np.sqrt(8 * np.log(2)) / 0.5))
+        return r / np.median(r[120:-120, 120:-120])
+
+    def down(a, f=8):
+        return a.reshape(a.shape[0] // f, f, a.shape[1] // f, f).mean((1, 3))
+
+    def u8(a, lo, hi):
+        return base64.b64encode(np.clip(np.round((a - lo) / (hi - lo) * 255.0), 0, 255).astype(np.uint8).tobytes()).decode()
+
+    split_map = local(d["raw_hf"][streak_split, 1, mh:mh + N, mh:mh + N].astype(np.float64))
+    iv = d["ivar2"][3, 60:360, 60:360].astype(np.float64)
+    depth = np.kron(1.0 / np.sqrt(iv / np.median(iv)), np.ones((4, 4)))
+    tiles = []
+    for f in sorted(glob.glob(f"{OUT}/mss2/finder_test/part_*_of_*.json")):
+        tiles += json.load(open(f))
+    geo = []
+    for f in sorted(glob.glob(f"{OUT}/mss2/finder_test/geometry_part_*_of_*.json")):
+        geo += json.load(open(f))
+    rs = {d: np.mean([np.mean(t[d]["iso_per"]["s1"], 0) / np.mean(t[d]["iso_cut"]["s1"], 0) for t in geo], 0)
+          for d in ("split", "coadd")}
+    tr = [t for t in tiles if t["tile"] == streak_tile][0]
+    qtrue = lambda p, d="split": p[3] / rs[d][p[2]]
+    pk = [p for p in tr["split"]["raw"]["peaks"][streak_split] if qtrue(p) > 4.5]
+    lo_, hi_ = 0.6, 2.4
+    s["streak"] = dict(tile=streak_tile, split=streak_split, ra=meta["ra"], dec=meta["dec"], size=150, lo=lo_, hi=hi_,
+                       split_rms=u8(down(split_map)[::-1], lo_, hi_), depth=u8(down(depth)[::-1], lo_, hi_),
+                       split_max=float(split_map[120:-120, 120:-120].max()),
+                       peaks=[[round((N - 1 - p[0]) / 8.0, 1), round(p[1] / 8.0, 1), round(qtrue(p), 2)] for p in pk],
+                       q_min=4.5, n_peaks=len(pk),
+                       n_peaks_by_split=[sum(1 for p in tr["split"]["raw"]["peaks"][i] if qtrue(p) > 4.5) for i in range(4)])
+    s["nongauss"] = ng
+    # on the simulator's q scale: the geometry run gives sigma_periodic / sigma_cut per scale (rs); the
+    # run with the masking threshold at 4.3 (finder_test_qmask4.3) masks what 4 masks on periodic tiles
+    v3 = []
+    for f in sorted(glob.glob(f"{OUT}/mss2/finder_test_qmask4.3/part_*_of_*.json")):
+        v3 += json.load(open(f))
+    run = v3 if len(v3) == len(tiles) else tiles
+    rng = np.random.default_rng(1)
+    ix = rng.integers(0, len(run), (2000, len(run)))
+    thr = (4.0, 4.5, 5.0)
+    trueq = dict(source="q_mask 4.3" if run is v3 else "q_mask 4", n_tiles=len(run), thresholds=list(thr), depth={})
+    for depth in ("split", "coadd"):
+        # thresholds on the cut-outs that give the isotropic Gaussian noise the counts measured for
+        # the same noise on periodic tiles (the per-scale sigma ratio alone, measured with the other
+        # masking threshold, leaves the converted counts ~15% low)
+        target = np.mean([np.mean(t[depth]["iso_per"]["counts"], 0)[:3] for t in geo], 0)
+        iso_q = [[np.array([p[3] / rs[depth][p[2]] for p in m]) for m in t[depth]["iso"]["peaks"]] for t in run]
+        count = lambda x: np.mean([np.mean([np.sum(q > x) for q in maps]) for maps in iso_q])
+        teff = []
+        for i_, x in enumerate(thr):
+            lo, hi = x - 0.8, x + 0.8
+            for _ in range(40):
+                mid = 0.5 * (lo + hi)
+                lo, hi = (mid, hi) if count(mid) > target[i_] else (lo, mid)
+            teff.append(0.5 * (lo + hi))
+        per = {}
+        for k in ("raw", "mnms", "gauss", "gaussmod", "iso"):
+            per[k] = np.array([np.mean([[sum(1 for p in m if p[3] / rs[depth][p[2]] > x) for x in teff]
+                                        for m in t[depth][k]["peaks"]], axis=0) for t in run])
+        dd = {}
+        for k, c in per.items():
+            r1 = np.array([np.mean(t[depth][k]["s1"], 0) / np.mean(t[depth]["raw"]["s1"], 0) for t in run])
+            r0 = np.array([np.mean(t[depth][k]["s0"], 0) / np.mean(t[depth]["raw"]["s0"], 0) for t in run])
+            dd[k] = dict(counts=c.mean(0).tolist(), counts_err=c[ix].mean(1).std(0, ddof=1).tolist(),
+                         over_raw=(c.sum(0) / per["raw"].sum(0)).tolist(),
+                         over_raw_err=(c[ix].sum(1) / np.maximum(per["raw"][ix].sum(1), 1e-9)).std(0, ddof=1).tolist(),
+                         sigma_final=r1.mean(0).tolist(), sigma_final_err=r1[ix].mean(1).std(0, ddof=1).tolist(),
+                         sigma_first=r0.mean(0).tolist(),
+                         f_masked=float(np.mean([np.mean(t[depth][k]["f_masked"]) for t in run])))
+            if k + "_inj" in run[0][depth]:
+                rq = np.array([np.mean(np.ravel(t[depth][k + "_inj"]["qs_ref"])) / np.mean(np.ravel(t[depth]["raw_inj"]["qs_ref"]))
+                               for t in run])
+                dd[k]["cluster_q_over_raw"] = [float(rq.mean()), float(rq[ix].mean(1).std(ddof=1))]
+        ip = np.array([np.mean(t[depth]["iso_per"]["counts"], 0)[:3] for t in geo])
+        trueq["depth"][depth] = dict(kinds=dd, iso_periodic_measured=ip.mean(0).tolist(),
+                                     sigma_periodic_over_cut=rs[depth].tolist(), thresholds_on_cut=teff)
+    s["true_q"] = trueq
+    return s
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -330,7 +449,7 @@ def tile_part(width=240):
 
 def main():
     out = dict(hmf=hmf_part(), counts=counts_part(), optbias=optbias_part(), priors=priors_part(),
-               masking=masking_part(), lensing=lensing_part(), mss2=mss2_part())
+               masking=masking_part(), lensing=lensing_part(), mss2=mss2_part(), noise_test=noise_test_part())
     out["tile"] = tile_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"
