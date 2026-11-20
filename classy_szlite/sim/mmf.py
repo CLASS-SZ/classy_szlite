@@ -1,6 +1,7 @@
 """Multi-frequency matched filter on one tile (PLAN §5, mmf.py).
 
-* Covariance from the maps: 6×6 cross-spectra averaged over the in-band
+* Covariance from the maps: n×n cross-spectra (n channels: the six SO
+  channels by default, or a subset, ``filter_static(channels=...)``) averaged over the in-band
   modes of each |k| bin (rfft multiplicities), accumulated in float64. The
   per-bin sums use a static padded layout (no atomics), so the reduction
   order is fixed.
@@ -52,7 +53,7 @@ class FilterStatic(NamedTuple):
     m_binpos: jax.Array     # (n_modes,) int32
     bin_pad: jax.Array      # (n_bins, maxc) int32, position in the mode list or -1
     bin_count: jax.Array    # (n_bins,) float64
-    a: jax.Array            # (n_modes, 6) float64, f_i B_i(|k|)
+    a: jax.Array            # (n_modes, n_ch) float64, f_i B_i(|k|); n_ch channels (6 by default)
     tau_m: jax.Array        # (n_th, n_modes) float64, τ_j on the mode list
     tau_full: jax.Array     # (n_th, N, N/2+1) float32, τ_j on the rfft grid (0 out of band)
     disc_k: jax.Array       # (n_th, N, N/2+1) float32, rfft of the masking disc of scale j (real)
@@ -72,10 +73,16 @@ def disc_kernels(thetas=THETAS15, radius=MASK_RADIUS):
     return out
 
 
-def filter_static(thetas=THETAS15, mask_radius=MASK_RADIUS) -> FilterStatic:
+def filter_static(thetas=THETAS15, mask_radius=MASK_RADIUS, channels=None) -> FilterStatic:
+    """``channels``: indices of the SO channels the filter uses, in the maps' order (default all
+    six). The maps passed to q_cube and masked_cov must then hold exactly these channels."""
     G = grid()
+    n_all = len(ins.SO_LAT["freqs"])
+    ch = list(range(n_all)) if channels is None else [int(c) for c in channels]
+    if not ch or len(set(ch)) != len(ch) or min(ch) < 0 or max(ch) >= n_all:
+        raise ValueError(f"channels must be distinct indices in [0, {n_all}): {channels}")
     f = ins.tsz_f_uK(ins.SO_LAT["freqs"])
-    a = (ins.beams(G.m_L) * f[:, None]).T                              # (n_modes, 6)
+    a = (ins.beams(G.m_L) * f[:, None]).T[:, ch]                       # (n_modes, n_ch)
     T_m = np.stack([profiles.T_interp(G.m_L * t * ARCMIN) for t in thetas])
     tau_m = (np.asarray(thetas)[:, None] * ARCMIN) ** 2 * T_m / G.Om
     tau_full = np.zeros((len(thetas),) + G.L.shape, dtype=np.float32)
@@ -90,18 +97,28 @@ def filter_static(thetas=THETAS15, mask_radius=MASK_RADIUS) -> FilterStatic:
         disc_k=jnp.asarray(disc_kernels(thetas, mask_radius).astype(np.float32)))
 
 
-_PAIRS = [(i, j) for i in range(6) for j in range(i, 6)]
+def _pairs(n):
+    return [(i, j) for i in range(n) for j in range(i, n)]
+
+
+def _n_channels(X, fs: FilterStatic):
+    """The filter's channel count, checked against the maps' (static shapes)."""
+    n = fs.a.shape[1]
+    if X.shape[0] != n:
+        raise ValueError(f"the maps have {X.shape[0]} channels, the filter {n}")
+    return n
 
 
 def binned_cov(Xm, fs: FilterStatic):
-    """Binned 6×6 covariance (float64) from the in-band modes Xm (6, n_modes)."""
+    """Binned n×n covariance (float64) from the in-band modes Xm (n, n_modes)."""
+    n = _n_channels(Xm, fs)
     X = Xm.astype(jnp.complex128)
     W = fs.m_W
     pad = fs.bin_pad
     ok = pad >= 0
     pidx = jnp.where(ok, pad, 0)
-    C = jnp.zeros((pad.shape[0], 6, 6), dtype=jnp.float64)
-    for (i, j) in _PAIRS:
+    C = jnp.zeros((pad.shape[0], n, n), dtype=jnp.float64)
+    for (i, j) in _pairs(n):
         prod = W * (X[i].real * X[j].real + X[i].imag * X[j].imag)   # (n_modes,)
         v = jnp.sum(jnp.where(ok, prod[pidx], 0.0), axis=1) / fs.bin_count
         C = C.at[:, i, j].set(v)
@@ -111,15 +128,16 @@ def binned_cov(Xm, fs: FilterStatic):
 
 
 def weights(C, fs: FilterStatic):
-    """w(k) = C_b⁻¹ a(k) (n_modes, 6) and aᵀC⁻¹a (n_modes,), float64."""
+    """w(k) = C_b⁻¹ a(k) (n_modes, n) and aᵀC⁻¹a (n_modes,), float64."""
+    n = fs.a.shape[1]
     L = jnp.linalg.cholesky(C)
-    eye = jnp.broadcast_to(jnp.eye(6, dtype=C.dtype), C.shape)
+    eye = jnp.broadcast_to(jnp.eye(n, dtype=C.dtype), C.shape)
     Ci = jax.scipy.linalg.cho_solve((L, True), eye)
     Ci = 0.5 * (Ci + jnp.swapaxes(Ci, 1, 2))
     b = fs.m_binpos
     cols = []
-    for i in range(6):
-        wi = sum(Ci[b, i, j] * fs.a[:, j] for j in range(6))
+    for i in range(n):
+        wi = sum(Ci[b, i, j] * fs.a[:, j] for j in range(n))
         cols.append(wi)
     w = jnp.stack(cols, axis=1)
     aCa = jnp.sum(w * fs.a, axis=1)
@@ -129,11 +147,12 @@ def weights(C, fs: FilterStatic):
 def q_cube(X, fs: FilterStatic, C=None, dtype=jnp.float32):
     """S/N cube (n_th, N, N), σ_j (n_th,) and the covariance used.
 
-    ``X``: channel maps (6, N, N/2+1) in rfft units (complex). ``C``: binned
-    covariance; estimated from X if None.
+    ``X``: channel maps (n, N, N/2+1) in rfft units (complex), the filter's channels.
+    ``C``: binned covariance; estimated from X if None.
     """
     G = grid()
-    Xm = X.reshape(6, -1)[:, fs.m_idx]
+    n = _n_channels(X, fs)
+    Xm = X.reshape(n, -1)[:, fs.m_idx]
     if C is None:
         C = binned_cov(Xm, fs)
     w, aCa = weights(C, fs)
@@ -203,17 +222,18 @@ def masked_cov(X, mask, C0, fs: FilterStatic):
     """Binned covariance of the tile outside the mask (szsim's 'whitened'
     estimate, see the module docstring) and the kept fraction f.
 
-    ``X``: channel maps (6, N, N/2+1) in rfft units; ``mask``: (N, N), 1 = kept;
-    ``C0``: the unmasked binned covariance of the same maps (whitening)."""
+    ``X``: channel maps (n, N, N/2+1) in rfft units, the filter's channels; ``mask``: (N, N),
+    1 = kept; ``C0``: the unmasked binned covariance of the same maps (whitening)."""
     G = grid()
+    n = _n_channels(X, fs)
     Wm, Wi = whitening(C0)
-    Xm = X.reshape(6, -1)[:, fs.m_idx]
+    Xm = X.reshape(n, -1)[:, fs.m_idx]
     b = fs.m_binpos
     Wm32 = Wm.astype(jnp.float32)
-    Zm = jnp.stack([sum(Wm32[b, i, j] * Xm[j] for j in range(6)) for i in range(6)])
-    Z = jnp.zeros((6, G.L.size), Zm.dtype).at[:, fs.m_idx].set(Zm).reshape((6,) + G.L.shape)
+    Zm = jnp.stack([sum(Wm32[b, i, j] * Xm[j] for j in range(n)) for i in range(n)])
+    Z = jnp.zeros((n, G.L.size), Zm.dtype).at[:, fs.m_idx].set(Zm).reshape((n,) + G.L.shape)
     z = jnp.fft.irfft2(Z, s=(N, N)) * mask[None]
-    Zk = jnp.fft.rfft2(z).reshape(6, -1)[:, fs.m_idx]
+    Zk = jnp.fft.rfft2(z).reshape(n, -1)[:, fs.m_idx]
     f = jnp.mean(mask.astype(jnp.float64))
     Cw = binned_cov(Zk, fs) / f
     return jnp.einsum("bij,bjk,bkl->bil", Wi, Cw, Wi), f

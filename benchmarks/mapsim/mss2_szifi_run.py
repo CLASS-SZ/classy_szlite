@@ -1,7 +1,10 @@
 """SZiFi itself on the MSS2 comparison maps (``mss2_szifi_maps.py``), in three configurations.
 
     $SZIFI_PY -I -B benchmarks/mapsim/mss2_szifi_run.py [--workers 12] [--configs match,match4,coll]
-                                                         [--tiles ...] [--depths split0,mean]
+                                                         [--tiles ...] [--depths split0,mean] [--root DIR]
+
+--root: the folder of mss2_szifi_maps.py's outputs (maps/, meta.json, instrument.json, taper.npy);
+runs go to ROOT/szifi/runs and ROOT/szifi/stdout. Default: $MAPSIM_OUT/mss2/szifi_compare.
 
 SZiFi (github.com/inigozubeldia/szifi, commit 73626fb; the clone at $SZIFI_DIR) is imported
 unchanged and only called; no SZiFi code is copied (it has no licence). Run it with SZiFi's own
@@ -37,6 +40,12 @@ masking discs of 3 theta_500, inpainting with l_sep 12000, spectra in bins of 72
            'template_eval_type' hankel and 'use_q_tensor_interp' (SZiFi's standard templates);
            fixed mode (a blind search here).
 
+Same-mask references (--mask-from DIR, for maps without clusters): match4_same and coll_same are
+match4 and coll with one pass only (iterative False) and SZiFi's point-source mask set to the
+cluster mask of the same set-up's run on the same map in DIR (DIR/szifi/runs/{cfg}_*.npz). SZiFi
+inpaints and corrects for that mask from its first pass, so that pass's sigma is the masked
+estimate with that mask on maps without the clusters under it.
+
 Recorded per run (``szifi/runs/{cfg}_tile_{tile}_{depth}.npz``): both iterations' catalogues
 (q, y0, theta_500, the scale index, row i and column j from SZiFi's own coordinates), sigma per
 scale (SZiFi's 'maxima_lomem' leaves sigma at the first scale at 0: there it is the median
@@ -64,8 +73,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.environ.get("MAPSIM_OUT", "."), "mss2", "szifi_compare")
 SZIFI = os.environ.get("SZIFI_DIR", "/mnt/ceph/users/bbolliet/szifi")
 SURVEY = os.path.join(HERE, "mss2_szifi_survey.py")
-RUND, STDD = os.path.join(OUT, "szifi", "runs"), os.path.join(OUT, "szifi", "stdout")
-os.environ.setdefault("NUMBA_CACHE_DIR", os.path.join(OUT, "szifi", "numba_cache"))
 if SZIFI not in sys.path:
     sys.path.insert(0, SZIFI)
 
@@ -93,7 +100,10 @@ CONFIGS = {
                  max_radius_mask_arcmin=10.0, inpaint_type="orphics", n_inpaint=-1, zero_oob=False, pretaper=False),
 }
 CONFIGS["match4"] = dict(CONFIGS["match"], channels=CH4)
-COST = {"coll": 10.0, "match": 1.5, "match4": 1.2}          # relative run time, for the order of submission
+CONFIGS["match4_same"] = dict(CONFIGS["match4"], iterative=False, same_mask="match4")
+CONFIGS["coll_same"] = dict(CONFIGS["coll"], iterative=False, same_mask="coll")
+COST = {"coll": 10.0, "match": 1.5, "match4": 1.2, "coll_same": 5.0, "match4_same": 0.6}   # relative run time
+NOT_PARAMS = ("channels", "zero_oob", "pretaper", "same_mask")
 
 FLAGS = dict(zero_oob=False, lrange=None)
 REC = {}
@@ -146,14 +156,18 @@ def install_wrappers():
     mmf.filter_maps.find_clusters = w_find
 
 
-def make_params(cfg):
+def run_dirs(root):
+    return os.path.join(root, "szifi", "runs"), os.path.join(root, "szifi", "stdout")
+
+
+def make_params(cfg, root):
     import szifi
     p = copy.deepcopy(szifi.params_szifi_default)
     p.update(copy.deepcopy(BASE))
     c = CONFIGS[cfg]
-    p.update({k: copy.deepcopy(v) for k, v in c.items() if k not in ("channels", "zero_oob", "pretaper")})
+    p.update({k: copy.deepcopy(v) for k, v in c.items() if k not in NOT_PARAMS})
     p["freqs"] = list(range(len(c["channels"])))             # the survey file passes only these channels
-    p.update(survey_file=SURVEY, path=SZIFI + "/", path_data=os.path.join(OUT, "maps") + "/", path_template=None)
+    p.update(survey_file=SURVEY, path=SZIFI + "/", path_data=os.path.join(root, "maps") + "/", path_template=None)
     return p
 
 
@@ -187,19 +201,24 @@ def cat_arrays(c, thetas):
 
 
 def run_one(job):
-    cfg, ti, depth = job
+    cfg, ti, depth, root, mask_root = job
+    rund, stdd = run_dirs(root)
     import szifi
     install_wrappers()
     rec_reset()
-    meta = json.load(open(os.path.join(OUT, "meta.json")))
+    meta = json.load(open(os.path.join(root, "meta.json")))
     c = CONFIGS[cfg]
-    p = make_params(cfg)
+    p = make_params(cfg, root)
     FLAGS.update(zero_oob=bool(c["zero_oob"]), lrange=list(p["lrange"]))
     fid = f"tile_{ti:03d}_{depth}"
     pdata = {"data_set": "mapsim MSS2 comparison", "field_ids": [fid],
-             "map_files": {fid: os.path.join(OUT, "maps", f"{fid}.npy")}, "channels": list(c["channels"]),
-             "instrument_file": os.path.join(OUT, "instrument.json"), "white": meta["white"][str(ti)][depth],
-             "taper_file": os.path.join(OUT, "taper.npy"), "pretaper": bool(c["pretaper"])}
+             "map_files": {fid: os.path.join(root, "maps", f"{fid}.npy")}, "channels": list(c["channels"]),
+             "instrument_file": os.path.join(root, "instrument.json"), "white": meta["white"][str(ti)][depth],
+             "taper_file": os.path.join(root, "taper.npy"), "pretaper": bool(c["pretaper"])}
+    if c.get("same_mask"):
+        pdata["mask_point_npz"] = os.path.join(mask_root, "szifi", "runs", f"{c['same_mask']}_{fid}.npz")
+        if not os.path.exists(pdata["mask_point_npz"]):
+            raise FileNotFoundError(pdata["mask_point_npz"])
     seed = zlib.crc32(f"{cfg}_{fid}".encode())               # orphics inpainting draws from numpy's global generator
     np.random.seed(seed)
     t0 = time.time()
@@ -210,12 +229,13 @@ def run_one(job):
                                   data_file=data, rank=0)
         cf.find_clusters()
     t_run = time.time() - t0
-    with open(os.path.join(STDD, f"{cfg}_{fid}.txt"), "w") as fh:
+    with open(os.path.join(stdd, f"{cfg}_{fid}.txt"), "w") as fh:
         fh.write(buf.getvalue())
     res = cf.results_dict[fid]
     thetas = np.asarray(p["theta_500_vec_arcmin"], float)
     out = dict(cfg=cfg, tile=ti, depth=depth, thetas=thetas, channels=np.asarray(c["channels"]),
                pretaper=bool(c["pretaper"]), seed=seed, params_json=json.dumps(jsonable(p)), t_run=t_run,
+               mask_point_npz=pdata.get("mask_point_npz", ""),
                peak_rss_gb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1e9 if sys.platform == "darwin" else 1e6))
     n_it = 0
     for it in (0, 1):
@@ -243,7 +263,7 @@ def run_one(job):
     out["rec_t_filter"] = np.asarray(REC["t_filter"], float)
     if REC["mask"] is not None:
         out["mask"] = REC["mask"]
-    np.savez(os.path.join(RUND, f"{cfg}_{fid}.npz"), **out)
+    np.savez(os.path.join(rund, f"{cfg}_{fid}.npz"), **out)
     q1 = out.get("it1_q", np.zeros(0))
     return dict(cfg=cfg, tile=ti, depth=depth, t_run=round(t_run, 1), peak_rss_gb=round(out["peak_rss_gb"], 2),
                 n_it=n_it, n_det_it1=int(q1.size), n_det_it1_q5=int(np.sum(q1 > 5)),
@@ -256,15 +276,21 @@ def main():
     ap.add_argument("--configs", default="coll,match,match4")
     ap.add_argument("--tiles", default="")
     ap.add_argument("--depths", default="", help="default: the depths in meta.json")
+    ap.add_argument("--root", default=OUT, help="the folder of mss2_szifi_maps.py's outputs")
+    ap.add_argument("--mask-from", default="", help="root of the runs whose cluster masks the *_same set-ups use")
     args = ap.parse_args()
-    for d in (RUND, STDD, os.environ["NUMBA_CACHE_DIR"]):
+    root = os.path.abspath(args.root)
+    mask_root = os.path.abspath(args.mask_from) if args.mask_from else ""
+    os.environ.setdefault("NUMBA_CACHE_DIR", os.path.join(root, "szifi", "numba_cache"))   # inherited by the workers
+    for d in run_dirs(root) + (os.environ["NUMBA_CACHE_DIR"],):
         os.makedirs(d, exist_ok=True)
-    meta = json.load(open(os.path.join(OUT, "meta.json")))
+    meta = json.load(open(os.path.join(root, "meta.json")))
     tiles = [int(t) for t in args.tiles.split(",") if t] or meta["tiles"]
     cfgs = [c for c in args.configs.split(",") if c]
     assert all(c in CONFIGS for c in cfgs), cfgs
     depths = [d for d in args.depths.split(",") if d] or meta["depths"]
-    jobs = [(c, t, d) for c in cfgs for t in tiles for d in depths]
+    assert mask_root or not any(CONFIGS[c].get("same_mask") for c in cfgs), "the *_same set-ups need --mask-from"
+    jobs = [(c, t, d, root, mask_root) for c in cfgs for t in tiles for d in depths]
     jobs.sort(key=lambda j: -COST[j[0]])                     # the longest first
     print(f"{len(jobs)} SZiFi runs on {args.workers} workers: configs {cfgs}, tiles {tiles}", flush=True)
     t0 = time.time()
@@ -284,9 +310,11 @@ def main():
             except Exception as exc:
                 print(f"[{time.time() - t0:7.0f} s] FAILED {j}: {exc!r}", flush=True)
                 summ.append(dict(cfg=j[0], tile=j[1], depth=j[2], error=repr(exc)))
-    json.dump(summ, open(os.path.join(OUT, "szifi", "runs_summary.json"), "w"), indent=1)
-    print(f"done in {time.time() - t0:.0f} s; {sum('error' in s for s in summ)} failed", flush=True)
+    json.dump(summ, open(os.path.join(root, "szifi", "runs_summary.json"), "w"), indent=1)
+    n_fail = sum("error" in s for s in summ)
+    print(f"done in {time.time() - t0:.0f} s; {n_fail} of {len(summ)} runs failed", flush=True)
+    return 1 if n_fail else 0                                # any failure stops the batch (comparisons are paired)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
