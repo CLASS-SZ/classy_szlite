@@ -10,6 +10,9 @@ One field per call, params_data:
   white            (6,) the map's white levels in uK-arcmin per square 0.5' pixel, as SZiFi reads the
                    map (SZiFi uses them in orphics inpainting)
   taper_file       taper.npy: our cut-out taper (cosine over the outer 30')
+  mask_point_npz   optional: an npz whose 'mask' (packed bits of the 1200^2 map, 1 = kept) becomes
+                   SZiFi's point-source mask: SZiFi inpaints those holes and corrects the spectra
+                   for them from its first pass on (used to apply another run's cluster mask)
   pretaper         True: the map is tapered here and SZiFi gets ones as mask_map and mask_ps, so it
                    filters the map our finder filters (taper, then the multipole band). False: SZiFi
                    gets the untapered map and the taper as mask_map and mask_ps, as a survey with an
@@ -65,7 +68,11 @@ class input_data_survey:
             ones = np.ones((N_PIX, N_PIX))
             self.data["mask_map"][fid] = ones.copy() if pre else taper.copy()
             self.data["mask_ps"][fid] = ones.copy() if pre else taper.copy()
-            self.data["mask_point"][fid] = ones.copy()
+            if params_data.get("mask_point_npz"):
+                packed = np.load(params_data["mask_point_npz"])["mask"]
+                self.data["mask_point"][fid] = np.unpackbits(packed)[:N_PIX * N_PIX].reshape(N_PIX, N_PIX).astype(np.float64)
+            else:
+                self.data["mask_point"][fid] = ones.copy()
             self.data["mask_tile"][fid] = ones.copy()
             for k in ("mask_select", "mask_select_no_tile", "mask_peak_finding", "mask_peak_finding_no_tile"):
                 self.data[k][fid] = ones.copy()

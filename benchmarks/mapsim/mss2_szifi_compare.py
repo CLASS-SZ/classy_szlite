@@ -1,9 +1,12 @@
 """SZiFi's catalogues against our finder's on the MSS2 comparison maps.
 
-    python benchmarks/mapsim/mss2_szifi_compare.py
+    python benchmarks/mapsim/mss2_szifi_compare.py [--root DIR] [--ours ours] [--configs match,match4,coll]
+                                                   [--tag TAG]
 
-Inputs: ``mss2_szifi_maps.py``'s ours/*.npz and meta.json, ``mss2_szifi_run.py``'s szifi/runs/*.npz.
-Numpy and scipy only (runs in either environment). Writes szifi_compare/summary.txt and summary.json.
+Inputs, in --root (default $MAPSIM_OUT/mss2/szifi_compare): ``mss2_szifi_maps.py``'s meta.json and
+one of our finder's variants, --ours (ours: six channels; ours_ch4: the four high-frequency ones),
+and ``mss2_szifi_run.py``'s szifi/runs/*.npz for the --configs. Numpy and scipy only (runs in either
+environment). Writes ROOT/summary[_TAG].txt and .json.
 
 Conventions:
   * positions in our pixel indices (row iy, column ix). SZiFi reports the pixel half a pixel after
@@ -165,18 +168,18 @@ def offset(ours0, sz0):
 N_GLOBAL = 1200
 
 
-def load():
-    meta = json.load(open(os.path.join(OUT, "meta.json")))
+def load(root, ours_dir):
+    meta = json.load(open(os.path.join(root, "meta.json")))
     global N_GLOBAL
     N_GLOBAL = int(meta["N"])
     g = Grid(meta)
     ours = {}
-    for f in sorted(glob.glob(os.path.join(OUT, "ours", "tile_*.npz"))):
+    for f in sorted(glob.glob(os.path.join(root, ours_dir, "tile_*.npz"))):
         b = os.path.basename(f)[:-4]
         ti, dp = int(b[5:8]), b[9:]
         ours[(ti, dp)] = dict(np.load(f))
     sz = {}
-    for f in sorted(glob.glob(os.path.join(OUT, "szifi", "runs", "*.npz"))):
+    for f in sorted(glob.glob(os.path.join(root, "szifi", "runs", "*.npz"))):
         d = dict(np.load(f, allow_pickle=False))
         sz[(str(d["cfg"]), int(d["tile"]), str(d["depth"]))] = d
     return meta, g, ours, sz
@@ -230,7 +233,17 @@ def stats(x):
 
 
 def main():
-    meta, g, ours, sz = load()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=OUT)
+    ap.add_argument("--ours", default="ours", help="our finder's variant folder in --root")
+    ap.add_argument("--configs", default=",".join(CFGS))
+    ap.add_argument("--tag", default="")
+    args = ap.parse_args()
+    root, cfgs = args.root, [c for c in args.configs.split(",") if c]
+    tag = f"_{args.tag}" if args.tag else ""
+    meta, g, ours, sz = load(root, args.ours)
+    assert ours, f"no catalogues in {os.path.join(root, args.ours)}"
     depths = meta["depths"]
     tiles = meta["tiles"]
     lines, res = [], dict(check={}, depths={})
@@ -244,15 +257,28 @@ def main():
             if not np.array_equal(oc[name]["hist"], o[ref]):
                 bad.append((ti, dp, name, int(oc[name]["hist"].sum()), int(np.asarray(o[ref]).sum())))
     res["check"]["numpy_vs_simulator"] = dict(n_maps=len(ours), mismatches=bad)
-    sc = meta.get("selfcheck", {})
+    info_f = os.path.join(root, args.ours, "info.json")
+    vinfo = json.load(open(info_f)) if os.path.exists(info_f) else {}
+    sc = vinfo.get("selfcheck") or meta.get("selfcheck", {})
+    six = list(vinfo.get("channels", range(6))) == list(range(6))
+    prod_label = "production q" if six else "q rescaled with the six-channel geometry ratio"
     res["check"]["maps_selfcheck"] = sc
     P("SZiFi against our finder on MSS2 cut-outs with the simulator's sky (mss2_szifi_compare.py)")
-    P(f"tiles {tiles}, sky {meta['sky']}; interior > {g.e * g.pix:.0f}' from the edges")
+    P(f"tiles {tiles}, sky {meta['sky']}, clusters {meta.get('clusters', True)}; our finder: {args.ours} "
+      f"(channels {vinfo.get('channels', list(range(6)))}); interior > {g.e * g.pix:.0f}' from the edges")
     nbad = len({(t, dd) for t, dd, *_ in bad})
     P(f"check: numpy merging and confirmation reproduce the simulator's data vectors on {len(ours) - nbad} "
       f"of {len(ours)} maps" + (f"; mismatches {bad}" if bad else ""))
-    P("check: the rebuilt maps give the data-vector pipeline's counts: "
-      + ", ".join(f"{t}/{dp}: {v['inline']}/{v['stored']}" for t, dd in sc.items() for dp, v in dd.items()))
+    if any(v[k] is not None for dd in sc.values() for v in dd.values() for k in ("inline", "stored")):
+        P("check: the rebuilt maps give the data-vector pipeline's counts: "
+          + ", ".join(f"{t}/{dp}: {v['inline']}/{v['stored']}" for t, dd in sc.items() for dp, v in dd.items()))
+    else:
+        P("check against the data-vector pipeline: not applicable to a channel subset (see the six-channel variant)")
+    mv = vinfo.get("maps_vs_root") or {}
+    if mv:
+        same = sum(v["identical"] for dd in mv.values() for v in dd.values())
+        P(f"check: the maps rebuilt for this variant are identical to the stored ones on {same} of "
+          f"{sum(len(dd) for dd in mv.values())}")
 
     for dp in depths:
         R = dict(configs={})
@@ -278,7 +304,7 @@ def main():
         Ro = R["ours"]
         P(f"ours: masked {Ro['f_masked']['mean']:.3f}; kept q>5 {Ro['kept5_raw']} (cut-out q) / {Ro['kept5_prod']} "
           f"(production q); confirmed {Ro['conf5_raw']} / {Ro['conf5_prod']}; data vector {Ro['dv_raw']} / {Ro['dv_prod']}")
-        for cfg in CFGS:
+        for cfg in cfgs:
             rows = [(ti, v, sz.get((cfg, ti, dp))) for ti, v in per_tile.items()]
             rows = [r for r in rows if r[2] is not None]
             if not rows:
@@ -315,7 +341,7 @@ def main():
                 if 0 in sc_:
                     m0a.append(match(oc["raw0"], sc_[0]))
                     m0b.append(match(sc_[0], oc["raw0"]))
-                    if cfg == "match":
+                    if cfg in ("match", "match4"):
                         offs.append(offset(dict(q=o["pk0_q"], iy=o["pk0_iy"], ix=o["pk0_ix"]),
                                            dict(q=d["it0_q"], i=d["it0_i"], j=d["it0_j"])))
                 if True:
@@ -393,7 +419,7 @@ def main():
                   f"{B['matched']}/{B['n']} ({B['frac']:.4f}); q_SZiFi - q_ours {A['dq']['mean']:+.3f} +- {A['dq']['rms']:.3f}; "
                   f"median q_SZiFi/q_ours (q>6) {A['ratio_q6']['median']:.4f}")
             Pp = C["it1_prod_in_szifi"]
-            P(f"  against production q: median q_SZiFi/q_prod (q>6) {Pp['ratio_q6']['median']:.4f}; "
+            P(f"  against {prod_label}: median q_SZiFi/q_prod (q>6) {Pp['ratio_q6']['median']:.4f}; "
               f"q_SZiFi - q_prod {Pp['dq']['mean']:+.3f} +- {Pp['dq']['rms']:.3f}")
             c = C["counts"]
             P(f"  counts: kept q>5 {c['kept5']} (ours {c['kept5_raw']} cut-out q, {c['kept5_prod']} production); "
@@ -409,7 +435,7 @@ def main():
 
     txt = "\n".join(lines)
     print(txt)
-    open(os.path.join(OUT, "summary.txt"), "w").write(txt + "\n")
+    open(os.path.join(root, f"summary{tag}.txt"), "w").write(txt + "\n")
 
     def clean(v):
         if isinstance(v, dict):
@@ -423,7 +449,7 @@ def main():
         if isinstance(v, np.ndarray):
             return clean(v.tolist())
         return v
-    json.dump(clean(res), open(os.path.join(OUT, "summary.json"), "w"), indent=1)
+    json.dump(clean(res), open(os.path.join(root, f"summary{tag}.json"), "w"), indent=1)
     return 0 if not bad else 1
 
 
