@@ -988,3 +988,85 @@ tile, with errors from the tile scatter.
     estimate after masking is right;
   - ask the colleagues how their survey file treats the apodisation in the
     noise estimate.
+
+## 2026-11-20: SZiFi follow-up: four channels, and the noise without clusters
+
+Job 7513596 (genx, rome node worker5047 as job 7512667), snapshot fff0358
+(`szifi_compare2.sh`), 34 min. Same 8 tiles, two depths, sky 0.
+
+- **Our filter on channel subsets.** `mmf.filter_static(channels=...)`.
+  - The 13 new tests pass (`tests/test_sim_channels.py`).
+  - Six-channel outputs after the change equal the earlier snapshot's
+    (191b466, run in the same job) bit for bit on 16 of 16 maps, and the first
+    job's too.
+- **Four channels against six, our finder.** The data vectors agree to ±2 per
+  tile, and every noise ratio below to 0.001: the 27 and 39 GHz channels
+  hardly matter for the counts.
+- **Our finder with four channels against SZiFi set like ours** (same
+  channels; ratios SZiFi over ours, by tile pairs):
+
+  | | one split | mean of four splits |
+  |---|---|---|
+  | before masking: matched both ways | 100% / 100% | 100% / 100% |
+  | median q ratio (q > 6); Δq | 0.9987; −0.01 ± 0.18 | 0.9990; −0.02 ± 0.23 |
+  | after masking: median q ratio | 0.990 | 0.962 |
+  | data vector ratio | 0.982 ± 0.018 | 0.937 ± 0.014 |
+
+  - The gap after masking is the same as with our six channels, so it comes
+    from the masking step, not from the channels.
+  - SZiFi's positions are +0.50 pixel from ours in both axes (510 and 1,245
+    pairs).
+- **Noise after masking against the noise without clusters**
+  (`mss2_szifi_noise.py`; nosky maps are the same MSS2 noise and CMB without
+  the tSZ). Ranges are over 0.5′–15′; q is too low by r_after.
+
+  | mean of four splits | r_before | r_after | r_same | residual |
+  |---|---|---|---|---|
+  | our finder (6 or 4 channels) | 1.20–1.30 | 1.04–1.07 | 0.982–0.984 | 1.05–1.09 |
+  | SZiFi set like ours | 1.21–1.30 | 1.08–1.15 | 0.98–1.06 | 1.09–1.12 |
+  | SZiFi, colleagues' settings | 1.22–1.33 | 1.09–1.14 | 1.01–1.06 | 1.08–1.09 |
+
+  | one split | r_before | r_after | r_same | residual |
+  |---|---|---|---|---|
+  | our finder | 1.08–1.12 | 1.01–1.03 | 0.985–0.986 | 1.03–1.04 |
+  | SZiFi set like ours | 1.08–1.12 | 1.02–1.06 | 0.98–1.02 | 1.04–1.05 |
+  | SZiFi, colleagues' settings | 1.09–1.13 | 1.03–1.05 | 1.00–1.02 | 1.03–1.04 |
+
+  The ratios:
+  - **r_before:** first pass, maps with clusters, over maps without.
+  - **r_after:** final noise over the noise without clusters.
+  - **r_same:** the masked estimator on the maps without clusters, with the
+    mask it used on the maps with clusters: its own response to that mask.
+  - **residual:** r_after / r_same, the cluster signal left in the noise
+    estimate after masking.
+
+  Findings:
+  - **Our masking step comes closer to the noise without clusters** at every
+    scale and depth.
+    - At goal depth, SZiFi set like ours leaves about 1.5× as much cluster
+      signal (residual 1.09–1.12 against 1.05–1.09), although it masks more
+      (26% against 19%).
+    - Its estimator also adds up to +6% at the largest scales by itself
+      (r_same 1.06 at 15′).
+    - This is why it counts 6% fewer clusters.
+    - A likely cause: after inpainting, SZiFi blends the original map back into
+      each disc with a cosine weight, so part of each masked cluster stays in
+      the spectra.
+  - **Our estimator's own response is flat,** 0.983–0.986 in σ.
+    - Most of it (0.988 at the mean depth, 0.992 at one split) is the taper
+      factor sqrt(k), k = mean(M T²)/(mean(M) mean(T²)): the discs sit where
+      the taper is 1, but the estimate divides by the plain kept fraction.
+    - The rest (about 0.995) is the whitened estimator's known small bias
+      (0.992–0.996 on periodic tiles).
+    - k ranges over 0.96–0.98 by tile at the mean depth. The real-data taper
+      correction must be calibrated with clusters for this reason too.
+  - **One masking iteration leaves 5–9% of σ from unmasked clusters at goal
+    depth** in our finder (3–4% at one split), as the earlier project found on
+    periodic tiles. This is part of the forward model: the same finder runs on
+    data and simulations.
+  - **The colleagues' q.** Their masking step leaves about as much cluster
+    signal as ours. Their q differs from our production q mainly by the taper,
+    which they do not correct: +6.5–8.8% (median, q > 6), and +13–24% in the
+    counts above q = 5 on these maps.
+- **Next:** the colleagues' q scale (ask how their survey file treats the
+  apodisation), then back to inference.
