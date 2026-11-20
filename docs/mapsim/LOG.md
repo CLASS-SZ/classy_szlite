@@ -861,3 +861,37 @@ The peak buffer with masking:
     spectra.
 - **Next:** the GPU step (M6b). It needs a per-tile noise option in
   `spike.py`, then one short RTX job.
+
+## 2026-11-20: the noise generator on the GPU (M6b)
+
+Job 7510857: one RTX PRO 6000 Blackwell, snapshot 09ec5fb
+(`benchmarks/mapsim/noise_gpu.sh`), 19 minutes.
+
+- **Noise tests on the GPU:** 12 of 12 pass, including the two full-tile tests
+  (deterministic ops).
+- **GPU against CPU**, 4 tiles, each with its own MSS2 spectrum and depths 1.0,
+  1.3, 0.8 and 1.0:
+  - data vectors, peaks, kept and confirmed clusters identical on 4 of 4 tiles;
+  - halos identical on 3 of 4. Tile 0 has 73,830 against 73,829: the known
+    last-bit difference of the Poisson sampler for λ ≥ 10, which changes only
+    that cell's halos (`halos.sample_halos`);
+  - σ within 8×10⁻⁷.
+- **Batch invariance** with deterministic ops, batch sizes 1, 4 and 16 over 16
+  tiles, each with its own spectrum and depth: every integer output identical;
+  σ within 9×10⁻⁹.
+- **Speed and memory** at batch 16 (whole tile):
+
+  | | per tile | noise stage | peak memory |
+  |---|---|---|---|
+  | 2019 forecast noise | 9.34 ms | 0.62 ms | 9.18 GiB |
+  | MSS2 noise | 9.17 ms | 0.50 ms | 9.20 GiB |
+
+  - The MSS2 noise costs no extra time or memory. Compiling its noise stage
+    takes 7 s instead of 0.8 s, once per process.
+  - The whole tile takes 9.2–9.3 ms, against 6.8 ms in the M0 spike, because
+    the finder now includes the masking pass (4.5 ms).
+- **Peak buffer** at the deepest MSS2 tile (lowest 150 GHz white level), depth 1:
+  - at most 494 peaks at the fiducial point, and 1,976 at the adopted box's
+    heaviest corner, of a buffer of 3,072 (64%); no overflow;
+  - a depth below 1 (deeper than the four-split mean) at that corner would
+    need a new check.
