@@ -6,9 +6,13 @@
 
 Outputs go to $MAPSIM_OUT/mss2/finder_test (finder_test_qmask<Q> with --q-mask). On the
 2026-11-19 run the four parts ran side by side, each pinned to four of the job's CPUs.
---q-mask 4.3 masks on these tapered cut-outs what 4 masks on the simulator's periodic tiles
-(see the geometry run); the summary converts counts to the periodic tiles' q scale in
-diagnostics_data.py.
+--q-mask sets the masking threshold on the cut-outs. The masking pass thresholds the first-pass
+q, whose cut-out/periodic ratio is 1.042-1.066 (the final pass's is 1.055-1.077), so for noise
+alone about 4.2 matches 4 on periodic tiles, and 4.3 masks less (0.063 of the tile against
+0.094-0.102). The 2026-11-19 run at 4.3 is therefore lighter than production for noise alone.
+With a full cluster sky, 4.3 brings the masked fraction back near the calibration point
+(mss2_datavector_test.py checks this against periodic tiles). diagnostics_data.py converts the
+counts to the periodic tiles' q scale.
 
 Input: the MSS2 tiles cut by ``mss2_tiles.py`` ($MAPSIM_OUT/mss2/tiles): raw MSS2 noise
 (4 splits, native CAR pixels, Stokes I) with a 120' margin, 20 mnms "fdw" simulations at
@@ -719,8 +723,8 @@ def main():
     ap.add_argument("--summary", action="store_true", help="merge the parts' outputs and print the summary")
     ap.add_argument("--geometry", action="store_true", help="run the cut-out vs periodic comparison instead")
     ap.add_argument("--q-mask", type=float, default=float(mmf.Q_MASK),
-                    help="masking threshold on the finder's q (4.3 on these tapered cut-outs masks what 4 masks on "
-                         "the simulator's periodic tiles, whose q scale is 1.054-1.077 times lower)")
+                    help="masking threshold on the finder's q (on these tapered cut-outs about 4.2 matches 4 on "
+                         "periodic tiles for noise alone; see the docstring)")
     args = ap.parse_args()
     odir = os.path.join(OUT, "finder_test" if args.q_mask == mmf.Q_MASK else f"finder_test_qmask{args.q_mask:g}")
     os.makedirs(odir, exist_ok=True)

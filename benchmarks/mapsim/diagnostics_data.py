@@ -292,8 +292,9 @@ def noise_test_part(streak_tile=79, streak_split=1):
                        q_min=4.5, n_peaks=len(pk),
                        n_peaks_by_split=[sum(1 for p in tr["split"]["raw"]["peaks"][i] if qtrue(p) > 4.5) for i in range(4)])
     s["nongauss"] = ng
-    # on the simulator's q scale: the geometry run gives sigma_periodic / sigma_cut per scale (rs); the
-    # run with the masking threshold at 4.3 (finder_test_qmask4.3) masks what 4 masks on periodic tiles
+    # on the simulator's q scale: the geometry run gives sigma_periodic / sigma_cut per scale (rs). The
+    # run with the masking threshold at 4.3 (finder_test_qmask4.3) masks less than 4 does on periodic
+    # tiles (about 4.2 would match, from the first-pass ratio), and the run at 4 masks more
     v3 = []
     for f in sorted(glob.glob(f"{OUT}/mss2/finder_test_qmask4.3/part_*_of_*.json")):
         v3 += json.load(open(f))
@@ -304,8 +305,8 @@ def noise_test_part(streak_tile=79, streak_split=1):
     trueq = dict(source="q_mask 4.3" if run is v3 else "q_mask 4", n_tiles=len(run), thresholds=list(thr), depth={})
     for depth in ("split", "coadd"):
         # thresholds on the cut-outs that give the isotropic Gaussian noise the counts measured for
-        # the same noise on periodic tiles (the per-scale sigma ratio alone, measured with the other
-        # masking threshold, leaves the converted counts ~15% low)
+        # the same noise on periodic tiles (the per-scale sigma ratio alone, measured at q_mask 4,
+        # leaves q 0.8-0.9% too low at q_mask 4.3, which is ~15% in the steep noise-peak counts)
         target = np.mean([np.mean(t[depth]["iso_per"]["counts"], 0)[:3] for t in geo], 0)
         iso_q = [[np.array([p[3] / rs[depth][p[2]] for p in m]) for m in t[depth]["iso"]["peaks"]] for t in run]
         count = lambda x: np.mean([np.mean([np.sum(q > x) for q in maps]) for maps in iso_q])
