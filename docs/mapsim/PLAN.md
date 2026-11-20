@@ -311,7 +311,7 @@ Data:
   - the selected sample's mean p̄ within 0.5%.
   - Second check: the finder's first-pass noise level per tile within 0.3% of MSS2's.
   - Tag the finder version used: the planned masking follow-ups (M5) move these numbers, so the test is rerun after any finder change.
-- **GPU:** one short RTX job: the noise tests on the GPU; GPU against CPU on one tile; `spike.py`'s run and invariance commands with a per-tile noise option (batch sizes 1, 4 and 16, deterministic ops, integer outputs identical); timing and peak memory of the noise path against the forecast path; the peak buffer at the deepest tile.
+- **GPU:** one short RTX job: the noise tests on the GPU; GPU against CPU on one tile; `spike.py`'s run and invariance commands with a per-tile noise option (batch sizes 1, 4 and 16, deterministic ops, integer outputs identical); timing and peak memory of the noise path against the forecast path; the peak buffer at the deepest tile. *Done 2026-11-20* (job 7510857, `LOG.md`): all passed; the MSS2 noise costs no extra time or memory; the peak buffer is 64% full at the heaviest corner.
   - Then the GPU generator must reproduce the numpy periodic kind's counts on the 32 tiles. For that comparison it must be fed the same spectra as that kind (`ft.iso_spectra` on the cut-outs, square-pixel multipoles, bins of 2 × 2π / (1680 × 0.5′)), not `spectra.npz`, whose true-sky multipoles, pixel areas and tile levels differ; `spectra.npz` is for production.
 - **Decisions pending:** year 1 and the streaks (§3.5).
 
