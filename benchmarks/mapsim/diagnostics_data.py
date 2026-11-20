@@ -355,6 +355,19 @@ def datavector_part():
     return s
 
 
+def szifi_part():
+    """Our finder against SZiFi on the MSS2 comparison maps: mss2_szifi_compare.py's summary.json,
+    and the follow-up's summary_ch4.json (our finder with the four high-frequency channels) and
+    noise_summary.json (noise after masking against the maps without clusters) when present."""
+    base = f"{OUT}/mss2/szifi_compare"
+    meta = json.load(open(f"{base}/meta.json"))
+    out = dict(thetas=meta["thetas"], tiles=meta["tiles"], summary=json.load(open(f"{base}/summary.json")))
+    for name, fn in (("ch4", "summary_ch4.json"), ("noise", "noise_summary.json")):
+        if os.path.exists(f"{base}/{fn}"):
+            out[name] = json.load(open(f"{base}/{fn}"))
+    return out
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -466,6 +479,8 @@ def main():
                masking=masking_part(), lensing=lensing_part(), mss2=mss2_part(), noise_test=noise_test_part(),
                datavector=datavector_part())
     out["tile"] = tile_part()
+    if os.path.exists(f"{OUT}/mss2/szifi_compare/summary.json"):
+        out["szifi"] = szifi_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"
     with open(path, "w") as fh:
