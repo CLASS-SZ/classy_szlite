@@ -6,6 +6,11 @@ Branch `mapsim` of classy_szlite. Plan v2, 2026-11-18, revised twice:
 
 All are fixed below.
 
+Updated 2026-11-20 (v2.1) after the tests with SO's MSS2 noise simulation (`LOG.md`, 2026-11-19 and 2026-11-20) and a readiness audit:
+- realistic noise is a new milestone, M6b, with the design decided on 2026-11-20 (§3.5);
+- the geometry for real data is decided: simulate the data pipeline's tapered cut-outs (§3.5, M9);
+- inference does not wait for the noise generator: M7 and the library choice start now.
+
 ## 1. Goal and headline tests
 
 We extend the simulation-based inference (SBI) of cluster counts in Zubeldia, Bolliet, Challinor & Handley (2025, arXiv:2504.10230) from a catalogue-level simulator to a map-level one. For each parameter draw:
@@ -40,6 +45,7 @@ Headline tests, each on map-level mock data at a known cosmology:
   - SZiFi, cosmocnc_jax and JXPaint are reference code: we read them, rewrite, and benchmark against them, never copy. SZiFi and JXPaint have no licence. cosmocnc_jax declares MIT in its `pyproject.toml` but ships no LICENSE file, so we treat it as unlicensed until its authors confirm.
   - classy_szlite (MIT) is the base, and the simulator lives in it.
 - **Simple problem first:** flat periodic 10° × 10° tiles (1200² pixels of 0.5′), Poisson halos, uniform depth, SO goal, the six LAT channels, lensed CMB, white and atmospheric noise, and no foregrounds. Full-sky HEALPix, clustering, masks and foregrounds come later.
+  - The noise is moving to per-tile noise calibrated on MSS2 (§3.5, M6b). The 2019 forecast model (white plus atmospheric, correlated within a tube) stays as an option.
 - **Every component has two independent checks where possible,** each with a stated tolerance and reference. Code tests (identical inputs, round-off tolerances) are kept separate from physics comparisons (different inputs, documented, no pass/fail).
 - **Flatiron's rules** (`/etc/claude-code/CLAUDE.md` on rusty):
   - every Slurm submission needs the user's explicit approval;
@@ -154,6 +160,23 @@ The finder's template τ_θ(ℓ) is the exact Fourier transform of the same trun
   - With the mean p, that makes 21 numbers.
 - **Legacy credit rule:** the filter-response attribution of steps 3a/3b is kept only to reproduce step-3b numbers (M6).
 
+### 3.5 Noise and geometry (decided 2026-11-20)
+
+What the MSS2 tests showed (details and numbers in `LOG.md`, 2026-11-19 and 2026-11-20):
+- MSS2's coadd has SO's five-year baseline white levels. In the finder's noise, the plain mean of its four splits is about our goal depth, and one split is about 1.35× baseline, somewhat deeper than a year-1 rescaling.
+- With the simulator's own sky in MSS2 noise and in model noise (paired, 32 tiles × 16 skies):
+  - at four-split depth, Gaussian noise with each tile's own spectra reproduces MSS2's data vector to 0.1–0.3% (40%-sky Poisson error 0.45%);
+  - at one-split depth, MSS2 gives about 1% more detections, mostly at q = 5–8.4, because the masking pass removes more of its streaks (single noisy observations) and so lowers its noise estimate by 0.27%. Gaussian models give 1.0–1.2% fewer detections, and mnms, fitted to MSS2 itself, 0.8% fewer.
+- Within-tile depth variation and 2D anisotropy changed the counts by less than 0.2%. A generator from band-averaged spectra times the depth map gave −0.9% ± 0.65%: the depth map sets each tile's noise level only roughly.
+- Tapered cut-outs, which is how real data come, give q 5–8% above periodic tiles. A conversion calibrated on noise alone is 0.5–0.8% off in counts once clusters are in the map.
+- The tests treated MSS2's equal-angle pixels (RA pixels cos δ narrower) as square. Ratios between noise models are unaffected, but the spectra must be re-measured in true sky multipoles before the simulator uses them: as measured, they would add up to 10% noise at dec −35° and stretch multipoles along RA.
+
+Decisions:
+- **What the generator draws:** each tile's own stationary, isotropic Gaussian noise, with binned 6 × 6 auto and cross spectra in true sky multipoles and true pixel area. They come from MSS2 now and from the data's split differences later. No depth map and no 2D spectra in v1. The 27 and 39 GHz bands get a noise floor above ℓ ≈ 5400, where their 2′ maps are empty.
+- **Depth:** the four-split mean of MSS2 for the next runs (the depth at which Gaussian noise passes), with depth as one scale per tile, so year 1 is a one-number change. Year 1 and the streaks are decided after the colleague's answer on how their year-1 maps were made and after an accuracy calculation: what the one-split residual does to σ8 and Ω_m with A_SZ, α_SZ and σ_lnq free. No streak model before that. Year 1 would also need a year-1 lensing noise curve and a wider prior box (one split gives 0.41× the detections).
+- **Tiles and sky positions:** a per-tile table (tile id, spectrum index; later depth scale, taper and mask) passed beside the shared static arrays. That table is also the start of the multi-tile driver M8 needs.
+- **Geometry for real data:** simulate what the data pipeline does (the same taper, overlapping tiles, only each tile's interior counted), and reproject the data to square-pixel tiles, rather than correcting the data's q. It costs about 1.6× the GPU time (§7). It is built at the real-data stage (M9), but the noise draw is written for any grid size now.
+
 ## 4. Modes
 
 - **production:** §3.2–3.4.
@@ -173,6 +196,8 @@ classy_szlite/sz_scaling.py     y0–M, theta500–M (production and legacy mode
 classy_szlite/profiles.py       A10 eq.12 projected profile (3D truncation, unit centre), Hankel tables
 classy_szlite/sim/flatsky.py    tile geometry, l grids, FFT normalisation, Hermitian Gaussian modes, beams
 classy_szlite/sim/instrument.py SO LAT channels: beams, white + atmospheric noise (tube correlations), tSZ SED
+classy_szlite/sim/noise.py      per-tile noise calibrated on MSS2 (M6b): binned 6x6 spectra in true sky multipoles,
+                                correlated Gaussian draws on any grid size, the per-tile table
 classy_szlite/sim/halos.py      lambda(z, ln M) cells per tile, Poisson draws into capacity-class buffers + overflow flags
 classy_szlite/sim/paint.py      band-limited painter (lax.scan over halo blocks into one donated 2400^2 buffer;
                                 int32 indices, mode='drop'; separate path for theta500 > ~10')
@@ -270,6 +295,23 @@ Data:
   - Route (b), later: port the virtual-cluster kernel machinery in legacy mode, and match the SO goal deficit of −2.10% within ~0.25%.
 - Measured time and memory per stage and per tile, on A100, H100 and RTX Blackwell.
 
+**M6b. Realistic noise calibrated on MSS2** (§3.5). Data on rusty: `/mnt/ceph/users/bbolliet/mapsim/mss2` (raw MSS2, 32 stored tiles of 107 candidates, test outputs). Prototype and test: `benchmarks/mapsim/mss2_finder_test.py` (`iso_spectra`, `iso_from_spectra`, `true_ell`) and `mss2_datavector_test.py`.
+- **Spectra:** re-measure every candidate tile's binned 6 × 6 spectra in true sky multipoles and true pixel area, for the four-split mean and each split, with the 27/39 GHz floor; store spectra only (a few MB). One CPU job. *Check:* a synthetic isotropic field sampled onto the maps' pixels is recovered to 1% per bin.
+- **Code tests** (identical inputs, round-off tolerances):
+  - the GPU draw equals the numpy reference draw, from the same random numbers, to float32 round-off;
+  - drawn auto and cross spectra match the input, |Δ| < 3 SE per bin, also for today's tube-correlated 2019 noise, which has never been tested this way;
+  - bitwise batch invariance with different tiles in a batch;
+  - halos and CMB unchanged when the noise model changes (the keys are split per component).
+- **Validation** (`mss2_datavector_test.py`, the generator as one more noise kind, paired with MSS2 on the same skies, 32 tiles × 16 skies), at four-split depth:
+  - total counts within 0.3% of MSS2, with an error of at most 0.2%;
+  - each q bin within one 40%-sky Poisson error;
+  - the 20-bin Δχ² over 40% of the sky, after removing its noise part, at most 3;
+  - the selected sample's mean p̄ within 0.5%.
+  - Second check: the finder's first-pass noise level per tile within 0.3% of MSS2's.
+  - Tag the finder version used: the planned masking follow-ups (M5) move these numbers, so the test is rerun after any finder change.
+- **GPU:** one short RTX job for GPU against CPU, timing, and the peak buffer at the deepest tile; then the GPU generator fed the measured spectra must reproduce the numpy periodic kind's counts on the 32 tiles.
+- **Decisions pending:** year 1 and the streaks (§3.5).
+
 **M7. Catalogue-level baselines.**
 - Rewrite the paper's SO-like simulator.
   - Code tests against cosmocnc_jax with identical inputs, injecting `hmf_matrix`: counts to 5e-4.
@@ -278,7 +320,7 @@ Data:
   - The empirical correlation of the ln q and ln p residuals equals the pinned value.
 - Variants: (i) the paper's (analytic σ_y0, dof = 0); (ii) finder-calibrated (σ_finder = r̄(θ)σ_y0 and the control's isolated-cluster kernel).
 
-**M8. SBI and T1–T4,** first on 10% of the sky.
+**M8. SBI and T1–T4,** first on 10% of the sky. The map-level runs use the M6b noise; the library choice and the catalogue-level parts start before M6b ends.
 - Neural posterior estimation as in the paper: sbi, a MAF, 21 numbers.
 - Coverage tests.
 - The control simulator (`sim/control.py`) for T3, and the legacy generator for T4.
@@ -287,12 +329,15 @@ Data:
 **M9. Scale-up.**
 - 40% of the sky, 10⁴ simulations, capacity classes, one worker per GPU (disBatch or a job array).
 - Then the full-sky version: HEALPix painting, tiling with buffers and cores, clustering, masks and foregrounds.
+- Real-data geometry (§3.5): tapered cut-outs with overlaps, only interiors counted, data reprojected to square-pixel tiles; the finder learns to take a pixel mask (it takes none today); spectra for the rest of the footprint (dec −63° to −40° and +10° to +25°, the RA 350°–10° strip, partial tiles).
 
 ## 7. Budget
 
 Set by the M0 spike (`M0_LOG.md`, 2026-11-18).
 - **Per tile, fiducial halo load, one finder pass:** 6.8 ms on an RTX PRO 6000 Blackwell and 14.4 ms on an A100 (batch 16, 8 GiB). Painting is ~70% of that; the FFTs of the maps and the filter take ~2 ms.
 - **10⁴ simulations × 165 tiles:** 3.1 RTX GPU-hours at the fiducial load. That rises to ~4.6 GPU-hours with the prior-averaged halo load (×1.05 over the wide box, from 0.42× to 1.94× of the fiducial; ×1.17 over the paper's prior) and the masking pass (×~1.4, M5; on the CPU the finder takes 2.5× longer with it, and the finder is ~2 ms of the 6.8 ms on the GPU, to be measured). Coverage mocks, the 10%-sky runs and compile time (~35 s per program per job) add less than that again.
+
+- **Realistic noise (M6b):** a few extra FFTs per tile next to the 0.6 ms map stage, and per-tile spectra of a few MB. **Simulating tapered cut-outs (M9):** about 1.6× the GPU time, so roughly 7–8 RTX GPU-hours per 10⁴ simulations of 40% of the sky instead of 4.6.
 
 CPU fallback and cross-check: our szsim pipeline needs ~3,000–6,600 CPU-hours for 10⁴ simulations; SZiFi would need ~50,000. The GPU total must also count the coverage mocks, the 10%-sky runs, compile time, development jobs and capacity padding.
 
@@ -317,6 +362,8 @@ Environment and data:
 ## 9. Open questions for the user
 
 1. **Confirmation rule:** keep (M_conf, r_conf) = (5e13 M_sun, 1.5′), and drop unconfirmed detections?
-2. **CMB lensing in v1:** keep it at catalogue level as specified, or drop it?
-3. **NPE library:** `sbi` (PyTorch, as in the paper) first, or a JAX-native flow?
+2. **CMB lensing in v1:** settled 2026-11-18: kept, as the data vector's 21st number (`LOG.md`, "stacked CMB lensing").
+3. **NPE library:** `sbi` (PyTorch, as in the paper) first, or a JAX-native flow? Now due: M7 and M8 start in parallel with M6b.
 4. **Catalogue baseline:** dof = 0 as in the paper's SO-like setup, or also a calibrated dof (k = 2 came closest in step 3b)?
+5. **Target depth:** year 1 or five years? Waiting for the colleague's answer on their year-1 maps and for the accuracy calculation (§3.5).
+6. **MSS2's streaks:** model them in the generator, apply a calibrated q shift, or neither? Decided with question 5.
