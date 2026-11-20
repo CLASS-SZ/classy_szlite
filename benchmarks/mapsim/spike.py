@@ -20,7 +20,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 from classy_szlite.sim import halos as hl, paint as pt, mmf, simulator as simu  # noqa: E402
-from classy_szlite.sim import instrument as ins, summaries as sm  # noqa: E402
+from classy_szlite.sim import instrument as ins, summaries as sm, noise as nz  # noqa: E402
 from classy_szlite.sim.flatsky import grid  # noqa: E402
 
 OUT = os.path.join(os.environ.get("MAPSIM_OUT", "."), "m0")
@@ -138,26 +138,59 @@ def tile_keys(B, sim_index=0, base=20261118):
     return jax.vmap(lambda i: jax.random.fold_in(k, i))(jnp.arange(B, dtype=jnp.uint32))
 
 
+def theta_of(name):
+    """The fiducial point, or the adopted prior box's heaviest corner (prior_corners.py)."""
+    if name == "fid":
+        return simu.THETA_FID
+    pc = json.load(open(os.path.join(os.environ.get("MAPSIM_OUT", "."), "priors", "prior_corners.json")))
+    return simu.THETA_FID._replace(**pc["boxes"]["wide"]["heaviest"]["theta"])
+
+
+def noise_for(args, B):
+    """None for the 2019 forecast noise; for --noise mss2 a NoiseInput with one spectrum per tile
+    (tile i takes spectrum i mod n, or all tiles the deepest one: the lowest 150 GHz white level)
+    and depth 1, or depths cycling 1.0, 1.3, 0.8 with --mixed-depth."""
+    if args.noise == "forecast":
+        return None
+    nt, info = nz.load_mss2(args.spectra, args.noise_set)
+    if args.deepest:
+        spec = np.full(B, int(np.argmin(np.asarray(info["white"])[:, info["bands"].index("f150")])))
+    else:
+        spec = np.arange(B) % nt.F.shape[0]
+    depth = np.array([1.0, 1.3, 0.8])[np.arange(B) % 3] if args.mixed_depth else np.ones(B)
+    log(f"noise: MSS2 '{args.noise_set}', spectra {spec[:8].tolist()}{'...' if B > 8 else ''}, depths {depth[:6].tolist()}")
+    return nz.noise_input(nt, spec, depth)
+
+
+def per_tile(ni, B):
+    """Per-tile spectrum indices and depths (dummies for the forecast noise)."""
+    if ni is None:
+        return jnp.zeros(B, jnp.int32), jnp.ones(B, jnp.float32)
+    return ni.spec, ni.depth
+
+
+def noise_arg(ni, s, d):
+    return None if ni is None else nz.NoiseInput(ni.tables, s, d)
+
+
 def cmd_invariance(args):
     """Same tile keys at several batch sizes: integer outputs must be identical
     (run with XLA_FLAGS=--xla_gpu_deterministic_ops=true on GPUs)."""
-    theta = simu.THETA_FID
+    theta = theta_of(args.theta)
     cells, tb, cs, cfg, st, info = setup(theta)
-
-    def s_finder(X):
-        # first pass plus the masking iteration (cfg.n_iter), up to the final peaks
-        return simu.find_clusters(X, st.fs, cfg)[0].count
-
-    def tile(key):
-        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
-    f = jax.jit(jax.vmap(tile))
     Bmax = max(args.batch)
+    ni = noise_for(args, Bmax)
+    specs, depths = per_tile(ni, Bmax)
+
+    def tile(key, s, d):
+        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg, noise_arg(ni, s, d))
+    f = jax.jit(jax.vmap(tile))
     outs = {}
     for B in args.batch:
         o = {}
         for a in range(0, Bmax, B):                  # cover tiles 0..Bmax-1 in chunks of B
             keys = tile_keys(Bmax)[a:a + B]
-            r = jax.device_get(f(keys))
+            r = jax.device_get(f(keys, specs[a:a + B], depths[a:a + B]))
             for k in ("counts", "n_halos", "n_peaks", "n_kept", "n_conf", "overflow", "sigma"):
                 o.setdefault(k, []).append(np.asarray(r[k]))
         outs[B] = {k: np.concatenate(v) for k, v in o.items()}
@@ -175,7 +208,7 @@ def cmd_invariance(args):
 
 
 def cmd_run(args):
-    theta = simu.THETA_FID
+    theta = theta_of(args.theta)
     t0 = time.time()
     cells, tb, cs, cfg, st, info = setup(theta)
     log(f"setup {time.time() - t0:.1f} s; backend {jax.default_backend()}, devices {jax.devices()}")
@@ -190,8 +223,10 @@ def cmd_run(args):
     def s_paint(h):
         return pt.paint_y(h, tabs, cfg.paint, st.T_tab)
 
-    def s_maps(key, yk):
-        return simu.channel_maps(key, yk, st)
+    ni_all = noise_for(args, max(args.batch))
+
+    def s_maps(key, yk, s, d):
+        return simu.channel_maps(key, yk, st, noise_arg(ni_all, s, d))
 
     def s_filter(X):
         q, sig, _ = mmf.q_cube(X, st.fs)
@@ -207,13 +242,14 @@ def cmd_run(args):
         # first pass plus the masking iteration (cfg.n_iter), up to the final peaks
         return simu.find_clusters(X, st.fs, cfg)[0].count
 
-    def tile(key):
-        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg)
+    def tile(key, s, d):
+        return simu.simulate_tile(key, cs, theta, st, tb, cells, cfg, noise_arg(ni_all, s, d))
 
     res = dict(info=info, backend=jax.default_backend(), device=str(jax.devices()[0]),
-               xla_flags=os.environ.get("XLA_FLAGS", ""), runs=[])
+               xla_flags=os.environ.get("XLA_FLAGS", ""), noise=args.noise, theta=args.theta, runs=[])
     for B in args.batch:
         keys = tile_keys(B)
+        specs, depths = (a[:B] for a in per_tile(ni_all, max(args.batch)))
         stages = dict(
             halos=jax.jit(jax.vmap(s_halos)),
             paint=jax.jit(jax.vmap(s_paint)),
@@ -241,11 +277,11 @@ def cmd_run(args):
 
         h = timed("halos", stages["halos"], keys)
         yk, ovf = timed("paint", stages["paint"], h)
-        X = timed("maps", stages["maps"], keys, yk)
+        X = timed("maps", stages["maps"], keys, yk, specs, depths)
         q, sig = timed("filter", stages["filter"], X)
         counts, npk = timed("peaks", stages["peaks"], q, h)
         timed("finder", stages["finder"], X)
-        out = timed("full", stages["full"], keys)
+        out = timed("full", stages["full"], keys, specs, depths)
         res["runs"].append(dict(batch=B, timings=timings,
                                 n_halos=np.asarray(out["n_halos"]).tolist(),
                                 n_peaks=np.asarray(out["n_peaks"]).tolist(),
@@ -258,7 +294,7 @@ def cmd_run(args):
         if args.trace and B == args.batch[-1]:
             tdir = os.path.join(OUT, f"trace_{args.tag or jax.default_backend()}_B{B}")
             with jax.profiler.trace(tdir):
-                jax.block_until_ready(stages["full"](keys))
+                jax.block_until_ready(stages["full"](keys, specs, depths))
             log(f"   profiler trace in {tdir}")
         try:
             ms = jax.devices()[0].memory_stats()
@@ -272,16 +308,63 @@ def cmd_run(args):
         json.dump(res, f, indent=1)
 
 
+FIELDS_INT = ("counts", "n_halos", "n_peaks", "n_kept", "n_conf", "overflow")
+
+
+def cmd_tiles(args):
+    """Tiles 0..B-1 one at a time (batch 1), outputs saved as tiles_<tag>.json: for comparisons
+    between backends (run once with JAX_PLATFORMS=cpu), and the peak buffer at a given setting."""
+    theta = theta_of(args.theta)
+    cells, tb, cs, cfg, st, info = setup(theta)
+    B = args.batch[0]
+    ni = noise_for(args, B)
+    specs, depths = per_tile(ni, B)
+    f = jax.jit(lambda key, s, d: simu.simulate_tile(key, cs, theta, st, tb, cells, cfg, noise_arg(ni, s, d)))
+    keys = tile_keys(B)
+    out = {k: [] for k in FIELDS_INT + ("sigma", "sigma0")}
+    for i in range(B):
+        r = jax.device_get(f(keys[i], specs[i], depths[i]))
+        for k in out:
+            out[k].append(np.asarray(r[k]).tolist())
+        log(f"tile {i}: n_halos {int(r['n_halos'])}, n_peaks {int(r['n_peaks'])} (buffer {cfg.peak_cap}), "
+            f"n_kept {int(r['n_kept'])}, n_conf {int(r['n_conf'])}, data vector {int(np.asarray(r['counts']).sum())}, "
+            f"overflow {np.asarray(r['overflow']).any()}")
+    out.update(backend=jax.default_backend(), noise=args.noise, theta=args.theta, peak_cap=cfg.peak_cap,
+               spec=np.asarray(specs).tolist(), depth=np.asarray(depths).tolist())
+    with open(os.path.join(OUT, f"tiles_{args.tag}.json"), "w") as fh:
+        json.dump(out, fh)
+
+
+def cmd_compare(args):
+    """Integer outputs and sigma of two cmd_tiles runs (e.g. GPU against CPU)."""
+    a, b = (json.load(open(os.path.join(OUT, f"tiles_{t}.json"))) for t in args.tags)
+    for k in FIELDS_INT:
+        same = [np.array_equal(x, y) for x, y in zip(a[k], b[k])]
+        log(f"{args.tags[0]} vs {args.tags[1]}: {k:9s} identical on {sum(same)} of {len(same)} tiles")
+    for k in ("sigma", "sigma0"):
+        d = np.max(np.abs(np.asarray(a[k]) / np.asarray(b[k]) - 1))
+        log(f"{args.tags[0]} vs {args.tags[1]}: {k} max relative difference {d:.2e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["check", "run", "invariance"])
+    ap.add_argument("cmd", choices=["check", "run", "invariance", "tiles", "compare"])
     ap.add_argument("--batch", type=int, nargs="+", default=[1])
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--tags", nargs=2, default=None, help="compare: two tiles_<tag>.json")
     ap.add_argument("--trace", action="store_true", help="jax.profiler trace of the last batch size")
+    ap.add_argument("--theta", choices=["fid", "corner"], default="fid",
+                    help="the fiducial point or the adopted prior box's heaviest corner")
+    ap.add_argument("--noise", choices=["forecast", "mss2"], default="forecast")
+    ap.add_argument("--spectra", default=os.path.join(os.environ.get("MAPSIM_OUT", "."), "mss2", "spectra", "spectra.npz"))
+    ap.add_argument("--noise-set", default="mean", help="mean (four splits) or split0..split3")
+    ap.add_argument("--mixed-depth", action="store_true", help="per-tile depths cycling 1.0, 1.3, 0.8")
+    ap.add_argument("--deepest", action="store_true", help="every tile takes the deepest MSS2 spectrum")
     args = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
-    {"check": cmd_check, "run": cmd_run, "invariance": cmd_invariance}[args.cmd](args)
+    {"check": cmd_check, "run": cmd_run, "invariance": cmd_invariance, "tiles": cmd_tiles,
+     "compare": cmd_compare}[args.cmd](args)
 
 
 if __name__ == "__main__":
