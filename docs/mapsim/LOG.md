@@ -1064,8 +1064,9 @@ Job 7513596 (genx, rome node worker5047 as job 7512667), snapshot fff0358
     depth** in our finder (3–4% at one split), as the earlier project found on
     periodic tiles. This is part of the forward model: the same finder runs on
     data and simulations.
-  - **The colleagues' q.** Their masking step leaves about as much cluster
-    signal as ours. Their q differs from our production q mainly by the taper,
+  - **The colleagues' q.** Their masking step leaves slightly more cluster
+    signal than ours at goal depth (residual 1.08–1.09 against 1.05–1.09), about
+    the same at one split. Their q differs from our production q mainly by the taper,
     which they do not correct: +6.5–8.8% (median, q > 6), and +13–24% in the
     counts above q = 5 on these maps.
 - **Next:** the colleagues' q scale (ask how their survey file treats the
