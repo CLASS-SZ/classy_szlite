@@ -803,3 +803,61 @@ The peak buffer with masking:
   reference.
 - **Next:** port the draw to the GPU with per-tile inputs from
   `spectra.npz` (M6b).
+
+## 2026-11-20: the noise generator (M6b, step 2)
+
+- **Module:** `classy_szlite/sim/noise.py`.
+  - Each tile's noise is stationary, isotropic and Gaussian, drawn from that
+    tile's binned 6 × 6 spectra: X_c(k) = depth Σ_d F[s, b(k), c, d] W_d(k).
+    W is the rfft of unit white fields, F F^T = C per multipole bin (an
+    eigendecomposition with negative eigenvalues clipped), s is the tile's
+    spectrum index, and depth is one amplitude per tile.
+  - The draw uses one gather per entry, so there is no 6 × 6 matrix per mode.
+    It works on any grid size whose bin map is built from that grid; the
+    per-mode power assumes 0.5′ pixels.
+  - `load_mss2` reads `mss2_spectra.py`'s spectra (a chosen set: the
+    four-split mean or a split). `noise_input` and `spectrum_rows` check
+    spectrum indices on the host, because under jit an out-of-range index
+    would silently take the last spectrum.
+- **Simulator:** `channel_maps`, `tile_maps` and `simulate_tile` take an
+  optional `NoiseInput` (tables, spectrum index, depth), vmapped per tile.
+  - The default is unchanged: the 2019 forecast noise.
+  - The CMB and halos use the same keys either way.
+  - With the MSS2 noise, `tile_static`'s mode still sets the lensing table
+    (σ_κ), which the per-tile depth does not reach.
+- **Tests:** `tests/test_sim_noise.py`, 12 tests passing on rusty (CPU), plus
+  the 29 earlier simulator tests.
+  - **Draw:** equals a float64 numpy reference from the same random
+    numbers, to 1e-5 of the local rms in every multipole bin.
+  - **Spectra:** drawn auto and cross spectra match the input with analytic
+    errors: under 1.5% of bin entries beyond 3σ, and ratios per range of
+    multipole and the mean ratio within 5σ.
+    - The same test runs on the 2019 forecast noise of `channel_maps`, never
+      tested this way before. Its bin-averaged truth needed the full-plane
+      mode weights, because the atmospheric noise is steep within a bin.
+  - **Other grids:** a 256² grid with the clamp beyond the last bin.
+  - **Batching:** batched draws match single ones to round-off. XLA's CPU FFT
+    is not bit-for-bit batch-invariant (differences of order 1e-5 relative on
+    a few modes), so bitwise invariance is left to the GPU and the integer
+    data vector.
+  - **Depth scale:** exact.
+  - **Host checks and loader:** both tested.
+  - **Sky unchanged:** the tSZ and CMB terms are the same with either noise
+    model, also with the CMB off.
+  - **Full tiles (slow):** `tile_maps` gives the same halos with either noise
+    model, and its maps differ only by the noise draw. `simulate_tile` under
+    vmap with a different spectrum and depth per tile gives the same integer
+    outputs as single-tile runs.
+- **Review.** Two independent reviews, each checked by a sceptic, found no
+  bug in the module (units, factors, bins, Hermitian symmetry checked
+  independently). They found weak tests, all fixed:
+  - bias bounds 26σ wide;
+  - a sky test that could not see the tSZ;
+  - a tolerance set by the largest low-ℓ modes;
+  - no full-tile test;
+  - a draw tied to the 1200² grid;
+  - unchecked indices;
+  - a GPU check in the plan that would have compared differently defined
+    spectra.
+- **Next:** the GPU step (M6b). It needs a per-tile noise option in
+  `spike.py`, then one short RTX job.

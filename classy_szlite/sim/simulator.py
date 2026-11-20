@@ -1,8 +1,9 @@
 """One tile, end to end (first version, for the M0 throughput spike).
 
 θ → cosmology → λ cells (once per θ), then per tile:
-halos → y(k) → six channel maps (tSZ + lensed CMB + white and atmospheric
-noise) → matched filter (covariance from the maps) → peaks → masking
+halos → y(k) → six channel maps (tSZ + lensed CMB + noise: the 2019 forecast
+model's white and atmospheric noise, or per-tile noise calibrated on MSS2,
+noise.py) → matched filter (covariance from the maps) → peaks → masking
 iteration (discs around the q > 4 peaks, covariance re-estimated outside
 them, filter run again; ``TileConfig.n_iter`` times, 1 by default as SZiFi)
 → merging → confirmation → (q, z) histogram.
@@ -25,6 +26,7 @@ from . import paint as pt
 from . import mmf
 from . import summaries as sm
 from . import lensing
+from . import noise as nz
 from .flatsky import N, PIX, grid
 
 
@@ -124,11 +126,18 @@ def cosmology_stage(theta: Theta, cells: hl.CellGrid) -> CosmoStage:
                       chi_star=lensing.chi_star(theta.h, theta.omega_cdm, theta.omega_b))
 
 
-def channel_maps(key, yk, st: TileStatic):
-    """Six channel maps (6, N, N/2+1) c64 in rfft units [μK]."""
+def channel_maps(key, yk, st: TileStatic, noise: nz.NoiseInput | None = None):
+    """Six channel maps (6, N, N/2+1) c64 in rfft units [μK]. The noise is the 2019 forecast
+    model's (white plus atmospheric, correlated within a tube) unless ``noise`` gives the tile's
+    MSS2-calibrated spectra (noise.py). Either way the CMB uses the same key, so changing the
+    noise model leaves the sky unchanged. With ``noise``, tile_static's ``mode`` still sets the
+    lensing noise table (σ_κ) of the stacked-lensing observable: keep it consistent with the
+    noise's depth (the per-tile depth scale does not reach it)."""
     k_cmb, k_w, k_a = jax.random.split(key, 3)
     f32 = jnp.float32
     cmb = jnp.fft.rfft2(jax.random.normal(k_cmb, (N, N), dtype=f32)) * st.cmb_amp
+    if noise is not None:
+        return st.a_full * yk[None] + st.B_full * cmb[None] + nz.draw(k_w, noise.tables, noise.spec, noise.depth)
     white = jnp.fft.rfft2(jax.random.normal(k_w, (6, N, N), dtype=f32)
                           * st.white_pix[:, None, None])
     g = jnp.fft.rfft2(jax.random.normal(k_a, (6, N, N), dtype=f32))       # 2 per tube
@@ -144,20 +153,22 @@ def channel_maps(key, yk, st: TileStatic):
 
 
 def tile_maps(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
-              cells: hl.CellGrid, cfg: TileConfig):
+              cells: hl.CellGrid, cfg: TileConfig,
+              noise: nz.NoiseInput | None = None):
     """Halos, the six channel maps and the painter's overflow flags of one tile."""
     k_h, k_m = jax.random.split(key)
     halos = hl.sample_halos(k_h, cs.lam, cells, cfg.halo_cap, cs.cg, theta.h, theta.A_SZ,
                             theta.alpha_SZ, theta.sigma_lnq, theta.one_minus_b, d2N=cs.d2N)
     tabs = tables._replace(tab=st.paint_tab, rP=st.paint_rP)
     yk, ovf_paint = pt.paint_y(halos, tabs, cfg.paint, st.T_tab)
-    return halos, channel_maps(k_m, yk, st), ovf_paint
+    return halos, channel_maps(k_m, yk, st, noise), ovf_paint
 
 
 def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.PaintTables,
-                  cells: hl.CellGrid, cfg: TileConfig):
+                  cells: hl.CellGrid, cfg: TileConfig,
+                  noise: nz.NoiseInput | None = None):
     """Data vector and diagnostics of one tile."""
-    halos, X, ovf_paint = tile_maps(key, cs, theta, st, tables, cells, cfg)
+    halos, X, ovf_paint = tile_maps(key, cs, theta, st, tables, cells, cfg, noise)
     pk, sigma, mk = find_clusters(X, st.fs, cfg)
     keep = sm.merge_local_max(pk, cfg.r_merge)
     cf = sm.confirm(pk, keep, halos, cfg.M_conf, cfg.r_conf, cfg.conf_cap)

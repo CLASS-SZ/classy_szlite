@@ -460,7 +460,7 @@ def main():
     t0 = time.time()
     cells, tb, cs, cfg0, _, info = spike.setup(theta)
     cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
-    st = simu.tile_static(cmb, tb, mode="baseline")          # lensing table: MSS2's white levels are baseline's
+    st = simu.tile_static(cmb, tb, mode="baseline")          # sets only the lensing table here (the noise is MSS2's maps)
     cfg = cfg0._replace(q_mask=Q_MASK_CUT)
     rs = geometry_ratios()
     sky, datavector, datavector_per = make_pipeline(cs, theta, st, tb, cells, cfg, cfg0)

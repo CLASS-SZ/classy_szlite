@@ -297,11 +297,13 @@ Data:
 
 **M6b. Realistic noise calibrated on MSS2** (§3.5). Data on rusty: `/mnt/ceph/users/bbolliet/mapsim/mss2` (raw MSS2, 32 stored tiles of 107 candidates, test outputs). Prototype and test: `benchmarks/mapsim/mss2_finder_test.py` (`iso_spectra`, `iso_from_spectra`, `true_ell`) and `mss2_datavector_test.py`.
 - **Spectra:** re-measure every candidate tile's binned 6 × 6 spectra in true sky multipoles and true pixel area, for the four-split mean and each split, with the 27/39 GHz floor. *Done 2026-11-20* (`mss2_spectra.py`; `mss2/spectra/spectra.npz`, 107 tiles): its check recovers synthetic fields built from the maps' pixel sizes to 0.05% in all entries and sectors, and the row areas to 0.03%; a square-pixel control fails by 21% at dec −35° (`LOG.md`, "per-tile noise spectra").
-- **Code tests** (identical inputs, round-off tolerances):
-  - the GPU draw equals the numpy reference draw, from the same random numbers, to float32 round-off;
-  - drawn auto and cross spectra match the input, |Δ| < 3 SE per bin, also for today's tube-correlated 2019 noise, which has never been tested this way;
-  - bitwise batch invariance with different tiles in a batch;
-  - halos and CMB unchanged when the noise model changes (the keys are split per component).
+- **Code tests** (identical inputs, round-off tolerances). *Done 2026-11-20* on CPU (`classy_szlite/sim/noise.py`, `tests/test_sim_noise.py`: 10 fast tests and 2 slow full-tile tests; `LOG.md`, "the noise generator"):
+  - the draw equals a numpy reference from the same random numbers, to float32 round-off in every multipole bin;
+  - drawn auto and cross spectra match the input with analytic errors (z-scores per bin, ratios per range of multipole and the mean ratio within 5 standard errors), also for today's tube-correlated 2019 noise;
+  - other grid sizes, and the clamp beyond the measured range;
+  - batched against single draws to float32 round-off (XLA's CPU FFT is not bit-for-bit batch-invariant), and full tiles under vmap with a spectrum and depth per tile: integer outputs identical;
+  - halos, tSZ and CMB unchanged when the noise model changes (the keys are split per component);
+  - spectrum indices checked on the host (under jit an out-of-range index would silently take the last spectrum).
 - **Validation** (`mss2_datavector_test.py`, the generator as one more noise kind, paired with MSS2 on the same skies, 32 tiles × 16 skies), at four-split depth:
   - total counts within 0.3% of MSS2, with an error of at most 0.2%;
   - each q bin within one 40%-sky Poisson error;
@@ -309,7 +311,8 @@ Data:
   - the selected sample's mean p̄ within 0.5%.
   - Second check: the finder's first-pass noise level per tile within 0.3% of MSS2's.
   - Tag the finder version used: the planned masking follow-ups (M5) move these numbers, so the test is rerun after any finder change.
-- **GPU:** one short RTX job for GPU against CPU, timing, and the peak buffer at the deepest tile; then the GPU generator fed the measured spectra must reproduce the numpy periodic kind's counts on the 32 tiles.
+- **GPU:** one short RTX job: the noise tests on the GPU; GPU against CPU on one tile; `spike.py`'s run and invariance commands with a per-tile noise option (batch sizes 1, 4 and 16, deterministic ops, integer outputs identical); timing and peak memory of the noise path against the forecast path; the peak buffer at the deepest tile.
+  - Then the GPU generator must reproduce the numpy periodic kind's counts on the 32 tiles. For that comparison it must be fed the same spectra as that kind (`ft.iso_spectra` on the cut-outs, square-pixel multipoles, bins of 2 × 2π / (1680 × 0.5′)), not `spectra.npz`, whose true-sky multipoles, pixel areas and tile levels differ; `spectra.npz` is for production.
 - **Decisions pending:** year 1 and the streaks (§3.5).
 
 **M7. Catalogue-level baselines.**
