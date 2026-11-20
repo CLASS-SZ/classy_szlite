@@ -895,3 +895,96 @@ Job 7510857: one RTX PRO 6000 Blackwell, snapshot 09ec5fb
     heaviest corner, of a buffer of 3,072 (64%); no overflow;
   - a depth below 1 (deeper than the four-split mean) at that corner would
     need a new check.
+
+## 2026-11-20: our finder against SZiFi on MSS2 cut-outs
+
+Job 7512667 (genx, 16 cores, 1 h 10 min), snapshot 191b466. Code:
+`benchmarks/mapsim/mss2_szifi_{maps,survey,run,compare}.py` and
+`szifi_compare.sh`; outputs in `mss2/szifi_compare/` (`summary.txt`,
+`summary.json`).
+
+- **Maps:** the data-vector test's maps for 8 tiles (two each at dec −35, −25
+  and −15, one each at −5 and +5), sky 0, at two depths: MSS2 split 0 (near
+  year 1) and the plain mean of the four splits (about goal).
+- **Self-checks, all 16 maps:** the maps give the data-vector test's stored
+  counts, and the numpy merging and confirmation reproduce the simulator's
+  data vectors.
+- **SZiFi 73626fb, three set-ups,** imported and called:
+  - **as our finder, six channels:** the map our finder filters, our 15
+    scales, ℓ 100–20000 with the out-of-band fix, masking at q > 4.3, diffusive
+    inpainting with ℓ_sep 12000;
+  - **the same with the four high-frequency channels;**
+  - **the colleagues' settings:** four high-frequency channels, 100 scales to
+    80′, anisotropic covariance, every detection masked with discs capped at
+    10′, orphics inpainting, and the band cut before the taper, as SZiFi does
+    with an apodised mask.
+
+Kept interior detections with q > 5. Ratios are SZiFi over ours, paired by
+tile, with errors from the tile scatter.
+
+| | one split | mean of four splits |
+|---|---|---|
+| four channels, before masking: matched both ways | 100% / 100% | 100% / 100% |
+| median q ratio (q > 6); Δq | 0.9997; −0.01 ± 0.20 | 0.9975; −0.02 ± 0.24 |
+| four channels, after masking: median q ratio | 0.990 | 0.960 |
+| data vector ratio | 0.991 ± 0.017 | 0.936 ± 0.014 |
+| colleagues, after masking: median q ratio | 1.013 | 0.990 |
+| data vector against our cut-out q | 1.020 ± 0.015 | 0.966 ± 0.010 |
+| median q against production q | 1.086 | 1.062 |
+| data vector against production q | 1.218 ± 0.025 | 1.126 ± 0.013 |
+
+- **The matched filter agrees with SZiFi's.** With the four high-frequency
+  channels and before masking:
+  - every detection above q = 5 is found by both codes;
+  - q agrees to 0.03–0.25% (median), with a scatter of 0.20–0.24, while our
+    finder uses six channels.
+- **The masking step differs at goal depth.** After masking, at the mean depth:
+  - SZiFi's noise falls by 8–13%, ours by 12–18%, so SZiFi's noise is 2–11%
+    above ours from 0.5′ to 15′;
+  - its q are 4% lower and it counts 6% fewer clusters.
+
+  At one split the two agree within 1% (noise −0.5% to +5%).
+  - **Methods:** SZiFi inpaints the masked discs and corrects the power only
+    above ℓ_sep; ours whitens the maps and masks them.
+  - **Masked fractions:** 26% for SZiFi against 19% for ours at the mean
+    depth. Much of the excess comes from 45′ discs around a few detections at
+    the largest scale (9 on tile 2, none for ours).
+  - **Not yet separated:** the effect of the channels (four against six).
+- **The colleagues' set-up finds the same clusters** (99.7–100% both ways),
+  with q within 1% of our cut-out q.
+  - Neither corrects the noise estimate for the taper. Against the
+    periodic-tile q scale that the simulator uses (production q), their q is
+    6–9% higher and their data vector 13–22% higher on these maps.
+  - Whether their own runs carry this inflation depends on how their survey
+    file apodises the tiles, which we do not have.
+- **Their filter is quieter at large scales.** Before masking, σ at 2.7′–15′ is
+  2–4% below ours, and 4–5% below SZiFi with the same channels in our order.
+  - The cause is the band cut before the taper, the anisotropic covariance, or
+    both.
+  - This is a possible gain for our finder on real data.
+- **SZiFi with all six channels breaks on MSS2 maps.**
+  - **At the smallest scale:** 41,868 candidates above q = 4.3 at θ = 0.5′ on
+    tile 2 (mean depth), against 59 for ours.
+  - **Masking:** it masks 37–48% of the tiles.
+  - **Final data vector:** 19% low at the mean depth.
+  - **Cause:** only the two low-frequency channels trigger it. MSS2 provides
+    them on a 2′ grid; after upsampling to 0.5′ their power above ℓ ≈ 10000 is
+    10⁻⁹–10⁻⁸ of their power at ℓ 2000–3000. SZiFi most likely amplifies
+    rounding noise in those empty modes, as it does outside its multipole
+    range (SZIFI_REVIEW.md, E4).
+  - **Not affected:** our finder on the same six channels (every one of its
+    detections is in the four-channel SZiFi catalogue), and the colleagues,
+    who use the four high-frequency channels.
+- **Positions:** SZiFi's are on average 0.33–0.42 pixel after ours (the
+  half-pixel convention found earlier).
+- **Run time per tile, one core, at most 1.9 GB:**
+  - four channels, 15 scales: 2–6 min;
+  - colleagues' settings: 9–29 min;
+  - six channels: 9–41 min, slowed by the masks.
+- **Next:**
+  - our finder on the four high-frequency channels, to separate the channels
+    from the masking step;
+  - both finders on the same maps without the cluster sky, to tell which noise
+    estimate after masking is right;
+  - ask the colleagues how their survey file treats the apodisation in the
+    noise estimate.
