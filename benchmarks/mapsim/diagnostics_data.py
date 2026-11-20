@@ -6,7 +6,8 @@ Reads the outputs of counts_modes.py, paper_sigma.py, optbias.py,
 hmf_compare.py, prior_corners.py, mask_check.py, lens_check.py, the MSS2
 noise check (Perlmutter job, copied to $MAPSIM_OUT/mss2), and the MSS2 noise
 tests on rusty (mss2_tiles.py: tile_diagnostics.json and the tiles;
-mss2_finder_test.py --summary: finder_test/summary.json) under $MAPSIM_OUT,
+mss2_finder_test.py --summary: finder_test/summary.json; mss2_datavector_test.py
+--summary: datavector_test/summary.json) under $MAPSIM_OUT,
 simulates one goal-depth tile at the fiducial point for a picture (with the
 masking iteration), and writes $MAPSIM_OUT/diagnostics/diagnostics.json.
 
@@ -342,6 +343,18 @@ def noise_test_part(streak_tile=79, streak_split=1):
     return s
 
 
+def datavector_part():
+    """The simulator's sky in MSS2 noise and in model noise: data vectors compared through the
+    production pipeline (mss2_datavector_test.py --summary writes datavector_test/summary.json).
+    Adds the 40%-sky Poisson error per q bin of MSS2's counts."""
+    s = json.load(open(f"{OUT}/mss2/datavector_test/summary.json"))
+    n40 = 0.4 * 41253.0 / 64.0                        # 64-deg2 interiors in 40% of the sky
+    for dp in s["depth"].values():
+        dp["raw"]["poisson40_q"] = [float(1.0 / np.sqrt(n40 * c)) for c in dp["raw"]["q_counts"]]
+        dp["raw"]["poisson40_total"] = float(1.0 / np.sqrt(n40 * dp["raw"]["detections"]))
+    return s
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -450,7 +463,8 @@ def tile_part(width=240):
 
 def main():
     out = dict(hmf=hmf_part(), counts=counts_part(), optbias=optbias_part(), priors=priors_part(),
-               masking=masking_part(), lensing=lensing_part(), mss2=mss2_part(), noise_test=noise_test_part())
+               masking=masking_part(), lensing=lensing_part(), mss2=mss2_part(), noise_test=noise_test_part(),
+               datavector=datavector_part())
     out["tile"] = tile_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"

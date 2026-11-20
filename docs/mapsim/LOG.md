@@ -732,3 +732,9 @@ The peak buffer with masking:
   - Run the generator on more tiles to pin it below 0.3%.
   - Calibrate the year-1 shift, or model the streaks.
   - Add the taper correction for real data, calibrated with a cluster sky.
+- **Progress page, version 8:** a figure of detections per q bin relative to
+  MSS2 for each noise model, at both depths, against the 40%-sky Poisson
+  error; four new checks (goal depth, year-1 depth, the generator, the taper
+  conversion with clusters); an updated "Since the last update" and "Next";
+  the masking-threshold caption corrected. `diagnostics_data.py` reads
+  `datavector_test/summary.json`.
