@@ -163,7 +163,7 @@ The finder's template τ_θ(ℓ) is the exact Fourier transform of the same trun
 ### 3.5 Noise and geometry (decided 2026-11-20)
 
 What the MSS2 tests showed (details and numbers in `LOG.md`, 2026-11-19 and 2026-11-20):
-- MSS2's coadd has SO's five-year baseline white levels. In the finder's noise, the plain mean of its four splits is about our goal depth, and one split is about 1.35× baseline, somewhat deeper than a year-1 rescaling.
+- In true sky units the plain mean of MSS2's four splits has white levels of 6.9 μK-arcmin at 90 GHz and 7.9 at 150 GHz (ℓ = 8000–12000), between SO's goal and baseline; MSS2's own weighted coadd is deeper still. An earlier reading put the coadd at SO baseline because its window (ℓ = 12000–16000) sits on a bump in MSS2's spectra at ℓ ≈ 15000. In the finder's noise, the four-split mean is about our goal depth, and one split about 1.35× baseline.
 - With the simulator's own sky in MSS2 noise and in model noise (paired, 32 tiles × 16 skies):
   - at four-split depth, Gaussian noise with each tile's own spectra reproduces MSS2's data vector to 0.1–0.3% (40%-sky Poisson error 0.45%);
   - at one-split depth, MSS2 gives about 1% more detections, mostly at q = 5–8.4, because the masking pass removes more of its streaks (single noisy observations) and so lowers its noise estimate by 0.27%. Gaussian models give 1.0–1.2% fewer detections, and mnms, fitted to MSS2 itself, 0.8% fewer.
@@ -296,7 +296,7 @@ Data:
 - Measured time and memory per stage and per tile, on A100, H100 and RTX Blackwell.
 
 **M6b. Realistic noise calibrated on MSS2** (§3.5). Data on rusty: `/mnt/ceph/users/bbolliet/mapsim/mss2` (raw MSS2, 32 stored tiles of 107 candidates, test outputs). Prototype and test: `benchmarks/mapsim/mss2_finder_test.py` (`iso_spectra`, `iso_from_spectra`, `true_ell`) and `mss2_datavector_test.py`.
-- **Spectra:** re-measure every candidate tile's binned 6 × 6 spectra in true sky multipoles and true pixel area, for the four-split mean and each split, with the 27/39 GHz floor; store spectra only (a few MB). One CPU job. *Check:* a synthetic isotropic field sampled onto the maps' pixels is recovered to 1% per bin.
+- **Spectra:** re-measure every candidate tile's binned 6 × 6 spectra in true sky multipoles and true pixel area, for the four-split mean and each split, with the 27/39 GHz floor. *Done 2026-11-20* (`mss2_spectra.py`; `mss2/spectra/spectra.npz`, 107 tiles): its check recovers synthetic fields built from the maps' pixel sizes to 0.05% in all entries and sectors, and the row areas to 0.03%; a square-pixel control fails by 21% at dec −35° (`LOG.md`, "per-tile noise spectra").
 - **Code tests** (identical inputs, round-off tolerances):
   - the GPU draw equals the numpy reference draw, from the same random numbers, to float32 round-off;
   - drawn auto and cross spectra match the input, |Δ| < 3 SE per bin, also for today's tube-correlated 2019 noise, which has never been tested this way;
