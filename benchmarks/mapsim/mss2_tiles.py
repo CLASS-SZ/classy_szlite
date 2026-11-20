@@ -187,18 +187,21 @@ def gauss_like(m, pix_arcmin):
     return g / np.sqrt(ny * nx * np.mean(w ** 2))
 
 
-def main():
-    os.makedirs(os.path.join(OUT, "tiles"), exist_ok=True)
+def headers():
+    """The f090 and f030 grids' headers and the mnms tubes', with the 2' row alignment checked."""
     h090 = hdu(raw_path("f090", "coadd", "sky_ivar")).header
     h030 = hdu(raw_path("f030", "coadd", "sky_ivar")).header
     hsim = {t: hdu(sim_path(t, 0, 0)).header for t in PAIR}
     hmask = hdu(MASK).header
     assert all(hmask[k] == h090[k] for k in ("NAXIS1", "NAXIS2", "CRPIX1", "CRPIX2", "CRVAL1", "CDELT1", "CDELT2"))
-    dec090, ra090 = rows_dec(h090), cols_ra(h090)
     for h in [h030] + list(hsim.values()):          # 2' row k holds 0.5' rows 4k..4k+3
         assert h["CRPIX2"] == (h090["CRPIX2"] + 1.5) / 4 and abs(h["CDELT2"] - 4 * h090["CDELT2"]) < 1e-12
+    return h090, h030, hsim
 
-    # ---- candidates per declination band
+
+def candidates(h090, h030):
+    """Every tile fully observed in all six bands and >= 90% inside the mask, per declination band."""
+    dec090, ra090 = rows_dec(h090), cols_ra(h090)
     cands = []
     for dec_c in DEC_CENTRES:
         rc, _ = pix_of(h090, 180.0, dec_c)
@@ -218,6 +221,14 @@ def main():
             if all(np.all(v > 0) for v in iv_lf):
                 cands.append(dict(dec_band=dec_c, r0=r0, c0=c0, ra=ra_c, dec=dc, mask_frac=frac))
         log(f"dec {dec_c:+.0f}: {sum(c['dec_band'] == dec_c for c in cands)} candidates")
+    return cands
+
+
+def main():
+    os.makedirs(os.path.join(OUT, "tiles"), exist_ok=True)
+    h090, h030, hsim = headers()
+    dec090, ra090 = rows_dec(h090), cols_ra(h090)
+    cands = candidates(h090, h030)
     order = RNG.permutation(len(cands))
     # spread the selection across declination bands: round-robin over bands in random order
     by_band = {d: [i for i in order if cands[i]["dec_band"] == d] for d in DEC_CENTRES}

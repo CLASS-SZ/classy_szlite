@@ -738,3 +738,68 @@ The peak buffer with masking:
   conversion with clusters); an updated "Since the last update" and "Next";
   the masking-threshold caption corrected. `diagnostics_data.py` reads
   `datavector_test/summary.json`.
+
+## 2026-11-20: per-tile noise spectra in true sky multipoles
+
+- **Measurement** (`benchmarks/mapsim/mss2_spectra.py`, 7 minutes on 16
+  cores): binned 6 × 6 auto and cross spectra for all 107 candidate tiles,
+  for the four-split mean and for each split. They are what the simulator's
+  noise generator will draw from: `mss2/spectra/spectra.npz` (47 MB), with
+  white levels and positions in `spectra.json`.
+  - **Multipoles:** true sky multipoles, hypot(k_dec, k_RA / cos δ). The
+    maps' RA pixels are cos δ narrower than their dec pixels; earlier tests
+    treated them as square.
+  - **Units:** per-mode power on the simulator's square 0.5′ pixels, which
+    is the measured power times cos δ. Each row is weighted by
+    sqrt(cos δ_row / cos δ_centre).
+  - **Shape and level:** the shape comes from the cut-out with its 120′
+    margin. Each channel's level comes from the tile itself under the
+    finder's 30′ taper, over ℓ = 6000–20000 (3000–4500 at 27/39 GHz).
+  - **27 and 39 GHz:** shifted 1.5 fine rows, because a 2′ row k is centred
+    on 0.5′ row 4k + 1.5. Above ℓ = 4500 their autos are floored at their
+    3000–4500 level and their crosses set to 0.
+- **Check** (`--check`): synthetic fields built from the maps' physical
+  pixel sizes at dec −35°, −15° and +5°, through the functions that write the
+  spectra.
+  - All 36 auto and cross entries come back within 0.01–0.05%, and the RA-
+    and dec-dominated sectors within 0.05%.
+  - White noise on rows whose pixel area follows their own cos δ: the white
+    level comes back to 0.9997–1.0002 with the row weights, against
+    1.0012–1.0032 without them.
+  - A square-pixel control misses by 21% at dec −35°, as it must.
+  - A planted square-pixel multipole mapping is caught (autos 0.988, RA
+    sector 0.980).
+- **Findings:**
+  - **White levels** of the four-split mean (ℓ = 8000–12000, true sky units,
+    median over tiles): f030 57.1, f040 37.7, f090 6.9, f150 7.9, f230 20.2,
+    f290 53.5 μK-arcmin. At 90 and 150 GHz that is between SO's goal (5.8,
+    6.3) and baseline (8.0, 10), and MSS2's own weighted coadd is deeper
+    still.
+  - The Perlmutter check's "coadd at baseline" reading (f150 10.6) took its
+    level over ℓ = 12000–16000, which sits on a bump. The finder-based
+    reading (four splits ≈ goal) stands.
+  - **Bumps in MSS2's spectra:** at ℓ ≈ 15000, 1.8× the surrounding power at
+    150 GHz, 1.5–1.6× at 230/280 GHz and 1.1× at 90 GHz. At 150 GHz there is
+    also 1.2× at ℓ ≈ 8000 and a dip to 0.88–0.90 at ℓ = 5000–6000. They are
+    probably from the scanning or the map-making, and the generator
+    reproduces them.
+  - **Tile against cut-out level:** 1.1–1.7% rms over tiles, in power
+    (four-split mean).
+  - **27/39 GHz offset in the earlier tests:** their maps sat 0.75′ off the
+    90–280 GHz maps. That changes only their cross spectra (by up to ~2% at
+    ℓ ≈ 1000), which does not touch the earlier conclusions.
+- **Review.** Two independent reviews, each checked by a sceptic, ran
+  before the measurement was kept. They found:
+  - the margin mixed into each tile's level;
+  - one centre cos δ biasing the power 0.1–0.35% high, cancelling the margin
+    error on average, so both are fixed together;
+  - a check that never ran the production binning, nor tested the multipole
+    mapping;
+  - the 27/39 GHz row offset;
+  - output issues: a mislabelled depth field, and partial runs overwriting
+    the full file.
+
+  All are fixed. The first run is kept as `spectra_v1_unfixed.*` for
+  reference.
+- **Next:** port the draw to the GPU with per-tile inputs from
+  `spectra.npz` (M6b).
