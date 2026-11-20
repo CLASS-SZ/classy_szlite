@@ -642,3 +642,93 @@ The peak buffer with masking:
 - **Progress page, version 7:** the MSS2 test (false peaks per noise model,
   the streak picture), five new checks, an updated "Since the last update",
   and the generator and taper correction in "Next".
+
+## 2026-11-20: MSS2 noise and the data vector
+
+- **Test** (`benchmarks/mapsim/mss2_datavector_test.py`; 32 MSS2 tiles × 16
+  sky realisations; about 3.5 hours on 16 cores):
+  - The simulator's fiducial sky (halos above 10¹³ M☉, tSZ painted by the
+    production painter, lensed CMB) goes into every noise map of a tile.
+  - The production pipeline gives the data vector: the finder with masking,
+    merging, confirmation, the 4 × 5 counts and the stacked-lensing sample.
+    The lensing part is the noiseless mean p̄, so it measures selection only.
+  - The same sky goes into every noise map of a tile, so the comparison is
+    paired.
+  - Noise kinds:
+    - MSS2;
+    - mnms;
+    - Gaussian with each tile's own 2D spectra and depth pattern;
+    - isotropic Gaussian with each tile's own spectra;
+    - a practical generator (next item);
+    - a periodic control (two items down).
+  - The first four kinds copy each tile's own spectra and level, so they
+    test non-Gaussianity with perfect two-point statistics.
+  - The generator is isotropic Gaussian noise with the depth-normalised
+    spectra averaged over the other tiles of the same declination band,
+    times the tile's own absolute depth map. It runs at four-split depth
+    only, because the tiles store only the coadd inverse variance.
+  - The periodic control is isotropic noise on a periodic tile with no
+    taper, run with production's masking threshold and no rescaling.
+  - Depths: one split, about 1.35× the simulator's baseline noise in the
+    finder (somewhat deeper than a year-1 rescaling of MSS2); the plain mean
+    of the four splits, about goal depth (MSS2's own coadd is deeper).
+  - On the cut-outs, masking runs at q = 4.3 and each peak's q is divided by
+    the geometry run's ratio.
+- **Results**, detections relative to MSS2 (bootstrap errors over tiles):
+  - One split (MSS2: 77.0 detections per 64 deg²): mnms −0.8% ± 0.2%;
+    Gaussian with the 2D spectra and depth pattern −1.0% ± 0.2%; isotropic
+    Gaussian −1.2% ± 0.3%.
+    - Most of the deficit is in the lowest q bin (5 to 8.4: isotropic −1.5%,
+      1.8 times the 40%-sky Poisson error).
+    - It is largest at dec +5° (isotropic −3.1%) and −5° (−1.6%), and absent
+      at −35° and −25°.
+    - 20-bin Δχ² over 40% of the sky, after removing its noise part: about
+      3 (isotropic), 2 (depth pattern), 1 (mnms).
+  - Four splits (MSS2: 188.4 per 64 deg²): mnms −0.3% ± 0.2%, depth pattern
+    −0.3% ± 0.2%, isotropic −0.1% ± 0.2%. Δχ² is consistent with noise.
+  - The generator at four splits: −0.9% ± 0.65%. Its error is dominated by
+    tile-to-tile differences (0.64% of its 0.67%): it gets each tile's noise
+    level only approximately. More tiles would sharpen it (107 candidate
+    tiles exist; 32 are stored).
+  - Stacked lensing: the selected sample's mean p̄ moves by at most 0.5%,
+    against a 2% measurement error.
+  - Mechanism at one split: MSS2's noise gets more of its patches masked
+    (0.153 of the tile against 0.146 for isotropic noise), so its σ_j after
+    masking is 0.27% lower. That gives q 0.27% higher and about 1% more
+    detections. At four splits the masked fractions agree (0.178).
+- **The q scale of the cut-outs with a cluster sky:** the periodic control
+  gives 0.8% (one split) and 0.55% (four splits) more detections than the
+  same isotropic noise on the rescaled cut-out. The conversion from tapered
+  cut-outs, calibrated on noise alone, is therefore 0.5–0.8% low in counts
+  with clusters in the map. This is common to all kinds, so the ratios hold,
+  but the taper correction for real data must be calibrated with a cluster
+  sky.
+- **Review.** Three independent reviews, each checked by a sceptic,
+  checked the test before the results were read. Their points:
+  - Precision is about ±0.2% per depth. The three kinds' ratios to MSS2 at
+    four splits are 75–85% correlated (one MSS2 map per tile), so their
+    agreement counts as one measurement.
+  - The per-tile Gaussian kinds are oracles, hence the generator kind.
+  - The cut-out q conversion needed a check with a cluster sky, hence the
+    periodic control.
+  - The depth labels were corrected (one split is not quite year 1; four
+    splits are about goal).
+  - The explanation of the 4.3 masking threshold was wrong for noise alone,
+    and is corrected in the scripts.
+- **What it means:**
+  - At goal-like depth, Gaussian noise with MSS2's spectra and depth pattern
+    reproduces MSS2's data vector to 0.1–0.3%, inside the 40%-sky Poisson
+    error (0.45%).
+  - At about year-1 depth, MSS2's streaks add about 1% to the detections,
+    mostly near threshold. That is about 1.5 Poisson errors over 40% of the
+    sky. The shift is nearly uniform in q, so most of it would be absorbed
+    by the mass calibration, but it biases that calibration.
+  - mnms closes only a fifth of this gap.
+  - For a year-1 analysis the generator needs either streaks or a calibrated
+    shift of about 0.3% in q. The shift can be measured this way, with its
+    error.
+- **Next:**
+  - Ask how the colleagues' year-1 maps were made (in progress).
+  - Run the generator on more tiles to pin it below 0.3%.
+  - Calibrate the year-1 shift, or model the streaks.
+  - Add the taper correction for real data, calibrated with a cluster sky.
