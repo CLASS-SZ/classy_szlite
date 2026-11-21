@@ -1409,3 +1409,40 @@ by up to 5.3σ on map-level data, and map-level inference is not. Paper 1's
 main result holds on public inputs.
 
 The calibrated catalogue model for this survey is job 7517636.
+
+## 2026-11-21: the calibrated catalogue model with the forecast noise
+
+**The run** (job 7517636, 24 min). `calib_bias.sh` with NOISE=forecast:
+- the per-halo table on 20 forecast-noise mocks;
+- the calibration (s 0.988–0.991, k 1.07–1.51, w 1.04–1.18, f 0.002–0.029
+  per z bin up to 1.5);
+- catalogue variant calibf41, trained and applied to the 100 mocks and to the
+  500 map-level prior draws.
+
+**The sbi warnings.** Rejection sampling was slow for some prior draws (low
+acceptance): there, the posterior put most of its mass outside the prior box.
+
+**Results:**
+- **At the fiducial point:** σ8 +0.13 ± 0.09σ, ω_c +0.09σ, A_SZ −0.06σ,
+  α_SZ +0.50 ± 0.08σ, S8 +0.14σ.
+- **Across the prior:**
+  - σ8 bias +1.06 ± 0.10σ;
+  - coverage at 50% / 90%: σ8 0.32 / 0.65, ω_c 0.40 / 0.72, A_SZ 0.41 / 0.82,
+    α_SZ 0.39 / 0.80;
+  - map-level, for comparison: 0.45 / 0.89, 0.48 / 0.86, 0.46 / 0.87,
+    0.44 / 0.85.
+- **σ8 bias in thirds of the true values:**
+  - ω_c: +0.02, +0.50, +2.64σ;
+  - A_SZ: −0.09, +1.00, +2.26σ;
+  - α_SZ: +1.70, +0.85, +0.63σ;
+  - σ8: +1.07, +1.11, +1.00σ.
+
+**Reading.** The MSS2 result is reproduced on public inputs. Paper 1's three
+steps hold:
+1. the published catalogue model is biased by up to 5.3σ;
+2. calibrated, it is right at the calibration point (α_SZ +0.5σ left) but
+   miscalibrated across the prior;
+3. map-level inference is unbiased and calibrated.
+
+The report page (https://claude.ai/artifact/K8wpHKW8Wy9bictKwkKfCY) has a
+public-noise section.
