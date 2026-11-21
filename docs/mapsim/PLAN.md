@@ -392,6 +392,7 @@ Environment and data:
     - foregrounds (CIB, radio sources);
     - footprint, masks and tapered cut-outs (M9);
     - real-data mass-calibration priors.
+- **Two tracks in parallel** (user, 2026-11-21): paper 1 on public noise, and the internal MSS2 work toward SO's real-data analysis (year-1 depth, streaks, taper calibration with clusters, footprint and masks), which continues. They share all the code; only the noise input differs.
 - **Order:**
   1. finish the bias test (MSS2 noise);
   2. repeat it with the public forecast noise;
