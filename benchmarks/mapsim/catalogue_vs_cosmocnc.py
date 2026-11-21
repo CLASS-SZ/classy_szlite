@@ -95,14 +95,14 @@ def main():
 
     print("2. expected data vector at the fiducial point, paper tables, 40% of the sky:")
     t0 = time.time()
-    ec, en, ep = jax.jit(lambda: ct.expected(simu.THETA_FID, cells, sz, le))()
+    ec, en, ep = jax.jit(lambda th: ct.expected(th, cells, sz, le))(simu.THETA_FID)
     t_exp = time.time() - t0
     ec = np.asarray(ec)
     print("   counts, rows q bins (5-8.4-14-24-40), columns z bins (0.01-0.31-...-1.5):")
     for row in ec:
         print("   " + "  ".join(f"{v:8.1f}" for v in row))
     print(f"   in the grid {ec.sum():.0f}; selected (q > 5, any z, any q) {float(en):.0f}; mean p {float(ep) / float(en):.4f}")
-    so = np.asarray(SO_sim_0["counts_zq"]).T
+    so = np.asarray(SO_SIM_0["counts_zq"]).T
     print(f"   SO_sim_0 (other settings): in the grid {so.sum()}, selected {SO_SIM_0['n']}; paper: about 16,000 selected")
     print("   ratio to SO_sim_0 per cell (q rows, z columns):")
     for r1, r2 in zip(ec, so):

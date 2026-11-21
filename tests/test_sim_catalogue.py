@@ -7,7 +7,9 @@
   correlation, and q_obs, p_obs carry unit Gaussian noise about sqrt(q_true^2 + dof) and p_true.
 * The halos drawn: their number against the summed cell rates, and their z distribution
   against the rates' z marginal.
-* The whole simulator: the mean over 30 catalogues of the 20 counts, the number selected and
+* Per halo, the selected clusters' p_obs summed against each drawn halo's exact conditional
+  expectation (the observable layers alone, without the halo sampler).
+* The whole simulator: the mean over 120 catalogues of the 20 counts, the number selected and
   the mean p agree with catalogue.expected (an independent quadrature) within 4.5 standard
   errors; and the same key gives the same catalogue, batched or not.
 """
@@ -93,10 +95,10 @@ def test_halo_number_and_redshifts(setup):
 def test_simulations_match_expectation(setup):
     cells, sz, le = setup
     cfg = ct.CatalogueConfig()
-    ec, en, ep = jax.jit(lambda: ct.expected(TH, cells, sz, le, cfg))()
+    ec, en, ep = jax.jit(lambda th: ct.expected(th, cells, sz, le, cfg))(TH)
     ec, en, ep = np.asarray(ec), float(en), float(ep)
     f = jax.jit(lambda k: ct.simulate(k, TH, cells, sz, le, cfg))
-    R = 30
+    R = 120
     C, Ns, Pm = [], [], []
     for r in range(R):
         c = f(jax.random.key(100 + r))
@@ -127,3 +129,32 @@ def test_same_key_same_catalogue_batched(setup):
         np.testing.assert_allclose(float(single[i].p_sum), float(batch.p_sum[i]), rtol=1e-12)
     again = f(keys[0])
     assert np.array_equal(np.asarray(again.counts), np.asarray(single[0].counts))
+
+
+@needs_tables
+def test_selected_p_against_conditional_expectation(setup):
+    """Sum of p_obs over the selected halos of one full-survey draw against the sum, over the
+    same drawn halos, of E[p_obs 1(q_obs > 5) | M, z] (Gauss-Hermite over the q scatter, r = 0),
+    and the same for the number selected; errors from the per-halo variances."""
+    from scipy.stats import norm
+    cells, sz, le = setup
+    cfg = ct.CatalogueConfig()
+    tot_p, tot_e, var_p, tot_n, tot_en, var_n = 0.0, 0.0, 0.0, 0, 0.0, 0.0
+    f = jax.jit(lambda k: ct.draw(k, TH, cells, sz, le, cfg))
+    gh, gw = np.polynomial.hermite_e.hermegauss(40)
+    gw = gw / gw.sum()
+    for r in range(4):
+        h = f(jax.random.key(500 + r))
+        v = np.asarray(h.valid)
+        qbar, pbar = np.asarray(h.qbar)[v], np.asarray(h.pbar)[v]
+        sel = (np.asarray(h.q_obs)[v] > cfg.q_min)
+        P = sum(w * (1.0 - norm.cdf(cfg.q_min - qbar * np.exp(TH.sigma_lnq * g))) for g, w in zip(gh, gw))
+        Ep = pbar * np.exp(0.5 * TH.sigma_lnp ** 2)
+        Ep2 = pbar ** 2 * np.exp(2 * TH.sigma_lnp ** 2) + 1.0
+        tot_p += float(np.asarray(h.p_obs)[v][sel].sum()); tot_e += float(np.sum(P * Ep))
+        var_p += float(np.sum(P * Ep2 - (P * Ep) ** 2))
+        tot_n += int(sel.sum()); tot_en += float(P.sum()); var_n += float(np.sum(P * (1 - P)))
+    zp, zn = (tot_p - tot_e) / np.sqrt(var_p), (tot_n - tot_en) / np.sqrt(var_n)
+    print(f"per-halo conditional: p sum z {zp:+.2f}, number selected z {zn:+.2f}; "
+          f"mean p {tot_p / tot_n:.5f} against {tot_e / tot_en:.5f}")
+    assert abs(zp) < 4.5 and abs(zn) < 4.5
