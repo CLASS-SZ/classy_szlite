@@ -1,7 +1,7 @@
 #!/bin/bash -l
 # Map-level simulations of the 10%-sky survey (maps_trainset.py): the lensing tests (the stacked p
 # now covers every confirmed q > 5 detection), then 100 mocks at the fiducial point, 500 held-out
-# prior draws and 10^4 training draws. Resumable. Submit (with the user's approval), e.g.:
+# prior draws and 10^4 training draws (SETS chooses, e.g. SETS='truth heldout'). Resumable. Submit (with the user's approval), e.g.:
 #   CODE=/mnt/home/bbolliet/mapsim-runs/<sha> sbatch -p gpu --gpus=1 -C rtxblackwell --cpus-per-gpu=16 --mem=96G \
 #        -t 03:00:00 -J mapsim-maps -o /mnt/ceph/users/bbolliet/mapsim/m0/logs/%x-%j.out $CODE/benchmarks/mapsim/maps_trainset.sh
 set -o pipefail
@@ -17,7 +17,7 @@ step "node"; hostname; nvidia-smi --query-gpu=name,memory.total --format=csv; ca
 step "lensing tests"
 PYTHONPATH=$CODE $PY -m pytest -q -p no:cacheprovider tests/test_sim_lensing.py 2>&1 | quiet | tail -4
 rc=${PIPESTATUS[0]}; [ $rc -eq 0 ] || { echo "tests failed (exit $rc); stopping"; exit $rc; }
-for s in truth heldout train; do
+for s in ${SETS:-truth heldout train}; do
   step "set $s"
   PYTHONPATH=$CODE $PY benchmarks/mapsim/maps_trainset.py --set $s 2>&1 | quiet
   rc=${PIPESTATUS[0]}; [ $rc -eq 0 ] || { echo "set $s failed (exit $rc); stopping"; exit $rc; }
