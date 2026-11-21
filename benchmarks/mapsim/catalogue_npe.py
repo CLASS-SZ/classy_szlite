@@ -19,6 +19,13 @@ Validation:
             central credible interval at levels 10%-90%); TARP if sbi provides it
   widths    the median posterior std at the fiducial point against the paper's likelihood widths
 Writes $MAPSIM_OUT/catalogue_npe/npe_{tag}.{pt,json,txt}.
+
+Options for the bias test (PLAN T1, T2): --data DIR (the train/heldout/truth sets, default
+catalogue_npe/), --prior {paper, maps} (the map-level box of maps_trainset.py), and --apply NAME=FILE
+(repeatable): the trained posterior on another set's data vectors, e.g. the catalogue-level
+posterior on the map-level mocks (maps_npe/truth.npz): bias of the posterior means against that
+set's true parameters, also for S8 = sigma8 sqrt(Omega_m / 0.3) and Omega_m. Posterior samples of
+the first catalogue of the truth set and of each applied set are saved for plots.
 """
 from __future__ import annotations
 
@@ -32,7 +39,16 @@ import torch
 
 OUT = os.path.join(os.environ.get("MAPSIM_OUT", "."), "catalogue_npe")
 NAMES = ("sigma8", "omega_cdm", "A_SZ", "alpha_SZ", "h", "omega_b", "n_s", "sigma_lnq", "beta_lens", "sigma_lnp")
-UNIFORM = {"sigma8": (0.7, 0.9), "omega_cdm": (0.0804, 0.200), "A_SZ": (-4.41, -4.21), "alpha_SZ": (1.0, 1.24)}
+UNIFORMS = {"paper": {"sigma8": (0.7, 0.9), "omega_cdm": (0.0804, 0.200), "A_SZ": (-4.41, -4.21), "alpha_SZ": (1.0, 1.24)},
+            "maps": {"sigma8": (0.770, 0.852), "omega_cdm": (0.0804, 0.169), "A_SZ": (-4.53, -4.08), "alpha_SZ": (1.0, 1.24)}}
+UNIFORM = dict(UNIFORMS["paper"])
+OMEGA_NU_H2 = 3 * 0.02 / 93.14
+
+
+def derived(s):
+    """(Omega_m, S8) from samples (n, 10) in NAMES order."""
+    om = (s[:, 1] + s[:, 5] + OMEGA_NU_H2) / s[:, 4] ** 2
+    return om, s[:, 0] * np.sqrt(om / 0.3)
 GAUSS = {"h": (0.674, 0.01), "omega_b": (0.0222, 0.00015), "n_s": (0.96, 0.0042), "sigma_lnq": (0.173, 0.05),
          "beta_lens": (0.92, 0.01), "sigma_lnp": (0.22, 0.05)}
 PAPER_BIAS = [-0.107, 0.031, 0.052, 0.10, 0.0211, -0.1039, -0.0395, -0.0585, -0.0122, -0.0417]   # Table 1
@@ -64,8 +80,11 @@ def sbi_api():
     return NPE, posterior_nn
 
 
+DATA = OUT
+
+
 def load(name):
-    d = np.load(os.path.join(OUT, f"{name}.npz"))
+    d = np.load(name if name.endswith(".npz") else os.path.join(DATA, f"{name}.npz"))
     ok = d["done"] & np.all(np.isfinite(d["x"]), axis=1)
     return d["theta"][ok].astype(np.float32), d["x"][ok].astype(np.float32)
 
@@ -76,7 +95,14 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--samples", type=int, default=10000)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--data", default=OUT)
+    ap.add_argument("--prior", choices=list(UNIFORMS), default="paper")
+    ap.add_argument("--apply", action="append", default=[], help="NAME=FILE.npz")
     args = ap.parse_args()
+    global DATA
+    DATA = args.data
+    UNIFORM.clear()
+    UNIFORM.update(UNIFORMS[args.prior])
     tag = args.tag or f"n{args.n_train}_s{args.seed}"
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -97,7 +123,7 @@ def main():
     summ = getattr(inf, "summary", {}) or {}
     n_ep = len(summ.get("validation_loss", summ.get("validation_log_probs", [])))
     P(f"trained in {time.time() - t0:.0f} s, {n_ep} epochs")
-    torch.save(de.state_dict() if hasattr(de, "state_dict") else de, os.path.join(OUT, f"npe_{tag}.pt"))
+    torch.save(de.state_dict() if hasattr(de, "state_dict") else de, os.path.join(DATA, f"npe_{tag}.pt"))
     res = dict(tag=tag, n_train=len(th), sbi=sbi.__version__, epochs=n_ep)
 
     def samples(xo, n):
@@ -153,8 +179,37 @@ def main():
     except Exception as exc:                                           # older sbi: no TARP
         P(f"   TARP not run: {exc!r}")
 
-    open(os.path.join(OUT, f"npe_{tag}.txt"), "w").write("\n".join(lines) + "\n")
-    json.dump(res, open(os.path.join(OUT, f"npe_{tag}.json"), "w"), indent=1)
+    # 3. the posterior on other sets (e.g. the catalogue-level posterior on map-level mocks)
+    saved = {"truth": samples(xt[0], args.samples)}
+    for item in args.apply:
+        name, f = item.split("=", 1)
+        ta, xa = load(f)
+        mu, sd, mu_d, sd_d = [], [], [], []
+        for xo in xa:
+            sm_ = samples(xo, args.samples)
+            mu.append(sm_.mean(0)); sd.append(sm_.std(0))
+            d = np.stack(derived(sm_), 1)
+            mu_d.append(d.mean(0)); sd_d.append(d.std(0))
+        mu, sd, mu_d, sd_d = map(np.array, (mu, sd, mu_d, sd_d))
+        b = (mu - ta) / sd
+        td = np.stack(derived(ta), 1)
+        bd = (mu_d - td) / sd_d
+        P(f"\n3. applied to {name} ({len(xa)} data vectors, {f}): bias <(mu - truth)/sigma> +- error of the mean")
+        for j, n in enumerate(NAMES):
+            P(f"   {n:10s} {b[:, j].mean():+7.3f} +- {b[:, j].std(ddof=1) / np.sqrt(len(b)):.3f}")
+        for j, n in enumerate(("Omega_m", "S8")):
+            P(f"   {n:10s} {bd[:, j].mean():+7.3f} +- {bd[:, j].std(ddof=1) / np.sqrt(len(bd)):.3f}"
+              f"   (median sigma {np.median(sd_d[:, j]):.4f})")
+        res.setdefault("applied", {})[name] = dict(file=f, bias=b.mean(0).tolist(),
+                                                   bias_err=(b.std(0, ddof=1) / np.sqrt(len(b))).tolist(),
+                                                   bias_derived=bd.mean(0).tolist(),
+                                                   bias_derived_err=(bd.std(0, ddof=1) / np.sqrt(len(bd))).tolist(),
+                                                   median_sigma=np.median(sd, 0).tolist(),
+                                                   median_sigma_derived=np.median(sd_d, 0).tolist())
+        saved[name] = samples(xa[0], args.samples)
+    np.savez(os.path.join(DATA, f"npe_{tag}_samples.npz"), **saved, names=np.array(NAMES))
+    open(os.path.join(DATA, f"npe_{tag}.txt"), "w").write("\n".join(lines) + "\n")
+    json.dump(res, open(os.path.join(DATA, f"npe_{tag}.json"), "w"), indent=1)
 
 
 if __name__ == "__main__":
