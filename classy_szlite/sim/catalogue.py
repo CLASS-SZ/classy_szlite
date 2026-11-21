@@ -115,6 +115,23 @@ def lens_table(mode="goal"):
     return PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(lnsig)[None])
 
 
+def analytic_sigma_y0_forecast(cmb_cl, mode="goal", fs=None):
+    """sigma_y0 of our filter at its 15 scales for the 2019 SO forecast noise (instrument.noise_cov:
+    white plus atmospheric, correlated within a tube; the simulator's default) plus the lensed CMB:
+    (1, 15) and the ln theta grid."""
+    from . import mmf, instrument as ins
+    from .flatsky import grid
+    G = grid()
+    fs = fs or mmf.filter_static()
+    B = ins.beams(G.m_L)
+    C = (ins.noise_cov(G.m_L, mode) + B[:, None, :] * B[None, :, :] * cmb_cl(G.m_L)[None, None, :]) * G.Npx / G.Om
+    Cb = np.stack([np.stack([np.bincount(G.m_binpos, weights=G.m_W * C[i, j], minlength=G.n_bins)
+                             / G.bin_count for j in range(6)], -1) for i in range(6)], 1)
+    _, aCa = mmf.weights(jnp.asarray(Cb), fs)
+    norm = jnp.sum(fs.m_W[None, :] * fs.tau_m ** 2 * aCa[None, :], axis=1)
+    return np.asarray(1.0 / jnp.sqrt(norm))[None], np.log(np.asarray(mmf.THETAS15))
+
+
 def analytic_sigma_y0(noise_tables, specs, cmb_cl, fs=None):
     """sigma_y0 of our matched filter at its 15 scales (mmf.THETAS15) for the noise of the MSS2
     spectra `specs` (noise.NoiseTables rows) plus the lensed CMB, without tSZ: the covariance is

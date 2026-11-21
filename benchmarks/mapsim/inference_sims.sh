@@ -4,7 +4,11 @@
 # simulations (maps_trainset.py --set train; resumable). Submit (with the user's approval), e.g.:
 #   CODE=/mnt/home/bbolliet/mapsim-runs/<sha> sbatch -p gpu --gpus=1 -C rtxblackwell --cpus-per-gpu=16 --mem=96G \
 #        -t 02:30:00 -J mapsim-isims -o /mnt/ceph/users/bbolliet/mapsim/m0/logs/%x-%j.out $CODE/benchmarks/mapsim/inference_sims.sh
+# NOISE=forecast: the same with the public 2019 forecast noise (catalogue variant forecast41,
+# maps_npe_forecast/), all three map-level sets. Default: MSS2 (survey41; the map mocks exist already).
 set -o pipefail
+NOISE=${NOISE:-mss2}
+if [ "$NOISE" = forecast ]; then CAT=forecast41; MAPSETS="truth heldout train"; else CAT=survey41; MAPSETS=train; fi
 CODE=${CODE:-/mnt/home/bbolliet/classy_szlite}
 export MAPSIM_OUT=/mnt/ceph/users/bbolliet/mapsim
 export MAPSIM_REFDATA=/mnt/ceph/users/bbolliet/sz-poisson-blending
@@ -19,9 +23,11 @@ step "node"; hostname; nvidia-smi --query-gpu=name,memory.total --format=csv; ca
 step "1. catalogue tests"
 PYTHONPATH=$CODE $PY -m pytest -q -p no:cacheprovider -s tests/test_sim_catalogue.py 2>&1 | quiet | grep -v "^\s*$" | tail -12; check ${PIPESTATUS[0]}
 for s in truth heldout train; do
-  step "2. catalogue model of the 41-tile survey: $s"
-  PYTHONPATH=$CODE $PY benchmarks/mapsim/catalogue_trainset.py --variant survey41 --set $s 2>&1 | quiet; check ${PIPESTATUS[0]}
+  step "2. catalogue model of the 41-tile survey ($CAT): $s"
+  PYTHONPATH=$CODE $PY benchmarks/mapsim/catalogue_trainset.py --variant $CAT --set $s 2>&1 | quiet; check ${PIPESTATUS[0]}
 done
-step "3. map-level training simulations"
-PYTHONPATH=$CODE $PY benchmarks/mapsim/maps_trainset.py --set train 2>&1 | quiet; check ${PIPESTATUS[0]}
+for s in $MAPSETS; do
+  step "3. map-level simulations ($NOISE noise): $s"
+  PYTHONPATH=$CODE $PY benchmarks/mapsim/maps_trainset.py --set $s --noise $NOISE 2>&1 | quiet; check ${PIPESTATUS[0]}
+done
 step "done"
