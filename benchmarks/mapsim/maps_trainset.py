@@ -76,11 +76,12 @@ def theta_of(row):
     return simu.THETA_FID._replace(**dict(zip(NAMES, (float(v) for v in row))))
 
 
-def make_sim(cells, tb, cfg, st, nt, specs, chunk):
-    spec_arr = jnp.asarray(specs)
+def make_sim(cells, tb, cfg, chunk):
+    """jitted simulation; the static arrays (tile statics, noise tables, survey spectra) are
+    arguments, not constants, so the compiled program stays small and cacheable."""
 
     @jax.jit
-    def sim(key, thv):
+    def sim(key, thv, st, nt, spec_arr):
         th = simu.THETA_FID._replace(**{n: thv[j] for j, n in enumerate(NAMES)})
         cs = simu.cosmology_stage(th, cells)
 
@@ -160,8 +161,9 @@ def main():
         for i in todo:
             c = int(cls[i])
             if c not in sims:
-                sims[c] = make_sim(cells, tb, cfgs[c], st, nt, specs, args.chunk)
-            o = jax.device_get(sims[c](jax.random.fold_in(base, int(i)), jnp.asarray(theta[i])))
+                sims[c] = make_sim(cells, tb, cfgs[c], args.chunk)
+            o = jax.device_get(sims[c](jax.random.fold_in(base, int(i)), jnp.asarray(theta[i]), st, nt,
+                                       jnp.asarray(specs)))
             if bool(o["overflow"]) and c < N_CLASSES - 1:
                 cls[i] = c + 1                                     # rerun in the next class
                 continue

@@ -15,6 +15,12 @@ omega_cdm is clipped at 0.200, the emulators' training edge (the paper's prior r
 sigma_lnq and sigma_lnp are truncated at 0 (redrawn), which removes 3e-4 and 5e-6 of the
 Gaussian mass. 'truth' uses the fiducial point (simulator.THETA_FID).
 
+--variant survey41 (variant (i), the catalogue model of the 10%-sky map-level survey,
+maps_trainset.py): 41 equal-area patches, one per survey tile, each with our filter's analytic
+sigma_y0 from that tile's MSS2 spectra plus the CMB (catalogue.analytic_sigma_y0), our goal
+sigma_kappa table, f_sky = 41 tiles; the map-level prior box (maps_trainset.py). Output in
+catalogue_npe/survey41/.
+
 Keys: simulation i of a set uses fold_in(key(SEED[set]), i); parameters come from numpy's
 default_rng(SEED[set]). Capacity classes: each draw goes to the smallest buffer that holds its
 expected halo number plus 8 standard deviations; an overflowing draw is rerun in the next class.
@@ -28,13 +34,17 @@ import json
 import os
 import time
 
+import sys
+
 import numpy as np
 import jax
 import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
-from classy_szlite.sim import catalogue as ct, simulator as simu  # noqa: E402
+from classy_szlite.sim import catalogue as ct, simulator as simu, halos as hl  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 OUT = os.path.join(os.environ.get("MAPSIM_OUT", "."), "catalogue_npe")
 NAMES = ("sigma8", "omega_cdm", "A_SZ", "alpha_SZ", "h", "omega_b", "n_s", "sigma_lnq", "beta_lens", "sigma_lnp")
@@ -43,7 +53,7 @@ GAUSS = {"h": (0.674, 0.01), "omega_b": (0.0222, 0.00015), "n_s": (0.96, 0.0042)
          "beta_lens": (0.92, 0.01), "sigma_lnp": (0.22, 0.05)}
 POSITIVE = ("sigma_lnq", "sigma_lnp")
 SEED = {"train": 20261121, "heldout": 20261122, "truth": 20261123}
-CLASSES = (2 ** 20, 2 ** 21, 2 ** 22, 2 ** 23)
+CLASSES = (2 ** 18, 2 ** 19, 2 ** 20, 2 ** 21, 2 ** 22, 2 ** 23)
 
 
 def draw_prior(n, rng):
@@ -73,16 +83,34 @@ def main():
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--chunk", type=int, default=512)
+    ap.add_argument("--variant", choices=("paper", "survey41"), default="paper")
     args = ap.parse_args()
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, f"{args.set}.npz")
+    out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant)
+    os.makedirs(out, exist_ok=True)
+    path = os.path.join(out, f"{args.set}.npz")
     rng = np.random.default_rng(SEED[args.set])
-    theta = (np.tile([getattr(simu.THETA_FID, k) for k in NAMES], (n, 1)) if args.set == "truth"
-             else draw_prior(n, rng))
     cells = ct.survey_cells()
-    sz, le = ct.paper_tables()
-    cfg0 = ct.CatalogueConfig()
+    if args.variant == "paper":
+        prior = draw_prior
+        sz, le = ct.paper_tables()
+        cfg0 = ct.CatalogueConfig()
+    else:
+        import maps_trainset as mt
+        from classy_szlite.sim import noise as nz, instrument as ins
+        import spike
+        prior = mt.draw_prior
+        nt, _ = nz.load_mss2(mt.SPECTRA, "mean")
+        specs = mt.survey_spectra(nt.F.shape[0])
+        cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
+        sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
+        sz = ct.PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(np.log(sig)))
+        le = ct.lens_table("goal")
+        cfg0 = ct.CatalogueConfig(f_sky=mt.N_TILES * hl.OMEGA_TILE / ct.SR_FULL, capacity=2 ** 19)
+        print(f"survey41: spectra {specs.tolist()}; sigma_y0 at 0.5' {sig[:, 0].min():.3g}-{sig[:, 0].max():.3g}, "
+              f"at 15' {sig[:, -1].min():.3g}-{sig[:, -1].max():.3g}; f_sky {cfg0.f_sky:.4f}", flush=True)
+        np.savez(os.path.join(out, "sigma_y0.npz"), sigma=sig, lnth=lnth, specs=specs)
+    theta = (np.tile([getattr(simu.THETA_FID, k) for k in NAMES], (n, 1)) if args.set == "truth" else prior(n, rng))
     base = jax.random.key(SEED[args.set])
 
     # expected halo numbers -> capacity classes
@@ -123,7 +151,7 @@ def main():
 
     def save():
         np.savez(path, theta=theta, x=x, n_halos=n_halos, n_sel=n_sel, capacity=cap, done=done, names=np.array(NAMES),
-                 settings=json.dumps(dict(variant="paper-exact (0)", f_sky=cfg0.f_sky, dof=cfg0.dof, r=cfg0.corr_lnq_lnp,
+                 settings=json.dumps(dict(variant=args.variant, f_sky=cfg0.f_sky, dof=cfg0.dof, r=cfg0.corr_lnq_lnp,
                                           a_lens=cfg0.a_lens, one_minus_b=simu.THETA_FID.one_minus_b,
                                           omega_cdm_max=0.200, seed=SEED[args.set], classes=list(CLASSES))))
 

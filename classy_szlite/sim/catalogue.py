@@ -87,6 +87,60 @@ def eval_fit(fit: NoiseFit, theta_arcmin, clamp=False):
     return jnp.exp(jnp.polyval(fit.coef, lnth))
 
 
+class PatchTable(NamedTuple):
+    """Noise tables per sky patch: ln sigma linear in ln theta[arcmin], held at the table ends
+    (variant (i): our own filter's sigma_y0 per survey tile; or one row for sigma_kappa)."""
+    lnth: jax.Array          # (n_th,)
+    lnsig: jax.Array         # (n_patch, n_th)
+
+
+def eval_table(tab: PatchTable, theta_arcmin, patch=None):
+    x = jnp.clip(jnp.log(theta_arcmin), tab.lnth[0], tab.lnth[-1])
+    i = jnp.clip(jnp.searchsorted(tab.lnth, x, side="right") - 1, 0, tab.lnth.shape[0] - 2)
+    w = (x - tab.lnth[i]) / (tab.lnth[i + 1] - tab.lnth[i])
+    row = jnp.zeros_like(i) if patch is None or tab.lnsig.shape[0] == 1 else patch
+    return jnp.exp((1.0 - w) * tab.lnsig[row, i] + w * tab.lnsig[row, i + 1])
+
+
+def noise_sigma(tab, theta_arcmin, clamp=False, patch=None):
+    """sigma at theta from a NoiseFit (cubic, the paper's) or a PatchTable (per patch)."""
+    if isinstance(tab, NoiseFit):
+        return eval_fit(tab, theta_arcmin, clamp)
+    return eval_table(tab, theta_arcmin, patch)
+
+
+def lens_table(mode="goal"):
+    """Our sigma_kappa table (lens_tables.py) as a one-row PatchTable."""
+    lnth, lnsig = lensing.table(mode)
+    return PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(lnsig)[None])
+
+
+def analytic_sigma_y0(noise_tables, specs, cmb_cl, fs=None):
+    """sigma_y0 of our matched filter at its 15 scales (mmf.THETAS15) for the noise of the MSS2
+    spectra `specs` (noise.NoiseTables rows) plus the lensed CMB, without tSZ: the covariance is
+    each mode's noise power (F F^T, per-mode units of noise.draw: E|X|^2 = N^2 C) plus
+    B_i B_j C_l N^2 / Omega_pix, averaged over the filter's bins as mmf's estimate is.
+    Returns (len(specs), 15) and the ln theta grid."""
+    from . import mmf, instrument as ins
+    from .flatsky import grid
+    G = grid()
+    fs = fs or mmf.filter_static()
+    b = np.asarray(noise_tables.bin_idx).ravel()[np.asarray(G.m_idx)]
+    B = ins.beams(G.m_L)
+    cmb = B[:, None, :] * B[None, :, :] * cmb_cl(G.m_L)[None, None, :] * G.Npx / G.Om      # (6, 6, n_modes)
+    F = np.asarray(noise_tables.F, dtype=np.float64)
+    out = []
+    for s in np.atleast_1d(specs):
+        N = np.einsum("bik,bjk->bij", F[s], F[s])[b] * G.Npx                                 # (n_modes, 6, 6)
+        C = np.moveaxis(cmb, -1, 0) + N
+        Cb = np.stack([np.stack([np.bincount(G.m_binpos, weights=G.m_W * C[:, i, j], minlength=G.n_bins)
+                                 / G.bin_count for j in range(6)], -1) for i in range(6)], 1)
+        _, aCa = mmf.weights(jnp.asarray(Cb), fs)
+        norm = jnp.sum(fs.m_W[None, :] * fs.tau_m ** 2 * aCa[None, :], axis=1)
+        out.append(np.asarray(1.0 / jnp.sqrt(norm)))
+    return np.array(out), np.log(np.asarray(mmf.THETAS15))
+
+
 class CatalogueConfig(NamedTuple):
     """Static settings (hashable)."""
     capacity: int = 2 ** 21          # halo buffer slots
@@ -120,17 +174,17 @@ def survey_rates(theta, cells):
     return cs.lam * s, cs.d2N * s, cs.cg, cs.chi_star
 
 
-def _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg):
+def _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch=None):
     """Median q and median p of halos (M500 [M_sun], z)."""
     H0_over_c = theta.h * 100.0 / lensing.C_KMS
     Ez = jnp.interp(z, cg.z, cg.Hz) / H0_over_c
     DA = jnp.interp(z, cg.z, cg.Da)
     y0 = y0_median(M, Ez, theta.h, theta.A_SZ, theta.alpha_SZ, theta.one_minus_b)
     th = theta500_arcmin(M, Ez, DA, theta.h, theta.one_minus_b)
-    qbar = y0 / eval_fit(sz_fit, th, cfg.clamp)
+    qbar = y0 / noise_sigma(sz_fit, th, cfg.clamp, patch)
     kap = lensing.kappa_rs(M, z, cg, theta.h, theta.beta_lens, chi_s)
     th_l = lensing.theta500_lens(M, z, cg, theta.h, theta.beta_lens)
-    pbar = cfg.a_lens * kap / eval_fit(lens_fit, th_l, cfg.clamp)
+    pbar = cfg.a_lens * kap / noise_sigma(lens_fit, th_l, cfg.clamp, patch)
     return qbar, pbar
 
 
@@ -177,7 +231,12 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
     z = ze[iz] + tz * (ze[iz + 1] - ze[iz])
     M = jnp.exp(me[im] + tm * (me[im + 1] - me[im]))
 
-    qbar, pbar = _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg)
+    patch = None
+    if isinstance(sz_fit, PatchTable) and sz_fit.lnsig.shape[0] > 1:     # equal-area patches, own key
+        k_patch = jax.random.fold_in(key, 0x5A7C)
+        patch = jax.vmap(lambda c, j: jax.random.randint(
+            jax.random.fold_in(jax.random.fold_in(k_patch, c), j), (), 0, sz_fit.lnsig.shape[0]))(cell, j_in_cell)
+    qbar, pbar = _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
     r = cfg.corr_lnq_lnp
     q_true = qbar * jnp.exp(theta.sigma_lnq * G[:, 0])
     p_true = pbar * jnp.exp(theta.sigma_lnp * (r * G[:, 0] + np.sqrt(1.0 - r * r) * G[:, 1]))
@@ -224,7 +283,7 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
               * jnp.asarray(w)[None, None, :, None] * jnp.asarray(w)[None, None, None, :])   # (n_z, n_m, s, s)
     zz = jnp.broadcast_to(jnp.asarray(Z)[:, None, :, None], wt.shape)
     MM = jnp.exp(jnp.broadcast_to(jnp.asarray(LM)[None, :, None, :], wt.shape))
-    qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, sz_fit, lens_fit, cfg)
+    n_patch = sz_fit.lnsig.shape[0] if isinstance(sz_fit, PatchTable) else 1
     gh, gw = np.polynomial.hermite_e.hermegauss(n_gh)
     gw = gw / gw.sum()
     g, gwj = jnp.asarray(gh), jnp.asarray(gw)
@@ -234,17 +293,20 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
     n_sel = 0.0
     p_sum = 0.0
     zb = jnp.searchsorted(jnp.asarray(sm.Z_EDGES), zz, side="right") - 1      # z bin of each point
-    for a in range(n_gh):
-        qt = jnp.sqrt((qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + cfg.dof)
-        cdf = norm.cdf(qe[None, None, None, None, :] - qt[..., None])          # P(q_obs < edge)
-        P_bin = cdf[..., 1:] - cdf[..., :-1]                                  # (.., 4)
-        P_sel = 1.0 - norm.cdf(cfg.q_min - qt)
-        # E[exp(sigma_lnp (r g1 + sqrt(1-r^2) g2))] over g2 at fixed g1
-        e_p = jnp.exp(theta.sigma_lnp * r * g[a] + 0.5 * (theta.sigma_lnp ** 2) * (1.0 - r * r))
-        ww = wt * gwj[a]
-        for j in range(5):
-            inz = (zb == j).astype(ww.dtype)
-            counts = counts.at[:, j].add(jnp.sum((ww * inz)[..., None] * P_bin, axis=(0, 1, 2, 3)))
-        n_sel = n_sel + jnp.sum(ww * P_sel)
-        p_sum = p_sum + jnp.sum(ww * P_sel * pbar * e_p)
+    inz = [(zb == j).astype(wt.dtype) for j in range(5)]
+    for pa in range(n_patch):
+        patch = None if n_patch == 1 else jnp.full(zz.shape, pa)
+        qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
+        for a in range(n_gh):
+            qt = jnp.sqrt((qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + cfg.dof)
+            cdf = norm.cdf(qe[None, None, None, None, :] - qt[..., None])          # P(q_obs < edge)
+            P_bin = cdf[..., 1:] - cdf[..., :-1]                                  # (.., 4)
+            P_sel = 1.0 - norm.cdf(cfg.q_min - qt)
+            # E[exp(sigma_lnp (r g1 + sqrt(1-r^2) g2))] over g2 at fixed g1
+            e_p = jnp.exp(theta.sigma_lnp * r * g[a] + 0.5 * (theta.sigma_lnp ** 2) * (1.0 - r * r))
+            ww = wt * gwj[a] / n_patch
+            for j in range(5):
+                counts = counts.at[:, j].add(jnp.sum((ww * inz[j])[..., None] * P_bin, axis=(0, 1, 2, 3)))
+            n_sel = n_sel + jnp.sum(ww * P_sel)
+            p_sum = p_sum + jnp.sum(ww * P_sel * pbar * e_p)
     return counts, n_sel, p_sum
