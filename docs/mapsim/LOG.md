@@ -1130,3 +1130,37 @@ paper's text, checked by a reviewer):
     uses capacity classes;
   - the ω_c prior is clipped at 0.200, the emulators' training edge (the
     paper's prior reaches 0.204).
+
+## 2026-11-21: catalogue-level NPE, as in the paper, with coverage tests
+
+- **Simulations** (`catalogue_trainset.py`, RTX job 7515732, 7.5 min):
+  - 10⁴ training draws (2 min 15 s on one GPU, 74 per second), 500 held-out
+    prior draws, and 100 catalogues at the fiducial point;
+  - the paper's prior, with ω_c clipped at 0.200 and the two scatter widths
+    truncated at 0;
+  - capacity classes from 2²⁰ to 2²² halos, with retries; no overflow left;
+  - 850 to 170,000 clusters selected across the prior (median 19,000).
+- **Environment:** `/mnt/home/bbolliet/venvs/sbi`, with sbi 0.27.0 and PyTorch
+  2.15 (CPU), 1.3 GB, built by `venvs/build_sbi.sh`.
+- **Training** (`catalogue_npe.py`, CPU job 7515804): NPE with a MAF of sbi's
+  default size, learning rate 5×10⁻⁴, 50-epoch patience; 370 epochs in 5.6 min.
+- **The paper's check,** 100 catalogues at the fiducial point. Bias of the
+  posterior means in posterior σ (ours; paper Table 1):
+
+  | | σ8 | ω_c | A_SZ | α_SZ | h | ω_b | n_s | σ_lnq | β_lens | σ_lnp |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | ours | +0.01 ± 0.10 | +0.12 ± 0.05 | −0.14 ± 0.08 | −0.02 ± 0.08 | +0.07 | +0.06 | +0.02 | +0.06 | −0.08 | −0.05 |
+  | paper | −0.11 ± 0.09 | +0.03 ± 0.06 | +0.05 ± 0.08 | +0.10 ± 0.10 | +0.02 | −0.10 | −0.04 | −0.06 | −0.01 | −0.04 |
+
+  - Both are within 0.14σ everywhere.
+  - Median posterior σ is 0.92–1.07 times the paper's likelihood widths.
+- **Coverage,** 500 held-out prior draws:
+  - **Ranks:** the true values' ranks are uniform for all ten parameters (KS
+    p 0.24–0.98).
+  - **TARP:** area to the diagonal −0.013, KS p 1.00.
+  - **Central intervals:** the 30%, 50%, 70% and 90% intervals are within
+    0.04 of nominal, except the 90% intervals of σ8 (0.86) and A_SZ (0.85),
+    about 3σ low on 500 draws. The posterior is slightly overconfident in the
+    tails there; an ensemble or more simulations should fix it.
+- **Cost of a full validation:** 17.5 min, mostly TARP's 1,000 samples for 500
+  draws (rejection sampling at the prior edges is slow).
