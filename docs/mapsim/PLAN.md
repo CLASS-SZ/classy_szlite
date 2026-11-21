@@ -374,3 +374,27 @@ Environment and data:
 4. **Catalogue baseline:** dof = 0 as in the paper's SO-like setup, or also a calibrated dof (k = 2 came closest in step 3b)?
 5. **Target depth:** year 1 or five years? Waiting for the colleague's answer on their year-1 maps and for the accuracy calculation (§3.5).
 6. **MSS2's streaks:** model them in the generator, apply a calibrated q shift, or neither? Decided with question 5.
+
+## 10. Publications from public data only (discussed 2026-11-21)
+
+- **Paper 1 (method, synthetic skies).**
+  - **Result:** map-level SBI recovers the truth with calibrated posteriors, while the paper's catalogue-level SBI on the same skies is biased. The bias is split into search selection, confusion noise and blending (T1–T3).
+  - **Public ingredients only:**
+    - the 2019 SO forecast noise (Ade et al. 2019), the simulator's default;
+    - for a realism test, ACT DR6's public noise simulations (mnms), whose per-tile spectra the noise module measures as it does MSS2's.
+  - **MSS2 stays internal validation.**
+  - **To check:** SO's publication policy for members presenting SO-like forecasts from public numbers.
+- **Paper 2 (real data).**
+  - **ACT DR6:** public maps at 0.5′ and public noise simulations, the closest match to the pipeline, with the DR5 catalogue for comparison. ACT's policy may apply to its members.
+  - **Planck:** fully public; PSZ2, with the paper's catalogue-level Planck SBI for comparison. Needs other beams and pixels, foregrounds and HEALPix tiling.
+  - **Gaps before either:**
+    - a model of confirmation and redshifts by optical follow-up (the simulator matches halos);
+    - foregrounds (CIB, radio sources);
+    - footprint, masks and tapered cut-outs (M9);
+    - real-data mass-calibration priors.
+- **Order:**
+  1. finish the bias test (MSS2 noise);
+  2. repeat it with the public forecast noise;
+  3. an ACT-noise robustness run;
+  4. write paper 1;
+  5. meanwhile, scope ACT DR6 against Planck, starting with the confirmation model.
