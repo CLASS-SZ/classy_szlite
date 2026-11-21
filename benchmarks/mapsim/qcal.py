@@ -46,6 +46,16 @@ R_NEIGH = 3.0                   # arcmin, for the isolation flag
 
 
 def run(args):
+    out = OUT + ("_forecast" if args.noise == "forecast" else "")
+    os.makedirs(out, exist_ok=True)
+    table(args.noise, args.mocks, save_dir=out)
+
+
+_BUILT = {}
+
+
+def _build(noise, setup_theta, cap, light):
+    """Static inputs and the jitted tile function (cached: one compilation per configuration)."""
     import jax
     import jax.numpy as jnp
     jax.config.update("jax_enable_x64", True)
@@ -55,30 +65,28 @@ def run(args):
     from classy_szlite.sim import catalogue as ct, mmf
     from classy_szlite.sim._util import compact
     from classy_szlite.sim.flatsky import PIXF, LBOX
-
-    out = OUT + ("_forecast" if args.noise == "forecast" else "")
-    os.makedirs(out, exist_ok=True)
     nt, _ = nz.load_mss2(mt.SPECTRA, "mean")
     specs = mt.survey_spectra(nt.F.shape[0])
-    cells, tb, cs, cfg0, st, _ = spike.setup(simu.THETA_FID)
+    cells, tb, _, cfg0, st, _ = spike.setup(setup_theta)
+    cosmo = jax.jit(lambda t: simu.cosmology_stage(t, cells))
     cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
     st = simu.tile_static(cmb, tb, mode="goal")
-    if args.noise == "forecast":
+    if noise == "forecast":
         sig_model, lnth = ct.analytic_sigma_y0_forecast(cmb, "goal")
         sig_model = np.repeat(sig_model, mt.N_TILES, axis=0)
     else:
         sig_model, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
     cfg = cfg0._replace(q_final=4.0, peak_cap=6144)      # more final-pass peaks at q > 4 than at q > 5
-    th = simu.THETA_FID
     lnth_j = jnp.asarray(lnth)
     lnMc = np.float32(np.log(cfg.M_conf))
-    forecast = args.noise == "forecast"
+    forecast = noise == "forecast"
+    CAPn = cap
 
     def interp_ln(lnsig, theta):                          # catalogue.eval_table for one row
         return ct.eval_table(ct.PatchTable(lnth=lnth_j, lnsig=lnsig[None]), theta)
 
     @jax.jit
-    def tile(key, cs, st, nt, spec, lnsig_model):
+    def tile(key, cs, th, st, nt, spec, lnsig_model):
         noise = None if forecast else nz.NoiseInput(nt, spec, jnp.float32(1.0))
         halos, X, ovf_paint = simu.tile_maps(key, cs, th, st, tb, cells, cfg, noise)
         pk, sigma, mk = simu.find_clusters(X, st.fs, cfg)
@@ -94,40 +102,70 @@ def run(args):
         j_best = jnp.full(C, -1, jnp.int32).at[jnp.where(is_best, cf.halo, C)].set(pk.j, mode="drop")
         # the halos above the confirmation mass
         massive = halos.valid & (halos.lnM >= lnMc)
-        idx, n_mass = compact(massive, CAP, C - 1)
-        ok = jnp.arange(CAP) < n_mass
+        idx, n_mass = compact(massive, CAPn, C - 1)
+        ok = jnp.arange(CAPn) < n_mass
         g = lambda a: jnp.take(a, idx)
         y0, t5 = g(halos.y0).astype(jnp.float64), g(halos.theta500).astype(jnp.float64)
         q_model = jnp.where(ok, y0 / interp_ln(lnsig_model, t5), 0.0)
         q_fsig = jnp.where(ok, y0 / interp_ln(jnp.log(sigma.astype(jnp.float64)), t5), 0.0)
-        # neighbours: the largest q_model of the other massive halos within R_NEIGH
-        hy = (g(halos.iy).astype(jnp.float32) + g(halos.oy)) * PIXF
-        hx = (g(halos.ix).astype(jnp.float32) + g(halos.ox)) * PIXF
-        dy = sm._wrap(hy[:, None] - hy[None, :], LBOX)
-        dx = sm._wrap(hx[:, None] - hx[None, :], LBOX)
-        near = (dy * dy + dx * dx <= R_NEIGH ** 2) & ok[None, :] & ~jnp.eye(CAP, dtype=bool)
-        q_nb = jnp.max(jnp.where(near, q_model[None, :].astype(jnp.float32), 0.0), axis=1)
-        close = (dy * dy + dx * dx <= np.float32(cfg.r_conf) ** 2) & ok[None, :] & ~jnp.eye(CAP, dtype=bool)
-        shadow = jnp.any(close & (g(halos.y0)[None, :] > g(halos.y0)[:, None]), axis=1)   # loses the match
+        if light:
+            q_nb, shadow = jnp.zeros(CAPn, jnp.float32), jnp.zeros(CAPn, bool)
+        else:
+            # neighbours: the largest q_model of the other massive halos within R_NEIGH
+            hy = (g(halos.iy).astype(jnp.float32) + g(halos.oy)) * PIXF
+            hx = (g(halos.ix).astype(jnp.float32) + g(halos.ox)) * PIXF
+            dy = sm._wrap(hy[:, None] - hy[None, :], LBOX)
+            dx = sm._wrap(hx[:, None] - hx[None, :], LBOX)
+            near = (dy * dy + dx * dx <= R_NEIGH ** 2) & ok[None, :] & ~jnp.eye(CAPn, dtype=bool)
+            q_nb = jnp.max(jnp.where(near, q_model[None, :].astype(jnp.float32), 0.0), axis=1)
+            close = (dy * dy + dx * dx <= np.float32(cfg.r_conf) ** 2) & ok[None, :] & ~jnp.eye(CAPn, dtype=bool)
+            shadow = jnp.any(close & (g(halos.y0)[None, :] > g(halos.y0)[:, None]), axis=1)   # loses the match
         # confirmed peaks above q = 5 whose matched halo is not in the list cannot happen (all massive)
         n_unconf5 = jnp.sum(keep & ~cf.ok & (pk.q > 5.0))
         ovf = jnp.concatenate([halos.overflow[None], ovf_paint, mk["peak_overflow"][None], cf.overflow[None],
-                               (n_mass > CAP)[None]])
+                               (n_mass > CAPn)[None]])
         return dict(ok=ok, z=g(halos.z), lnM=g(halos.lnM), theta500=t5.astype(jnp.float32), y0=y0.astype(jnp.float32),
                     q_model=q_model.astype(jnp.float32), q_fsig=q_fsig.astype(jnp.float32),
                     q_obs=g(q_best), n_match=g(n_match), j_obs=g(j_best), q_nb=q_nb, shadow=shadow,
                     counts=counts, sigma=sigma, sigma0=mk["sigma0"], n_unconf5=n_unconf5,
                     n_det5=jnp.sum(det & (pk.q > 5.0)), n_massive=n_mass, overflow=jnp.any(ovf))
 
-    base = jax.random.key(mt.SEED["truth"])
+    return dict(tile=tile, cosmo=cosmo, nt=nt, st=st, specs=specs, sig_model=sig_model, lnth=lnth)
+
+
+def table(noise, n_mocks, theta=None, base_key=None, setup_theta=None, cap=CAP, save_dir=None, light=False, log=print):
+    """The per-halo table of n_mocks map-level mocks of the 41-tile survey at theta (default: the
+    fiducial point, with the keys of maps_trainset.py --set truth, i.e. the mocks themselves).
+    Buffers are sized at setup_theta (default theta). light=True skips the neighbour flags (q_nb,
+    shadow), which cost a cap x cap comparison. Returns (H, tiles dict); with save_dir, also writes
+    halos.npy, tiles.npz and counts_*.npy there."""
+    import jax
+    import jax.numpy as jnp
+    jax.config.update("jax_enable_x64", True)
+    import spike
+    import maps_trainset as mt
+    from classy_szlite.sim import simulator as simu, noise as nz, instrument as ins, summaries as sm
+    from classy_szlite.sim import catalogue as ct, mmf
+    from classy_szlite.sim._util import compact
+    from classy_szlite.sim.flatsky import PIXF, LBOX
+
+    theta = simu.THETA_FID if theta is None else theta
+    bkey = (noise, theta if setup_theta is None else setup_theta, cap, light)
+    if bkey not in _BUILT:
+        _BUILT[bkey] = _build(*bkey)
+    b = _BUILT[bkey]
+    tile, nt, st, specs, sig_model, lnth = b["tile"], b["nt"], b["st"], b["specs"], b["sig_model"], b["lnth"]
+    cs = b["cosmo"](theta)
+    base = jax.random.key(mt.SEED["truth"]) if base_key is None else base_key
     rows, per_tile = [], []
     t0 = time.time()
     nt_d, st_d = jax.device_put(nt), jax.device_put(st)
-    for i in range(args.mocks):
+    th = jax.tree_util.tree_map(jnp.asarray, theta)
+    for i in range(n_mocks):
         km = jax.random.fold_in(base, i)
         counts_mock = np.zeros((4, 5), np.int64)
         for t in range(mt.N_TILES):
-            o = jax.device_get(tile(jax.random.fold_in(km, t), cs, st_d, nt_d, jnp.int32(specs[t]),
+            o = jax.device_get(tile(jax.random.fold_in(km, t), cs, th, st_d, nt_d, jnp.int32(specs[t]),
                                     jnp.asarray(np.log(sig_model[t]))))
             if o["overflow"]:
                 raise SystemExit(f"overflow in mock {i}, tile {t}")
@@ -139,14 +177,17 @@ def run(args):
             per_tile.append(dict(mock=i, tile=t, sigma=o["sigma"], sigma0=o["sigma0"], sigma_model=sig_model[t],
                                  n_unconf5=int(o["n_unconf5"]), n_det5=int(o["n_det5"]), n_massive=int(o["n_massive"])))
             counts_mock += o["counts"]
-        print(f"[{time.time() - t0:6.0f} s] mock {i}: q > 5 counts in the data vector {int(counts_mock.sum())}", flush=True)
-        np.save(os.path.join(out, f"counts_{i}.npy"), counts_mock)
+        log(f"[{time.time() - t0:6.0f} s] mock {i}: q > 5 counts in the data vector {int(counts_mock.sum())}")
+        if save_dir:
+            np.save(os.path.join(save_dir, f"counts_{i}.npy"), counts_mock)
     H = np.concatenate(rows)
-    np.save(os.path.join(out, "halos.npy"), H)
-    np.savez(os.path.join(out, "tiles.npz"), **{k: np.array([p[k] for p in per_tile]) for k in
-                                                ("mock", "tile", "sigma", "sigma0", "sigma_model", "n_unconf5", "n_det5",
-                                                 "n_massive")}, specs=specs, lnth=lnth, noise=args.noise)
-    print(f"done: {len(H)} halos above M_conf in {args.mocks} mocks ({time.time() - t0:.0f} s)", flush=True)
+    T = {k: np.array([p[k] for p in per_tile]) for k in
+         ("mock", "tile", "sigma", "sigma0", "sigma_model", "n_unconf5", "n_det5", "n_massive")}
+    if save_dir:
+        np.save(os.path.join(save_dir, "halos.npy"), H)
+        np.savez(os.path.join(save_dir, "tiles.npz"), **T, specs=specs, lnth=lnth, noise=noise)
+    log(f"done: {len(H)} halos above M_conf in {n_mocks} mocks ({time.time() - t0:.0f} s)")
+    return H, dict(T, specs=specs, lnth=lnth)
 
 
 # ------------------------------------------------------------------------------------------------

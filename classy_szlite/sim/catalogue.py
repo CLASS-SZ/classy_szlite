@@ -172,6 +172,12 @@ class CatalogueConfig(NamedTuple):
     # otherwise q_obs = sqrt((s q_true)^2 + k) + w N(0, 1). The last bin extends to any z. dof is
     # then unused.
     qcal: tuple | None = None
+    # Calibration that follows the parameters (variant (iii), qcal_grid.py): None, or
+    # (fid4, width4, g_sig (15 x 4), d0_sig (15,), rows (n_z x 21)) with x = (theta - fid4) / width4 in
+    # QCAL_PARAMS: ln sigma of the noise table shifts by d0_sig + g_sig x at each filter size, and per
+    # redshift bin row (z_upper, s0, s1..s4, k0, k1..k4, w0, w1..w4, f0, f1..f4) gives s = s0 + s.x etc.
+    # It replaces qcal.
+    qcal_theta: tuple | None = None
 
 
 class Catalogue(NamedTuple):
@@ -258,14 +264,18 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
         k_patch = jax.random.fold_in(key, 0x5A7C)
         patch = jax.vmap(lambda c, j: jax.random.randint(
             jax.random.fold_in(jax.random.fold_in(k_patch, c), j), (), 0, sz_fit.lnsig.shape[0]))(cell, j_in_cell)
+    qc = cfg.qcal
+    if cfg.qcal_theta is not None:
+        qc, dln = qcal_theta_eval(cfg.qcal_theta, theta)
+        sz_fit = sz_fit._replace(lnsig=sz_fit.lnsig + dln[None, :])
     qbar, pbar = _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
     r = cfg.corr_lnq_lnp
     q_true = qbar * jnp.exp(theta.sigma_lnq * G[:, 0])
     p_true = pbar * jnp.exp(theta.sigma_lnp * (r * G[:, 0] + np.sqrt(1.0 - r * r) * G[:, 1]))
-    if cfg.qcal is None:
+    if qc is None:
         q_obs = jnp.sqrt(q_true ** 2 + cfg.dof) + G[:, 2]
     else:                                                     # calibrated; the loss from its own key
-        s_, k_, w_, f_ = qcal_params(cfg.qcal, z)
+        s_, k_, w_, f_ = qcal_params(qc, z)
         q_obs = jnp.sqrt(jnp.maximum((s_ * q_true) ** 2 + k_, 0.0)) + w_ * G[:, 2]
         k_loss = jax.random.fold_in(key, 0x1055)
         u = jax.vmap(lambda c, j: jax.random.uniform(jax.random.fold_in(jax.random.fold_in(k_loss, c), j), (),
@@ -277,10 +287,27 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
 
 
 def qcal_params(qcal, z):
-    """(s, k, w, f) of each z from the calibration table (see CatalogueConfig.qcal)."""
-    t = np.asarray(qcal, dtype=np.float64)
-    i = jnp.clip(jnp.searchsorted(jnp.asarray(t[:, 0]), z, side="left"), 0, t.shape[0] - 1)
-    return tuple(jnp.asarray(t[:, c])[i] for c in (1, 2, 3, 4))
+    """(s, k, w, f) of each z from the calibration table (see CatalogueConfig.qcal; a tuple, or an
+    array from qcal_theta_eval)."""
+    t = jnp.asarray(np.asarray(qcal, dtype=np.float64)) if isinstance(qcal, tuple) else qcal
+    i = jnp.clip(jnp.searchsorted(t[:, 0], z, side="left"), 0, t.shape[0] - 1)
+    return tuple(t[:, c][i] for c in (1, 2, 3, 4))
+
+
+QCAL_PARAMS = ("sigma8", "omega_cdm", "A_SZ", "alpha_SZ")
+
+
+def qcal_theta_eval(qt, theta):
+    """The calibration at theta (CatalogueConfig.qcal_theta): the (n_z, 5) table of qcal_params and
+    the shift of ln sigma at the 15 filter sizes. Linear in x = (theta - fid) / width; w is kept above
+    0.05 and f within [0, 0.5]."""
+    fid, width, g_sig, d0_sig, rows = qt
+    x = jnp.stack([(getattr(theta, n) - fid[i]) / width[i] for i, n in enumerate(QCAL_PARAMS)])
+    dln = jnp.asarray(np.asarray(d0_sig)) + jnp.asarray(np.asarray(g_sig)) @ x
+    R = jnp.asarray(np.asarray(rows, dtype=np.float64))
+    lin = lambda c: R[:, c] + R[:, c + 1:c + 5] @ x
+    tab = jnp.stack([R[:, 0], lin(1), lin(6), jnp.maximum(lin(11), 0.05), jnp.clip(lin(16), 0.0, 0.5)], 1)
+    return tab, dln
 
 
 def load_qcal(path):
@@ -341,16 +368,20 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
     inz = [(zb == j).astype(wt.dtype) for j in range(5)]
     for pa in range(n_patch):
         patch = None if n_patch == 1 else jnp.full(zz.shape, pa)
-        qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
-        if cfg.qcal is None:
+        qc, szf = cfg.qcal, sz_fit
+        if cfg.qcal_theta is not None:
+            qc, dln = qcal_theta_eval(cfg.qcal_theta, theta)
+            szf = sz_fit._replace(lnsig=sz_fit.lnsig + dln[None, :])
+        qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, szf, lens_fit, cfg, patch)
+        if qc is None:
             s_, k_, w_, f_ = 1.0, cfg.dof, 1.0, 0.0
         else:
-            s_, k_, w_, f_ = qcal_params(cfg.qcal, zz)
+            s_, k_, w_, f_ = qcal_params(qc, zz)
         for a in range(n_gh):
             qt = jnp.sqrt(jnp.maximum((s_ * qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + k_, 0.0))
-            wq = w_ if cfg.qcal is None else w_[..., None]
+            wq = w_ if qc is None else w_[..., None]
             cdf = norm.cdf((qe[None, None, None, None, :] - qt[..., None]) / wq)   # P(q_obs < edge)
-            P_bin = (1.0 - (f_ if cfg.qcal is None else f_[..., None])) * (cdf[..., 1:] - cdf[..., :-1])
+            P_bin = (1.0 - (f_ if qc is None else f_[..., None])) * (cdf[..., 1:] - cdf[..., :-1])
             P_sel = (1.0 - f_) * (1.0 - norm.cdf((cfg.q_min - qt) / w_))
             # E[exp(sigma_lnp (r g1 + sqrt(1-r^2) g2))] over g2 at fixed g1
             e_p = jnp.exp(theta.sigma_lnp * r * g[a] + 0.5 * (theta.sigma_lnp ** 2) * (1.0 - r * r))

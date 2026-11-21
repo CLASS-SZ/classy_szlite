@@ -228,6 +228,58 @@ def test_calibrated_observation_simulations_match_expectation(setup):
     assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
 
 
+def _qcal_theta(qc, g=0.0, gs=0.0):
+    """A qcal_theta built from a constant table qc, with gradients g (observation) and gs (ln sigma)."""
+    fid = (0.811, 0.121, -4.3054, 1.1233)
+    width = (0.082, 0.0886, 0.45, 0.24)
+    rows = tuple((r[0], r[1], g, -g, g, 0.0, r[2], 2 * g, 0, 0, 0, r[3], 0, g, 0, 0, r[4], 0, 0, 0.1 * g, 0)
+                 for r in qc)
+    g_sig = tuple((gs, 0.5 * gs, gs, -gs) for _ in range(15))
+    return (fid, width, g_sig, tuple(0.0 for _ in range(15)), rows)
+
+
+def test_calibration_following_theta_reduces_to_fixed(setup):
+    """qcal_theta with zero gradients gives the same catalogue as qcal."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.5, 15.0, 15)
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes))))[None])
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    cfg = ct.CatalogueConfig(f_sky=0.05, capacity=2 ** 18, qcal=qc)
+    a = jax.jit(lambda k: ct.simulate(k, TH, cells, tab, le, cfg))(jax.random.key(11))
+    b = jax.jit(lambda k: ct.simulate(k, TH, cells, tab, le, cfg._replace(qcal=None, qcal_theta=_qcal_theta(qc))))(jax.random.key(11))
+    assert np.array_equal(np.asarray(a.counts), np.asarray(b.counts)) and float(a.p_sum) == float(b.p_sum)
+
+
+def test_calibration_following_theta_simulations_match_expectation(setup):
+    """qcal_theta with gradients, at a point away from the fiducial one: simulations against the
+    expectation, and the expectation differs from the fixed calibration's."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.5, 15.0, 15)
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes))))[None])
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    th = TH._replace(sigma8=0.84, omega_cdm=0.14, A_SZ=-4.2)
+    cfg = ct.CatalogueConfig(f_sky=0.1, capacity=2 ** 19, qcal_theta=_qcal_theta(qc, g=0.05, gs=-0.04))   # shifts that add, not cancel
+    ec, en, ep = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg))(th)
+    ec, en, ep = np.asarray(ec), float(en), float(ep)
+    _, n0, _ = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg._replace(qcal_theta=None, qcal=qc)))(th)
+    assert abs(en / float(n0) - 1) > 0.02
+    f = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg))
+    R = 40
+    C, Ns, Ps = [], [], []
+    for r in range(R):
+        c = f(jax.random.key(2900 + r))
+        assert not bool(c.overflow)
+        C.append(np.asarray(c.counts, float)); Ns.append(int(c.n_sel)); Ps.append(float(c.p_sum))
+    C, Ns = np.array(C), np.array(Ns, float)
+    keep = ec > 1.0
+    zc = (C.mean(0)[keep] - ec[keep]) / np.sqrt(ec[keep] / R)
+    print("calibration following theta, counts z-scores:", np.round(zc, 2).tolist(),
+          f"selected {Ns.mean():.1f} against {en:.1f} (fixed calibration {float(n0):.1f})")
+    assert np.all(np.abs(zc) < 4.5)
+    assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
+    assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
+
+
 def test_calibration_none_is_unchanged(setup):
     """qcal=None leaves the paper-exact simulator bit-identical."""
     cells, sz, le = setup
