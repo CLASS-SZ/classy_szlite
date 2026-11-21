@@ -201,6 +201,42 @@ def test_patches_simulations_match_expectation(setup):
     assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
 
 
+def test_calibrated_observation_simulations_match_expectation(setup):
+    """Variant (ii): per redshift bin scale s, search lift k, scatter w and loss f (CatalogueConfig.qcal),
+    with values far from the plain model so that a mistake shows: simulations against the expectation."""
+    cells, sz, le = setup
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    cfg = ct.CatalogueConfig(f_sky=0.1, capacity=2 ** 19, qcal=qc)
+    ec, en, ep = jax.jit(lambda t: ct.expected(t, cells, sz, le, cfg))(TH)
+    ec, en, ep = np.asarray(ec), float(en), float(ep)
+    e0, n0, _ = jax.jit(lambda t: ct.expected(t, cells, sz, le, cfg._replace(qcal=None)))(TH)
+    assert abs(en / float(n0) - 1) > 0.02                      # the calibration changes the selection
+    f = jax.jit(lambda k: ct.simulate(k, TH, cells, sz, le, cfg))
+    R = 60
+    C, Ns, Ps = [], [], []
+    for r in range(R):
+        c = f(jax.random.key(1900 + r))
+        assert not bool(c.overflow)
+        C.append(np.asarray(c.counts, float)); Ns.append(int(c.n_sel)); Ps.append(float(c.p_sum))
+    C, Ns = np.array(C), np.array(Ns, float)
+    keep = ec > 1.0
+    zc = (C.mean(0)[keep] - ec[keep]) / np.sqrt(ec[keep] / R)
+    print("calibrated counts z-scores:", np.round(zc, 2).tolist(), f"selected {Ns.mean():.1f} against {en:.1f};"
+          f" mean p {np.sum(Ps) / Ns.sum():.5f} against {ep / en:.5f}")
+    assert np.all(np.abs(zc) < 4.5)
+    assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
+    assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
+
+
+def test_calibration_none_is_unchanged(setup):
+    """qcal=None leaves the paper-exact simulator bit-identical."""
+    cells, sz, le = setup
+    cfg = ct.CatalogueConfig(f_sky=0.05, capacity=2 ** 18)
+    a = jax.jit(lambda k: ct.simulate(k, TH, cells, sz, le, cfg))(jax.random.key(7))
+    b = jax.jit(lambda k: ct.simulate(k, TH, cells, sz, le, cfg._replace(qcal=None)))(jax.random.key(7))
+    assert np.array_equal(np.asarray(a.counts), np.asarray(b.counts)) and float(a.p_sum) == float(b.p_sum)
+
+
 @pytest.mark.skipif(not os.path.exists(SPECTRA), reason="MSS2 spectra absent")
 def test_analytic_sigma_y0_matches_the_finder_on_noise():
     """Our filter's sigma_y0 from a tile's MSS2 spectra plus the CMB (catalogue.analytic_sigma_y0)

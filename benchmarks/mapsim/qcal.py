@@ -312,6 +312,23 @@ def analyse(args):
         zsc = (obs1 - p) / np.sqrt(np.maximum(v, 1))
         P(f"   {name}: total {p.sum():.0f}; one-per-halo mocks / predicted (rows q bins, columns z bins)\n{obs1 / p}\n"
           f"   z-scores (binomial): max |z| {np.abs(zsc).max():.1f}, chi2 {np.sum(zsc ** 2):.0f} for 20 bins")
+    # 7. the calibration for the catalogue model, variant (ii) (catalogue_trainset.py --variant calib41):
+    # the finder's noise per tile (mean over the mocks) and, per redshift bin (the five data-vector bins and
+    # z > 1.5, which the stacked p uses), the fit against q_fsig on halos with q_fsig > 2, applied to every
+    # halo (checked: within 0.97-1.04 of the mocks per bin, LOG 2026-11-21).
+    zb = [0.01, 0.31, 0.61, 0.90, 1.20, 1.50, 99.0]
+    cal = []
+    for a, b in zip(zb[:-1], zb[1:]):
+        m = (z > a) & (z <= b) & (qf > 2)
+        r = censored_fit(qf[m], qo[m])
+        cal.append((b, r["s"], r["k"], r["w"], r["f"]))
+    cal = np.array(cal)
+    sig_tile = np.array([T["sigma"][T["tile"] == t].mean(0) for t in range(int(T["tile"].max()) + 1)])
+    np.savez(os.path.join(out, "calibration.npz"), z_upper=cal[:, 0], s=cal[:, 1], k=cal[:, 2], w=cal[:, 3], f=cal[:, 4],
+             sigma=sig_tile, lnth=T["lnth"], specs=T["specs"], noise=args.noise, n_mocks=n_mocks)
+    P("\n7. calibration for the catalogue model (calibration.npz): per z bin (z_upper, s, k, w, f) against q_fsig")
+    for row in cal:
+        P("   " + "  ".join(f"{v:.4f}" for v in row))
     json.dump(dict(fits=fits, counts_mocks=obs.tolist(), counts_mocks_one_per_halo=obs1.tolist(), pred_catalogue=pa.tolist(), pred_fit_all=pb.tolist(),
                    pred_fit_z=pc.tolist()), open(os.path.join(out, "qcal.json"), "w"), indent=1, default=float)
     open(os.path.join(out, "qcal.txt"), "w").write("\n".join(lines) + "\n")

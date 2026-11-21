@@ -18,6 +18,10 @@ Gaussian mass. 'truth' uses the fiducial point (simulator.THETA_FID).
 --variant forecast41: the same with the 2019 SO forecast noise at goal depth (one sigma_y0 table
 for every tile), output in catalogue_npe/forecast41/ (PLAN section 10, paper 1).
 
+--variant calib41 (variant (ii)): the same survey with the finder's measured noise per tile and its
+calibrated observation per redshift bin (qcal.py: calibration.npz, from map-level mocks at the
+fiducial point; CatalogueConfig.qcal), held fixed over the prior. Output in catalogue_npe/calib41/.
+
 --variant survey41 (variant (i), the catalogue model of the 10%-sky map-level survey,
 maps_trainset.py): 41 equal-area patches, one per survey tile, each with our filter's analytic
 sigma_y0 from that tile's MSS2 spectra plus the CMB (catalogue.analytic_sigma_y0), our goal
@@ -86,7 +90,7 @@ def main():
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--chunk", type=int, default=512)
-    ap.add_argument("--variant", choices=("paper", "survey41", "forecast41"), default="paper")
+    ap.add_argument("--variant", choices=("paper", "survey41", "forecast41", "calib41"), default="paper")
     args = ap.parse_args()
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
     out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant)
@@ -106,13 +110,20 @@ def main():
         nt, _ = nz.load_mss2(mt.SPECTRA, "mean")
         specs = mt.survey_spectra(nt.F.shape[0])
         cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
+        qcal = None
         if args.variant == "forecast41":            # the same survey with the 2019 forecast noise (goal)
             sig, lnth = ct.analytic_sigma_y0_forecast(cmb, "goal")
+        elif args.variant == "calib41":             # the finder's noise and observation, from qcal.py
+            qcal, tab = ct.load_qcal(os.path.join(os.environ.get("MAPSIM_OUT", "."), "qcal", "calibration.npz"))
+            sig, lnth = np.exp(np.asarray(tab.lnsig)), np.asarray(tab.lnth)
+            assert np.array_equal(np.load(os.path.join(os.environ.get("MAPSIM_OUT", "."), "qcal", "calibration.npz"))["specs"], specs)
         else:
             sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
         sz = ct.PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(np.log(sig)))
         le = ct.lens_table("goal")
-        cfg0 = ct.CatalogueConfig(f_sky=mt.N_TILES * hl.OMEGA_TILE / ct.SR_FULL, capacity=2 ** 19)
+        cfg0 = ct.CatalogueConfig(f_sky=mt.N_TILES * hl.OMEGA_TILE / ct.SR_FULL, capacity=2 ** 19, qcal=qcal)
+        if qcal is not None:
+            print(f"calibration (z_upper, s, k, w, f): {qcal}", flush=True)
         print(f"{args.variant}: spectra {specs.tolist()}; sigma_y0 at 0.5' {sig[:, 0].min():.3g}-{sig[:, 0].max():.3g}, "
               f"at 15' {sig[:, -1].min():.3g}-{sig[:, -1].max():.3g}; f_sky {cfg0.f_sky:.4f}", flush=True)
         np.savez(os.path.join(out, "sigma_y0.npz"), sigma=sig, lnth=lnth, specs=specs)
@@ -157,7 +168,7 @@ def main():
 
     def save():
         np.savez(path, theta=theta, x=x, n_halos=n_halos, n_sel=n_sel, capacity=cap, done=done, names=np.array(NAMES),
-                 settings=json.dumps(dict(variant=args.variant, f_sky=cfg0.f_sky, dof=cfg0.dof, r=cfg0.corr_lnq_lnp,
+                 settings=json.dumps(dict(variant=args.variant, f_sky=cfg0.f_sky, qcal=cfg0.qcal, dof=cfg0.dof, r=cfg0.corr_lnq_lnp,
                                           a_lens=cfg0.a_lens, one_minus_b=simu.THETA_FID.one_minus_b,
                                           omega_cdm_max=0.200, seed=SEED[args.set], classes=list(CLASSES))))
 
