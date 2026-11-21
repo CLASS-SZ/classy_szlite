@@ -1169,3 +1169,57 @@ paper's text, checked by a reviewer):
     - (Corrected the same day: first reported as a tail effect only.)
 - **Cost of a full validation:** 17.5 min, mostly TARP's 1,000 samples for 500
   draws (rejection sampling at the prior edges is slow).
+
+## 2026-11-21: the bias test at 10% of the sky (MSS2 noise)
+
+**Survey.** 41 periodic tiles (f_sky 0.099), each with its own MSS2 noise: the
+four-split mean of one of 41 tiles drawn from the 107 measured. Map-level prior
+box, goal σ_κ table.
+- **Simulation jobs:** 7515849 (100 mocks and 500 held-out draws) and 7515882
+  (catalogue model, 10⁴ map-level training draws in 69 min at 2.4 per second);
+  no overflow.
+- **Map-level simulator:** halos, painted tSZ, CMB, the tile's MSS2 noise, our
+  finder with its masking pass, confirmation.
+  - The stacked p now averages over every confirmed detection with q > 5.
+- **Catalogue model of the same survey,** variant (i)
+  (`catalogue_trainset.py --variant survey41`):
+  - each tile's analytic σ_y0 from its MSS2 spectra plus the CMB, which agrees
+    with the finder's on noise maps to 0.1–0.8% (test);
+  - equal-area patches;
+  - goal σ_κ;
+  - q_obs = q_true + N(0,1).
+- **At the fiducial point:** the catalogue model selects about 13,900
+  clusters; the map-level mocks have about 13,300 confirmed detections with
+  q > 5.
+
+**Training** (`inference_npe.sh`, CPU job 7516107, 20 min): both posteriors
+trained the paper's way on 10⁴ simulations from the same prior. Bias of the
+posterior means, in posterior σ, over 100 mocks:
+
+| | σ8 | ω_c | A_SZ | α_SZ | h | Ω_m | S8 |
+|---|---|---|---|---|---|---|---|
+| catalogue posterior, map mocks | **+2.04 ± 0.10** | **−0.97 ± 0.06** | **−1.37 ± 0.08** | **−5.45 ± 0.13** | +0.30 | **−1.58 ± 0.09** | **−0.41 ± 0.08** |
+| catalogue posterior, catalogue mocks | −0.02 ± 0.10 | +0.01 ± 0.07 | −0.04 ± 0.09 | −0.06 ± 0.10 | +0.03 | | |
+| map posterior, map mocks | −0.05 ± 0.10 | +0.04 ± 0.07 | +0.02 ± 0.08 | +0.15 ± 0.09 | +0.01 | | |
+
+- **Both posteriors are calibrated on their own held-out simulations:** TARP
+  area −0.005 (catalogue) and −0.002 (map level), and the central intervals
+  are within 0.03–0.06 of nominal.
+  - The catalogue posterior's A_SZ ranks have KS p 0.001: its intervals are
+    6–9% narrow.
+- **So the bias comes from applying the catalogue model to map-level data,**
+  not from either network.
+- **Size:**
+  - Every parameter of the map-level posterior is within 0.17σ (β_lens
+    −0.17σ; its six prior-dominated parameters carry small but precise
+    offsets).
+  - The paper's catalogue-level inference is off by up to 5.5σ (α_SZ) and
+    2σ (σ8).
+  - The σ8 and Ω_m shifts partly cancel in S8 (−0.4σ).
+  - At 40% of the sky the posteriors narrow by about 2, so the shifts double
+    in σ.
+- **Next:**
+  - split the bias into search selection (the control simulator), confusion
+    noise (variant (ii)) and blending;
+  - for paper 1, rerun with the public forecast noise
+    (`NOISE=forecast inference_sims.sh`, then `inference_npe.sh`).
