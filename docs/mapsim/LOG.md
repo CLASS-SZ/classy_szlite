@@ -1377,3 +1377,35 @@ calibrated over the whole prior. This is paper 1's central result in
 miniature.
 - **Still to check:** whether recalibrating at the posterior's own point
   (iterating) recovers the catalogue model, as a real analysis might do.
+
+## 2026-11-21: the bias test with the public 2019 forecast noise (paper 1)
+
+**The runs.** The same 41-tile survey and skies (same keys) as the MSS2 test,
+with the simulator's default noise: the 2019 SO forecast, goal depth, white
+plus atmospheric.
+- **Simulations** (job 7517632, 85 min): 100 mocks, 500 held-out draws and
+  10⁴ training simulations; no overflow.
+  - The forecast noise is slightly lower than MSS2 depth 1: 14,027 median
+    detections per mock against 13,313.
+  - The published-style catalogue model of this survey (forecast41) uses one
+    analytic σ_y0 for all tiles.
+- **Training** (job 7517634, 20 min).
+
+**Bias on the 100 map-level mocks** (posterior σ):
+
+| | σ8 | ω_c | A_SZ | α_SZ | Ω_m | S8 |
+|---|---|---|---|---|---|---|
+| published-style catalogue posterior | **+1.86 ± 0.10** | **−0.77 ± 0.06** | **−1.42 ± 0.08** | **−5.28 ± 0.11** | **−1.26 ± 0.09** | **−0.30 ± 0.09** |
+| the same on its own catalogue mocks | −0.02 | +0.07 | −0.12 | −0.02 | | |
+| map-level posterior | −0.02 ± 0.10 | +0.08 ± 0.06 | −0.06 ± 0.09 | +0.15 ± 0.09 | | |
+
+**Coverage on 500 prior draws.**
+- **Map-level:** TARP −0.009; 50% intervals 0.44–0.51 and 90% 0.85–0.90.
+  α_SZ is slightly narrow (0.44 and 0.85); β_lens ranks KS p 0.003.
+- **Catalogue:** TARP +0.004; A_SZ narrow (KS p 0.001), as with MSS2.
+
+**Reading.** The same as with MSS2: the published catalogue model is biased
+by up to 5.3σ on map-level data, and map-level inference is not. Paper 1's
+main result holds on public inputs.
+
+The calibrated catalogue model for this survey is job 7517636.
