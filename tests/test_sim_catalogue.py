@@ -158,3 +158,69 @@ def test_selected_p_against_conditional_expectation(setup):
     print(f"per-halo conditional: p sum z {zp:+.2f}, number selected z {zn:+.2f}; "
           f"mean p {tot_p / tot_n:.5f} against {tot_e / tot_en:.5f}")
     assert abs(zp) < 4.5 and abs(zn) < 4.5
+
+
+# ---- per-patch noise (variant (i): each survey tile's own sigma_y0) ------------------------
+
+SPECTRA = os.path.join(os.environ.get("MAPSIM_OUT", "/mnt/ceph/users/bbolliet/mapsim"), "mss2", "spectra", "spectra.npz")
+
+
+def test_patch_table_interpolation():
+    lnth = jnp.log(jnp.array([0.5, 1.0, 2.0, 4.0]))
+    lnsig = jnp.log(jnp.array([[4.0, 2.0, 1.0, 0.5], [8.0, 4.0, 2.0, 1.0]]))
+    tab = ct.PatchTable(lnth=lnth, lnsig=lnsig)
+    th = jnp.array([0.5, 1.0, np.sqrt(2.0), 4.0, 10.0, 0.1])
+    for p in (0, 1):
+        got = np.asarray(ct.eval_table(tab, th, jnp.full(th.shape, p)))
+        base = np.array([4.0, 2.0, np.sqrt(2.0), 0.5, 0.5, 4.0]) * (1 + p)      # power law inside, held outside
+        np.testing.assert_allclose(got, base, rtol=1e-12)
+
+
+@needs_tables
+def test_patches_simulations_match_expectation(setup):
+    """Three equal-area patches with different noise (the paper's sigma_y0 table times 0.8, 1, 1.3)."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.3, 20.0, 30)
+    base = np.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes)))
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(np.outer([0.8, 1.0, 1.3], base))))
+    cfg = ct.CatalogueConfig(f_sky=0.1, capacity=2 ** 19)
+    ec, en, ep = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg))(TH)
+    ec, en, ep = np.asarray(ec), float(en), float(ep)
+    f = jax.jit(lambda k: ct.simulate(k, TH, cells, tab, le, cfg))
+    R = 60
+    C, Ns = [], []
+    for r in range(R):
+        c = f(jax.random.key(900 + r))
+        assert not bool(c.overflow)
+        C.append(np.asarray(c.counts, float)); Ns.append(int(c.n_sel))
+    C, Ns = np.array(C), np.array(Ns, float)
+    keep = ec > 1.0
+    zc = (C.mean(0)[keep] - ec[keep]) / np.sqrt(ec[keep] / R)
+    print("patch counts z-scores:", np.round(zc, 2).tolist(), f"selected {Ns.mean():.1f} against {en:.1f}")
+    assert np.all(np.abs(zc) < 4.5)
+    assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
+
+
+@pytest.mark.skipif(not os.path.exists(SPECTRA), reason="MSS2 spectra absent")
+def test_analytic_sigma_y0_matches_the_finder_on_noise():
+    """Our filter's sigma_y0 from a tile's MSS2 spectra plus the CMB (catalogue.analytic_sigma_y0)
+    against the sigma our finder estimates on maps drawn from the same spectra (no tSZ): within 3%."""
+    from classy_szlite.sim import noise as nz, mmf, paint as pt, instrument as ins, flatsky as fsk
+    path = os.path.join(os.environ.get("MAPSIM_REFDATA", "/mnt/ceph/users/bbolliet/sz-poisson-blending"),
+                        "data_real", "cmb_lensed_TT_camb.npz")
+    cmb = ins.cmb_cl_from_table(path) if os.path.exists(path) else ins.cmb_cl_emulator()
+    tb = pt.PaintTables(lnth0=0.0, dln=0.02, rP=np.ones(2), tab=np.zeros((2, 4)), th_split=6.0)
+    st = simu.tile_static(cmb, tb)
+    nt, info = nz.load_mss2(SPECTRA, "mean")
+    fs = mmf.filter_static()
+    for s in (0, 50):
+        sig_an, _ = ct.analytic_sigma_y0(nt, [s], cmb, fs)
+        ni = nz.noise_input(nt, s, 1.0)
+        est = []
+        for r in range(3):
+            X = jax.jit(lambda k: simu.channel_maps(k, jnp.zeros(fsk.grid().L.shape, jnp.complex64), st, ni))(
+                jax.random.key(40 + r))
+            est.append(np.asarray(jax.jit(lambda X: mmf.q_cube(X, fs))(X)[1]))
+        ratio = np.mean(est, 0) / sig_an[0]
+        print(f"spectrum {s}: finder sigma / analytic {np.round(ratio, 4).tolist()}")
+        assert np.all(np.abs(ratio - 1.0) < 0.03), ratio
