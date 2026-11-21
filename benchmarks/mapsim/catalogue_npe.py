@@ -132,8 +132,8 @@ def main():
     for t_i, x_i in zip(th_h, x_h):
         s = samples(x_i, n_cov)
         ranks.append((s < t_i[None]).mean(0))
-        lo = np.quantile(s, 0.5 - levels[:, None] / 2, axis=0)
-        hi = np.quantile(s, 0.5 + levels[:, None] / 2, axis=0)
+        lo = np.quantile(s, 0.5 - levels / 2, axis=0)                     # (9, 10)
+        hi = np.quantile(s, 0.5 + levels / 2, axis=0)
         inside.append((t_i[None] >= lo) & (t_i[None] <= hi))
     ranks, inside = np.array(ranks), np.array(inside)                   # (n, 10), (n, 9, 10)
     from scipy import stats

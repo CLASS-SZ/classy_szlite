@@ -11,6 +11,6 @@ PY=/mnt/home/bbolliet/venvs/sbi/bin/python
 cd $CODE
 echo "=== $(date +%T) node"; hostname; cat $CODE/SNAPSHOT
 echo "=== $(date +%T) NPE, 10^4 simulations"
-$PY benchmarks/mapsim/catalogue_npe.py --n-train 10000 --seed 0 2>&1 | grep --line-buffered -v -i "warn"
+$PY benchmarks/mapsim/catalogue_npe.py --n-train 10000 --seed 0 2>&1 | tr '\r' '\n' | grep --line-buffered -v -i "warn\|Epochs trained:"
 rc=${PIPESTATUS[0]}
 echo "=== $(date +%T) done (exit $rc)"; exit $rc
