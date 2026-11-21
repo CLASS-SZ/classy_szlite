@@ -131,7 +131,7 @@ Headline tests, each on map-level mock data at a known cosmology:
     - **Check:** the same code on the SENS1 curve must reproduce cosmocnc_jax's baseline table (`so_sim_lensing_mf_noise.npy`).
     - **Baseline comparisons:** the paper comparison and SO_sim_0 keep cosmocnc_jax's cubic log-log fit to its baseline table. We hold that fit at its end values outside the table (0.739′–5.87′), because SO_sim_0's mean p favours that (0.297 against 0.307 extrapolated; observed 0.2986 ± 0.0080);
   - a detection without a matched halo gets p ~ N(0,1);
-  - the summary is the mean p over the data-vector sample;
+  - the summary is the mean p over every selected cluster (q > 5, any redshift, q above 40 included), as the paper's "averaged across the entire catalogue" and cosmocnc's survey file (decided 2026-11-21; the map-level summary moves to this definition);
   - blending and mis-centring of the lensing signal are not modelled in v1.
 - **Population caveat:** the legacy population of our previous project had ~2.65× SPT's measured D_3000^tSZ (step 1). The production model has θ500 7% smaller and y0 ~15% higher at fixed M. Its D_3000 is computed in M3 and is expected to be similar. A lower-amplitude variant (M8) shows how the results scale.
 
@@ -315,7 +315,10 @@ Data:
   - Then the GPU generator must reproduce the numpy periodic kind's counts on the 32 tiles. For that comparison it must be fed the same spectra as that kind (`ft.iso_spectra` on the cut-outs, square-pixel multipoles, bins of 2 × 2π / (1680 × 0.5′)), not `spectra.npz`, whose true-sky multipoles, pixel areas and tile levels differ; `spectra.npz` is for production.
 - **Decisions pending:** year 1 and the streaks (§3.5).
 
-**M7. Catalogue-level baselines.**
+**M7. Catalogue-level baselines.** *Design 2026-11-21* (`LOG.md`, "catalogue-level simulator: what the paper did"):
+- `classy_szlite/sim/catalogue.py`, our own JAX simulator on our cosmology, mass function, scaling relations and lensing model: Poisson halos over f_sky × 4π from a (z, ln M) grid, the joint log-normal scatter of ln q and ln p, q_obs = √(q_true² + dof) + N(0,1), p_obs = p_true + N(0,1), selection q_obs > 5, the 4 × 5 counts and the mean p over all selected clusters.
+- Variant (0), paper-exact: the paper's σ_y0 table (SZiFi on Websky) and σ_κ table with cosmocnc's cubic fits, extrapolated as in its code (the clamp of §3.2 stays an option), M_min = 5e13, 40% of the sky, dof = 0, the paper's 10 parameters and priors (β_SZ = 0.8, r = 0, a_lens = 1 fixed).
+- Reference: cosmocnc_jax (JAX keys, unbiased sampler). The paper's catalogues came from the numpy cosmocnc (a cumulative-sum sampler about half a z cell low); its training settings (sbi version, MAF size, M_max, z range, grids) are asked of the authors.
 - Rewrite the paper's SO-like simulator.
   - Code tests against cosmocnc_jax with identical inputs, injecting `hmf_matrix`: counts to 5e-4.
   - Per-halo p to 1e-12, with the same cubic σ_κ fit and only for θ500,lens inside the table (or with clamping switched off).
@@ -324,7 +327,8 @@ Data:
 - Variants: (i) the paper's (analytic σ_y0, dof = 0); (ii) finder-calibrated (σ_finder = r̄(θ)σ_y0 and the control's isolated-cluster kernel).
 
 **M8. SBI and T1–T4,** first on 10% of the sky. The map-level runs use the M6b noise; the library choice and the catalogue-level parts start before M6b ends.
-- Neural posterior estimation as in the paper: sbi, a MAF, 21 numbers.
+- Neural posterior estimation as in the paper: sbi, a MAF, 21 numbers (decided 2026-11-21: sbi with its defaults until the authors' settings are known).
+- Validation beyond the paper (decided 2026-11-21): expected coverage (TARP and per-parameter ranks) on ~500 held-out prior draws, plus the paper's 100 test catalogues at the true point and the exact unbinned likelihood on one catalogue.
 - Coverage tests.
 - The control simulator (`sim/control.py`) for T3, and the legacy generator for T4.
 - A lower-amplitude variant (A_SZ lowered until D_3000^tSZ matches SPT) to show how the T2–T3 biases scale with the tSZ power.
@@ -366,7 +370,7 @@ Environment and data:
 
 1. **Confirmation rule:** keep (M_conf, r_conf) = (5e13 M_sun, 1.5′), and drop unconfirmed detections?
 2. **CMB lensing in v1:** settled 2026-11-18: kept, as the data vector's 21st number (`LOG.md`, "stacked CMB lensing").
-3. **NPE library:** `sbi` (PyTorch, as in the paper) first, or a JAX-native flow? Now due: M7 and M8 start in parallel with M6b.
+3. **NPE library:** settled 2026-11-21: `sbi` (PyTorch, as in the paper).
 4. **Catalogue baseline:** dof = 0 as in the paper's SO-like setup, or also a calibrated dof (k = 2 came closest in step 3b)?
 5. **Target depth:** year 1 or five years? Waiting for the colleague's answer on their year-1 maps and for the accuracy calculation (§3.5).
 6. **MSS2's streaks:** model them in the generator, apply a calibrated q shift, or neither? Decided with question 5.
