@@ -1223,3 +1223,68 @@ posterior means, in posterior σ, over 100 mocks:
     noise (variant (ii)) and blending;
   - for paper 1, rerun with the public forecast noise
     (`NOISE=forecast inference_sims.sh`, then `inference_npe.sh`).
+
+## 2026-11-21: why the catalogue model is biased on maps: the finder's q, halo by halo
+
+**Script and data.** `benchmarks/mapsim/qcal.py` (job 7516271, 9 min). It
+reruns 20 of the map-level mocks: the same skies, 820 tiles and 3.6 million
+halos above 5e13. For every halo it records three q's:
+- q_model = y0/σ_model(θ500), the catalogue model's q_true, with σ_model the
+  analytic noise of the tile's MSS2 spectra plus the CMB;
+- q_fsig = y0/σ_finder(θ500), the same with the finder's own final-pass
+  noise;
+- q_obs, the finder's best kept, confirmed peak on that halo.
+
+The q > 5 counts equal the mocks' data vectors in 20 of 20 mocks.
+Output: `/mnt/ceph/users/bbolliet/mapsim/qcal/`.
+
+**Findings:**
+
+- **The finder's noise is 4–8% above the analytic noise, even after masking**
+  (1.065, 1.073, 1.079, 1.076, 1.065, 1.042 at 0.5′, 1′, 2′, 4′, 8′, 15′;
+  1.20–1.29 before masking).
+  - The cause is the tSZ of the clusters below the masking threshold:
+    confusion noise.
+  - The catalogue model leaves it out, so every cluster's q is about 7% too
+    high in the model.
+- **Fits.** The model is: lost with probability f, otherwise
+  q_obs ~ N(√((s q)² + k), w), censored below 4, on halos with q > 2. The
+  catalogue model is s = 1, k = 0, w = 1, f = 0.
+
+  | | s | k | w | f |
+  |---|---|---|---|---|
+  | against q_model, all halos | 0.919 | 1.30 | 1.11 | 0.010 |
+  | against q_fsig, all halos | 0.991 | 1.31 | 1.10 | 0.010 |
+  | against q_fsig, isolated halos (no q > 1 within 3′) | 0.983 | 1.99 | 0.95 | 0.001 |
+
+  - The scale is almost all noise: against the finder's own σ, s = 0.99.
+  - The search over positions and sizes lifts q as √(q² + k):
+    - k = 2.0 for isolated halos, as in the injection tests;
+    - k = 1.3 for all halos.
+  - Neighbours widen the scatter to w = 1.1.
+  - w grows with redshift (1.04 at z < 0.3, 1.21 at z > 1.2) and for compact
+    clusters (1.28 for θ500 < 1′).
+  - 1% of halos are lost whatever their q, 3% at z < 0.3: their peak goes to
+    a heavier neighbour, or merges into a brighter peak.
+  - 1.3% of detections (3,176 of 253,000) sit on halos with q_model < 2:
+    noise peaks or blends near a massive halo.
+  - Duplicate peaks on one halo: 9 in 20 mocks.
+- **Counts predicted from each halo's q_model, against the mocks** (sum of 20
+  mocks; binomial z-scores on the same halos):
+
+  | | mocks / predicted, by bin | χ² (20 bins) |
+  |---|---|---|
+  | catalogue model | 0.78–1.07 | 10,243 |
+  | fitted relation, one for all halos | 0.95–1.06 | 427 |
+  | fitted per redshift bin | 0.97–1.04 | 114 |
+
+- **Conclusion.** The catalogue model's form is close to right. It fails
+  through its noise: it lacks the confusion from faint clusters (−8% in q),
+  the search lift (k ≈ 1.3) and the extra scatter from neighbours.
+  - Calibrated per redshift bin on map-level simulations, it reproduces the
+    mocks to 1–4% per bin. Residuals of up to 4.5σ remain.
+  - The open question for the bias test: the confusion noise depends on
+    cosmology (more clusters at higher σ8). Does a calibration at one point
+    of parameter space carry across the prior?
+  - Next: a catalogue model calibrated this way (variant (ii)), retrained and
+    applied to the same mocks.
