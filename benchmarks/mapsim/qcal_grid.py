@@ -160,6 +160,70 @@ def fit(args):
     Pr(f"written {os.path.join(out, 'calib_theta.npz')}")
 
 
+def fit_conf(args):
+    """Variant (iv): the calibration through the finder's noise level u = ln(sigma at 2' / fiducial),
+    quadratic in the scaled parameters; ln sigma at each size linear in u; s, k, w, f per z bin
+    quadratic in u. Leave-one-out residuals against the linear-in-parameters model."""
+    import maps_trainset as mt
+    from classy_szlite.sim import simulator as simu
+    out = out_dir(args.noise)
+    d = np.load(os.path.join(out, "calib_grid.npz"))
+    assert d["done"].all(), "not all points done"
+    P, rows, sig = d["theta"], d["rows"], d["sigma"]
+    n = len(P)
+    fid = np.array([getattr(simu.THETA_FID, p) for p in PARAMS])
+    width = np.array([mt.UNIFORM[p][1] - mt.UNIFORM[p][0] for p in PARAMS])
+    x = (P - fid) / width
+    Fq = np.c_[np.ones(n), x, np.array([x[:, i] * x[:, j] for i in range(4) for j in range(i, 4)]).T]   # (n, 15)
+    Fl = np.c_[np.ones(n), x]
+    lsig = np.log(sig.mean(1)) - np.log(sig[0].mean(0))[None, :]
+    u = lsig[:, 7]
+    lines = []
+
+    def Pr(s=""):
+        print(s, flush=True)
+        lines.append(s)
+
+    def loo(F, y):
+        e = []
+        for i in range(n):
+            m = np.arange(n) != i
+            c, *_ = np.linalg.lstsq(F[m], y[m], rcond=None)
+            e.append(y[i] - F[i] @ c)
+        return float(np.sqrt(np.mean(np.square(e))))
+    u_coef, *_ = np.linalg.lstsq(Fq, u, rcond=None)
+    Pr(f"u = ln(noise at 2' / fiducial): spread {u.std():.4f}; leave-one-out rms: linear in the parameters {loo(Fl, u):.4f},"
+       f" quadratic {loo(Fq, u):.4f}")
+    Fu = np.c_[np.ones(n), u]
+    sig_ab = np.array([np.linalg.lstsq(Fu, lsig[:, j], rcond=None)[0] for j in range(15)])
+    Pr("ln sigma at each size against u: leave-one-out rms " + " ".join(f"{loo(Fu, lsig[:, j]):.4f}" for j in range(15)))
+    Fu2 = np.c_[np.ones(n), u, u * u]
+    out_rows = []
+    for b in range(len(ZB) - 1):
+        r = [ZB[b + 1]]
+        msg = []
+        for c, nm in enumerate("skwf"):
+            y = rows[:, b, c]
+            r += list(np.linalg.lstsq(Fu2, y, rcond=None)[0])
+            msg.append(f"{nm} {loo(Fl, y):.4f}->{loo(Fu2, y):.4f}")
+        out_rows.append(r)
+        Pr(f"   z <= {ZB[b + 1]:5.2f} leave-one-out rms, linear in the parameters -> quadratic in u: " + "; ".join(msg))
+    np.savez(os.path.join(out, "calib_conf.npz"), fid=fid, width=width, u_coef=u_coef, sig_ab=sig_ab, rows=np.array(out_rows),
+             sigma=sig[0], lnth=d["lnth"], specs=d["specs"], noise=str(d["noise"]))
+    open(os.path.join(out, "calib_conf.txt"), "w").write("\n".join(lines) + "\n")
+    Pr(f"written {os.path.join(out, 'calib_conf.npz')}")
+
+
+def load_calib_conf(path):
+    """(CatalogueConfig.qcal_conf, PatchTable of the fiducial per-tile sigma) from calib_conf.npz."""
+    import jax.numpy as jnp
+    from classy_szlite.sim import catalogue as ct
+    d = np.load(path)
+    tup = lambda a: tuple(tuple(float(v) for v in r) for r in np.atleast_2d(a))
+    qc = (tuple(map(float, d["fid"])), tuple(map(float, d["width"])), tuple(map(float, d["u_coef"])), tup(d["sig_ab"]), tup(d["rows"]))
+    return qc, ct.PatchTable(lnth=jnp.asarray(d["lnth"]), lnsig=jnp.asarray(np.log(d["sigma"])))
+
+
 def load_calib_theta(path):
     """(CatalogueConfig.qcal_theta, PatchTable of the fiducial per-tile sigma) from calib_theta.npz."""
     import jax.numpy as jnp
@@ -177,8 +241,13 @@ def main():
     ap.add_argument("--mocks", type=int, default=5)
     ap.add_argument("--cap", type=int, default=16384)
     ap.add_argument("--noise", choices=("mss2", "forecast"), default="forecast")
+    ap.add_argument("--model", choices=("theta", "conf"), default="theta",
+                    help="theta: linear in the parameters (calib_theta.npz); conf: through the noise level (calib_conf.npz)")
     args = ap.parse_args()
-    run(args) if args.cmd == "run" else fit(args)
+    if args.cmd == "run":
+        run(args)
+    else:
+        fit(args) if args.model == "theta" else fit_conf(args)
 
 
 if __name__ == "__main__":

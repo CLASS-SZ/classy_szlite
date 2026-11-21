@@ -280,6 +280,61 @@ def test_calibration_following_theta_simulations_match_expectation(setup):
     assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
 
 
+def _qcal_conf(qc, a=0.0, b=0.0, uc=None):
+    """A qcal_conf from a constant table qc: noise level u from coefficients uc (15), ln sigma shift a + b u,
+    and per-z quadratic terms in u of 0.3 a for k and 0.1 a for w."""
+    fid = (0.811, 0.121, -4.3054, 1.1233)
+    width = (0.082, 0.0886, 0.45, 0.24)
+    uc = tuple(0.0 for _ in range(15)) if uc is None else uc
+    rows = tuple((r[0], r[1], 0.0, 0.0, r[2], 3 * a, 0.3 * a, r[3], a, 0.1 * a, r[4], 0.0, 0.0) for r in qc)
+    return (fid, width, uc, tuple((0.0, b) for _ in range(15)), rows)
+
+
+def test_calibration_through_noise_level_reduces_to_fixed(setup):
+    """qcal_conf with u = 0 everywhere gives the same catalogue as qcal."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.5, 15.0, 15)
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes))))[None])
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    cfg = ct.CatalogueConfig(f_sky=0.05, capacity=2 ** 18, qcal=qc)
+    th = TH._replace(sigma8=0.84, A_SZ=-4.2)
+    a = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg))(jax.random.key(13))
+    b = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg._replace(qcal=None, qcal_conf=_qcal_conf(qc, a=0.5, b=1.0))))(jax.random.key(13))
+    assert np.array_equal(np.asarray(a.counts), np.asarray(b.counts)) and float(a.p_sum) == float(b.p_sum)
+
+
+def test_calibration_through_noise_level_simulations_match_expectation(setup):
+    """qcal_conf with a noise level that grows with sigma8 and A_SZ (quadratic terms too), away from the
+    fiducial point: simulations against the expectation, which differs from the fixed calibration's."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.5, 15.0, 15)
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes))))[None])
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    uc = [0.0] * 15
+    uc[1], uc[3], uc[5] = 0.05, 0.1, 0.03                # x_sigma8, x_A_SZ, x_sigma8^2
+    th = TH._replace(sigma8=0.84, omega_cdm=0.14, A_SZ=-4.2)
+    cfg = ct.CatalogueConfig(f_sky=0.1, capacity=2 ** 19, qcal_conf=_qcal_conf(qc, a=-2.0, b=1.0, uc=tuple(uc)))
+    ec, en, ep = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg))(th)
+    ec, en, ep = np.asarray(ec), float(en), float(ep)
+    _, n0, _ = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg._replace(qcal_conf=None, qcal=qc)))(th)
+    assert abs(en / float(n0) - 1) > 0.02
+    f = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg))
+    R = 40
+    C, Ns, Ps = [], [], []
+    for r in range(R):
+        c = f(jax.random.key(3900 + r))
+        assert not bool(c.overflow)
+        C.append(np.asarray(c.counts, float)); Ns.append(int(c.n_sel)); Ps.append(float(c.p_sum))
+    C, Ns = np.array(C), np.array(Ns, float)
+    keep = ec > 1.0
+    zc = (C.mean(0)[keep] - ec[keep]) / np.sqrt(ec[keep] / R)
+    print("calibration through the noise level, counts z-scores:", np.round(zc, 2).tolist(),
+          f"selected {Ns.mean():.1f} against {en:.1f} (fixed calibration {float(n0):.1f})")
+    assert np.all(np.abs(zc) < 4.5)
+    assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
+    assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
+
+
 def test_calibration_none_is_unchanged(setup):
     """qcal=None leaves the paper-exact simulator bit-identical."""
     cells, sz, le = setup
