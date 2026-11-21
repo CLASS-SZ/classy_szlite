@@ -1498,3 +1498,41 @@ public-noise section.
 - On cost: the 25-point calibration took 7 min of GPU here, against 70 min
   for the 10⁴ map-level training simulations. A better calibration may need
   many more points.
+
+## 2026-11-21: the catalogue calibration through the finder's noise level (variant (iv), forecast noise)
+
+**The run** (job 7518794, 8 min; `calib_conf.sh`). 16 catalogue tests pass.
+The model is fitted on the 25 calibration points of variant (iii):
+- the noise level u = ln(σ_finder at 2′ / fiducial), quadratic in the scaled
+  parameters (leave-one-out 0.5%, against 2.0% linear);
+- ln σ at each size linear in u (leave-one-out ≤ 0.2%);
+- s, k, w, f per z bin quadratic in u. k's leave-one-out error drops from
+  0.14–0.34 to 0.09–0.26; w's is about the same or better.
+
+**Results** (catalogue variant calibcf41):
+
+| | at the truth (100 mocks): σ8, ω_c, A_SZ, α_SZ | across the prior: σ8, α_SZ bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| calibrated at one point | +0.13, +0.09, −0.06, +0.50 | +1.06, +0.58 | 0.32/0.65, 0.40/0.72, 0.41/0.82, 0.39/0.80 |
+| linear in the parameters | −0.13, +0.25, +0.15, +0.64 | +0.32, +0.55 | 0.42/0.84, 0.46/0.86, 0.47/0.88, 0.41/0.79 |
+| through the noise level | −0.07, +0.11, +0.09, +0.62 | +0.23, +0.52 | 0.46/0.90, 0.47/0.89, 0.48/0.88, 0.42/0.78 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+**σ8 bias in thirds, through the noise level:**
+- ω_c: +0.17, +0.05, +0.47;
+- A_SZ: +0.04, +0.06, +0.58;
+- σ8: +0.46, +0.25, −0.04.
+
+**α_SZ bias in thirds:**
+- A_SZ: +0.07, +0.52, +0.98;
+- α_SZ: +0.79, +0.71, +0.06.
+
+**Reading.**
+- Written through the noise level, the calibrated catalogue model matches
+  map-level coverage for σ8, ω_c and A_SZ.
+- α_SZ is biased by about +0.5σ and overconfident in every catalogue version.
+- The calibration is per redshift bin only. Earlier fits by θ500
+  (2026-11-21, MSS2) show the search lift and scatter depend strongly on
+  cluster size: k −0.02 and w 1.28 for θ500 < 1′, against k 1.3 and w 1.05
+  at 2–4′. That bears directly on the slope.
+- Next: calibrate per redshift and size.
