@@ -1328,3 +1328,52 @@ calibration the simulator is bit-identical to before.
   noise changes with σ8. Next: apply both catalogue posteriors and the
   map-level one to the 500 map-level held-out prior draws
   (`calib_prior.sh`): coverage, and bias in thirds of σ8.
+
+## 2026-11-21: the calibrated catalogue model across the prior
+
+**The run** (`calib_prior.sh`, CPU job 7516409).
+- The calibrated catalogue posterior (calib41, calibrated at the fiducial
+  point) was applied to the 500 map-level held-out prior draws, and to the
+  100 mocks again (same result as before: α_SZ +0.59σ, the rest ≤ 0.13σ).
+- **The job hit its 1-hour limit after this part.** Sampling 500 × 4,000 took
+  44 min. The reruns of the plain catalogue posterior and of the map-level
+  posterior did not run.
+- The map-level comparison on the same 500 draws exists already, from the
+  validation of 2026-11-21.
+- Per-draw output:
+  `catalogue_npe/calib41/npe_prior_calib41_applied_mapheld.npz`.
+
+**Coverage of the central 50% and 90% intervals, on the 500 map-level prior
+draws:**
+
+| | σ8 | ω_c | A_SZ | α_SZ |
+|---|---|---|---|---|
+| calibrated catalogue posterior | 0.31 / 0.65 | 0.37 / 0.72 | 0.40 / 0.82 | 0.40 / 0.77 |
+| map-level posterior | 0.47 / 0.89 | 0.48 / 0.87 | 0.46 / 0.87 | 0.46 / 0.87 |
+
+**Mean bias over the prior:** σ8 +0.88 ± 0.09σ, ω_c −0.34σ, A_SZ −0.23σ,
+α_SZ +0.62σ, Ω_m −0.54σ, S8 −0.19σ.
+
+**The bias grows away from the calibration point.**
+- By distance from it in the four uniform parameters (in prior widths), σ8's
+  bias is:
+  - +0.42σ in the nearest third (rms 1.5);
+  - +0.86σ in the middle third (rms 2.3);
+  - +1.36σ in the farthest third (rms 2.6).
+- It is driven by the parameters that set the amount of tSZ, and so the
+  confusion noise:
+  - **ω_c thirds:** σ8 bias −0.11, +0.43, +2.31σ;
+  - **A_SZ thirds:** −0.19, +0.85, +1.98σ;
+  - **α_SZ thirds:** +1.49, +0.71, +0.44σ (a lower slope means more faint-cluster tSZ).
+- σ8 itself matters little (+0.90, +0.97, +0.78σ).
+- Linear fit of σ8's bias in prior widths: +3.7 per unit ω_c and +3.6 per
+  unit A_SZ.
+
+**Reading.** A catalogue model calibrated at one point is unbiased there
+(the mocks) but not across the prior. The finder's noise, and its search
+lift and scatter, depend on how much tSZ the sky holds, which the parameters
+change. The map-level posterior carries this in its simulations and is
+calibrated over the whole prior. This is paper 1's central result in
+miniature.
+- **Still to check:** whether recalibrating at the posterior's own point
+  (iterating) recovers the catalogue model, as a real analysis might do.
