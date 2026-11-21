@@ -15,6 +15,9 @@ omega_cdm is clipped at 0.200, the emulators' training edge (the paper's prior r
 sigma_lnq and sigma_lnp are truncated at 0 (redrawn), which removes 3e-4 and 5e-6 of the
 Gaussian mass. 'truth' uses the fiducial point (simulator.THETA_FID).
 
+--variant forecast41: the same with the 2019 SO forecast noise at goal depth (one sigma_y0 table
+for every tile), output in catalogue_npe/forecast41/ (PLAN section 10, paper 1).
+
 --variant survey41 (variant (i), the catalogue model of the 10%-sky map-level survey,
 maps_trainset.py): 41 equal-area patches, one per survey tile, each with our filter's analytic
 sigma_y0 from that tile's MSS2 spectra plus the CMB (catalogue.analytic_sigma_y0), our goal
@@ -83,7 +86,7 @@ def main():
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--chunk", type=int, default=512)
-    ap.add_argument("--variant", choices=("paper", "survey41"), default="paper")
+    ap.add_argument("--variant", choices=("paper", "survey41", "forecast41"), default="paper")
     args = ap.parse_args()
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
     out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant)
@@ -103,11 +106,14 @@ def main():
         nt, _ = nz.load_mss2(mt.SPECTRA, "mean")
         specs = mt.survey_spectra(nt.F.shape[0])
         cmb = ins.cmb_cl_from_table(os.path.join(spike.REFDATA, "data_real", "cmb_lensed_TT_camb.npz"))
-        sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
+        if args.variant == "forecast41":            # the same survey with the 2019 forecast noise (goal)
+            sig, lnth = ct.analytic_sigma_y0_forecast(cmb, "goal")
+        else:
+            sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
         sz = ct.PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(np.log(sig)))
         le = ct.lens_table("goal")
         cfg0 = ct.CatalogueConfig(f_sky=mt.N_TILES * hl.OMEGA_TILE / ct.SR_FULL, capacity=2 ** 19)
-        print(f"survey41: spectra {specs.tolist()}; sigma_y0 at 0.5' {sig[:, 0].min():.3g}-{sig[:, 0].max():.3g}, "
+        print(f"{args.variant}: spectra {specs.tolist()}; sigma_y0 at 0.5' {sig[:, 0].min():.3g}-{sig[:, 0].max():.3g}, "
               f"at 15' {sig[:, -1].min():.3g}-{sig[:, -1].max():.3g}; f_sky {cfg0.f_sky:.4f}", flush=True)
         np.savez(os.path.join(out, "sigma_y0.npz"), sigma=sig, lnth=lnth, specs=specs)
     theta = (np.tile([getattr(simu.THETA_FID, k) for k in NAMES], (n, 1)) if args.set == "truth" else prior(n, rng))

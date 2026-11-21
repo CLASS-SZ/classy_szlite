@@ -4,6 +4,10 @@
     python benchmarks/mapsim/maps_trainset.py --set heldout   # 500 prior draws (coverage tests)
     python benchmarks/mapsim/maps_trainset.py --set train     # 10^4 prior draws
 
+--noise forecast: the same survey with the 2019 SO forecast noise at goal depth (public; white
+plus atmospheric, correlated within a tube: the simulator's default) instead of MSS2, the same
+keys (so the same halos and CMB), output in maps_npe_forecast/ (PLAN section 10, paper 1).
+
 The survey: 41 periodic 10-degree tiles (about 10% of the sky), each with its own MSS2 noise
 (noise.py: the tile's measured 6 x 6 spectra, four-split mean, depth 1), the same 41 spectra in
 every simulation (a fixed footprint), drawn without replacement from the 107 measured tiles
@@ -76,7 +80,7 @@ def theta_of(row):
     return simu.THETA_FID._replace(**dict(zip(NAMES, (float(v) for v in row))))
 
 
-def make_sim(cells, tb, cfg, chunk):
+def make_sim(cells, tb, cfg, chunk, forecast=False):
     """jitted simulation; the static arrays (tile statics, noise tables, survey spectra) are
     arguments, not constants, so the compiled program stays small and cacheable."""
 
@@ -87,7 +91,7 @@ def make_sim(cells, tb, cfg, chunk):
 
         def tile(args):
             t, s = args
-            ni = nz.NoiseInput(nt, s, jnp.float32(1.0))
+            ni = None if forecast else nz.NoiseInput(nt, s, jnp.float32(1.0))
             return simu.simulate_tile(jax.random.fold_in(key, t), cs, th, st, tb, cells, cfg, ni)
         o = jax.lax.map(tile, (jnp.arange(N_TILES), spec_arr), batch_size=chunk)
         n_p = jnp.sum(o["n_p"])
@@ -104,7 +108,11 @@ def main():
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--chunk", type=int, default=21, help="tiles per vectorised batch")
     ap.add_argument("--save-every", type=int, default=200)
+    ap.add_argument("--noise", choices=("mss2", "forecast"), default="mss2")
     args = ap.parse_args()
+    global OUT
+    if args.noise == "forecast":
+        OUT = OUT + "_forecast"
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{args.set}.npz")
@@ -150,7 +158,8 @@ def main():
     def save():
         np.savez(path, theta=theta, x=x, overflow=ovf, n_halos=n_halos, n_det=n_det, sigma=sig, done=done,
                  names=np.array(NAMES), specs=specs, **{"class": used},
-                 settings=json.dumps(dict(n_tiles=N_TILES, noise="MSS2 four-split mean, depth 1", lens_table="goal",
+                 settings=json.dumps(dict(n_tiles=N_TILES, noise=("2019 SO forecast, goal" if args.noise == "forecast"
+                                                                  else "MSS2 four-split mean, depth 1"), lens_table="goal",
                                           seed=SEED[args.set], survey_seed=SURVEY_SEED, classes=N_CLASSES)))
 
     sims = {}
@@ -161,7 +170,7 @@ def main():
         for i in todo:
             c = int(cls[i])
             if c not in sims:
-                sims[c] = make_sim(cells, tb, cfgs[c], args.chunk)
+                sims[c] = make_sim(cells, tb, cfgs[c], args.chunk, forecast=args.noise == "forecast")
             o = jax.device_get(sims[c](jax.random.fold_in(base, int(i)), jnp.asarray(theta[i]), st, nt,
                                        jnp.asarray(specs)))
             if bool(o["overflow"]) and c < N_CLASSES - 1:
