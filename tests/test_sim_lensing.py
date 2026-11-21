@@ -98,9 +98,9 @@ def test_p_draw_moments():
     assert abs(p.var() / v_th - 1) < 0.01
 
 
-def test_stacked_selection_equals_histogram(fid):
-    """On a synthetic catalogue: the number of detections in the stacked sum is
-    the histogram total, and p_sum is finite."""
+def test_stacked_selection_is_all_confirmed_above_q5(fid):
+    """On a synthetic catalogue: the stacked sum covers every kept, confirmed detection with
+    q > 5 (any z, q above 40 included), so at least the histogram total, and p_sum is finite."""
     cells, cs = fid
     th = simu.THETA_FID
     rng = np.random.default_rng(4)
@@ -127,7 +127,8 @@ def test_stacked_selection_equals_histogram(fid):
         lens_lnth, lens_lnsig = map(jnp.asarray, lz.table("goal"))
     p_sum, n_p = simu.stacked_lensing(jax.random.key(3), pk, keep, cf, halos, cs, th, St)
     print(f"histogram total {int(counts.sum())}, stacked n {int(n_p)}, mean p {float(p_sum) / max(int(n_p), 1):.3f}")
-    assert int(n_p) == int(counts.sum()) > 50
+    sel = np.asarray(keep & cf.ok & (pk.q > np.float32(sm.Q_EDGES[0])))
+    assert int(n_p) == int(sel.sum()) > int(counts.sum()) > 50     # z > 1.5 and q > 40 add to the stack
     assert np.isfinite(float(p_sum))
     assert bool(jnp.all(jnp.where(cf.ok, cf.halo < nh, True)))
 

@@ -76,7 +76,7 @@ def main():
         per = ps / n
         sem = np.sqrt(np.sum(n ** 2 * (per - mean) ** 2) / (n.sum() ** 2) * len(n) / (len(n) - 1))
         tot = o["counts"].sum((1, 2))
-        assert np.array_equal(tot, o["n_p"]), "stacked selection differs from the histogram"
+        assert np.all(o["n_p"] >= tot), "the stack must hold at least the histogram's detections"
         cat, ncat = catalogue_mean_p(cs, theta, cells, st, np.asarray(o["sigma"]).mean(0))
         res[mode] = dict(map_mean_p=float(mean), map_sem=float(sem), n_per_tile=float(n.mean()),
                          catalogue_mean_p=cat, catalogue_n_per_tile=ncat)

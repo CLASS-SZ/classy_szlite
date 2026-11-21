@@ -184,9 +184,11 @@ def simulate_tile(key, cs: CosmoStage, theta: Theta, st: TileStatic, tables: pt.
 
 
 def stacked_lensing(key, pk, keep, cf, halos, cs: CosmoStage, theta: Theta, st: TileStatic):
-    """Sum of the lensing observable p over the data-vector detections of one
-    tile, and their number (the survey's stacked mean is Σ p_sum / Σ n_p)."""
-    sel = sm.in_data_vector(pk.q, cf.z, keep & cf.ok)
+    """Sum of the lensing observable p over the selected detections of one tile, and their
+    number (the survey's stacked mean is Σ p_sum / Σ n_p). Selected: kept, confirmed and q > 5,
+    at any redshift and including q above 40, as the paper's "averaged across the entire
+    catalogue" (decided 2026-11-21; earlier: the 4 x 5 grid's detections only)."""
+    sel = keep & cf.ok & (pk.q > np.float32(sm.Q_EDGES[0]))
     M = jnp.exp(halos.lnM[cf.halo].astype(jnp.float64))
     z = halos.z[cf.halo].astype(jnp.float64)
     pbar = lensing.p_mean(M, z, cs.cg, theta.h, theta.beta_lens, cs.chi_star, st.lens_lnth, st.lens_lnsig)
