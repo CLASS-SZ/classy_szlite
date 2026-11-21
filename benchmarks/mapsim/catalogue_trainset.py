@@ -18,6 +18,8 @@ Gaussian mass. 'truth' uses the fiducial point (simulator.THETA_FID).
 --variant forecast41: the same with the 2019 SO forecast noise at goal depth (one sigma_y0 table
 for every tile), output in catalogue_npe/forecast41/ (PLAN section 10, paper 1).
 
+--variant calibf41: the same calibrated model for the forecast-noise survey (qcal_forecast/).
+
 --variant calib41 (variant (ii)): the same survey with the finder's measured noise per tile and its
 calibrated observation per redshift bin (qcal.py: calibration.npz, from map-level mocks at the
 fiducial point; CatalogueConfig.qcal), held fixed over the prior. Output in catalogue_npe/calib41/.
@@ -90,7 +92,7 @@ def main():
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--chunk", type=int, default=512)
-    ap.add_argument("--variant", choices=("paper", "survey41", "forecast41", "calib41"), default="paper")
+    ap.add_argument("--variant", choices=("paper", "survey41", "forecast41", "calib41", "calibf41"), default="paper")
     args = ap.parse_args()
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
     out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant)
@@ -113,10 +115,12 @@ def main():
         qcal = None
         if args.variant == "forecast41":            # the same survey with the 2019 forecast noise (goal)
             sig, lnth = ct.analytic_sigma_y0_forecast(cmb, "goal")
-        elif args.variant == "calib41":             # the finder's noise and observation, from qcal.py
-            qcal, tab = ct.load_qcal(os.path.join(os.environ.get("MAPSIM_OUT", "."), "qcal", "calibration.npz"))
+        elif args.variant in ("calib41", "calibf41"):   # the finder's noise and observation, from qcal.py
+            cal_path = os.path.join(os.environ.get("MAPSIM_OUT", "."), "qcal" if args.variant == "calib41" else "qcal_forecast",
+                                    "calibration.npz")
+            qcal, tab = ct.load_qcal(cal_path)
             sig, lnth = np.exp(np.asarray(tab.lnsig)), np.asarray(tab.lnth)
-            assert np.array_equal(np.load(os.path.join(os.environ.get("MAPSIM_OUT", "."), "qcal", "calibration.npz"))["specs"], specs)
+            assert np.array_equal(np.load(cal_path)["specs"], specs)
         else:
             sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
         sz = ct.PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(np.log(sig)))
