@@ -1446,3 +1446,55 @@ steps hold:
 
 The report page (https://claude.ai/artifact/K8wpHKW8Wy9bictKwkKfCY) has a
 public-noise section.
+
+## 2026-11-21: a catalogue calibration that follows the parameters (variant (iii), forecast noise)
+
+**The run** (job 7518553, 17 min; `calib_theta.sh`).
+- **Checks:** 14 catalogue tests pass. The reworked per-halo table
+  reproduces the mocks' data vectors (difference ≤ 1 per bin: one duplicate
+  peak).
+- **Calibration at 25 points:** the fiducial point plus a Latin hypercube of
+  24 in the map-level box, 5 forecast-noise mocks each. Linear fits in
+  x = (θ − θ_fid)/width over (σ8, ω_c, A_SZ, α_SZ).
+- **Catalogue sets calibtf41,** NPE trained, applied to the 100 mocks and the
+  500 prior draws.
+
+**What the 25 points show:**
+- **The finder's noise at 2′** ranges from 0.95 to 1.13 of its fiducial
+  value, rising with ω_c and A_SZ: +0.13 and +0.13 per prior width
+  (σ8 +0.06, α_SZ −0.05). The linear fit leaves 1.0–1.6% rms.
+- **The search lift k falls as the noise rises,** from 2.4 to −0.5 across
+  the prior.
+  - It is a tight function of the noise level.
+  - The linear fit in the parameters leaves an rms error of 0.11–0.27
+    (leave-one-out 0.14–0.34).
+- **The scatter w rises with the noise:** 1.00 to 1.10 at 0.3 < z < 0.6.
+- **s is constant** (0.986–0.995).
+- **f follows the noise** at low z.
+
+**Results:**
+
+| | at the truth (100 mocks): σ8, ω_c, A_SZ, α_SZ | across the prior: σ8 bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| calibrated at one point | +0.13, +0.09, −0.06, +0.50 | +1.06 | 0.32/0.65, 0.40/0.72, 0.41/0.82, 0.39/0.80 |
+| calibrated across the prior | −0.13, +0.25, +0.15, +0.64 | +0.32 | 0.42/0.84, 0.46/0.86, 0.47/0.88, 0.41/0.79 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+- **The σ8 bias in thirds of ω_c / A_SZ** drops from +0.02, +0.50, +2.64 /
+  −0.09, +1.00, +2.26 (fixed) to +0.27, +0.11, +0.57 / −0.09, +0.17, +0.87.
+- **What remains:**
+  - a σ8 trend with σ8 itself (+0.65, +0.34, −0.04);
+  - α_SZ +0.55σ on average (+1.0σ at high A_SZ).
+
+**Reading.**
+- A calibration that follows the parameters removes most of the
+  miscalibration but not all of it.
+- Candidates for the rest:
+  - the linear model for k;
+  - the per-tile noise shift taken as common to all tiles;
+  - correlations the four-number model leaves out.
+- Next: write the calibration as a function of the finder's noise level (one
+  number that k, w and f track tightly) instead of the four parameters.
+- On cost: the 25-point calibration took 7 min of GPU here, against 70 min
+  for the 10⁴ map-level training simulations. A better calibration may need
+  many more points.
