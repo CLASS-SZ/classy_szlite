@@ -1071,3 +1071,62 @@ Job 7513596 (genx, rome node worker5047 as job 7512667), snapshot fff0358
     counts above q = 5 on these maps.
 - **Next:** the colleagues' q scale (ask how their survey file treats the
   apodisation), then back to inference.
+
+## 2026-11-21: catalogue-level simulator: what the paper did, and our version
+
+**What the paper did** (a mapping of cosmocnc_jax, the numpy cosmocnc and the
+paper's text, checked by a reviewer):
+- **Catalogues.** cosmocnc's generator: Poisson halos over 40% of the sky from
+  a (z, ln M) grid with M_min = 5e13.
+  - **Per halo:** ln q̄ = ln(ȳ0/σ_y0(θ500)) and ln p̄ = ln(κ/σ_κ(θ500,lens)),
+    with log-normal scatter and r = 0. Then q_obs = √(q_true² + dof) + N(0,1)
+    with dof = 0, and p_obs = p_true + N(0,1).
+  - **Selection:** q_obs > 5.
+  - **Data vector:** the 4 × 5 counts and the mean p over every selected
+    cluster.
+  - **Noise tables:** the paper's σ_y0 (0.34′–7.4′) and σ_κ (0.74′–5.9′)
+    tables, as cubic fits in ln–ln, extrapolated outside them.
+- **The numpy cosmocnc was used, not cosmocnc_jax.** Its sampler (cumulative
+  sums, a linear-u grid) draws z about half a cell low. cosmocnc_jax's sampler
+  is unbiased and keyed, so it is the code reference.
+- **Inference.** sbi NPE_C with a MAF, one round, 10⁴ simulations, 50-epoch
+  patience, learning rate 5×10⁻⁴; validated on 100 test catalogues at the
+  truth, with no coverage tests.
+  - Not stated: the sbi version, MAF size, batch size, M_max, z range and
+    grids. These are asked of the authors.
+  - tszsbi is another project (tSZ power spectrum).
+- **Decisions (user, 2026-11-21):**
+  - sbi, as the paper;
+  - stacked p averaged over every q > 5 cluster at both levels;
+  - coverage tests added.
+
+**Our version:** `classy_szlite/sim/catalogue.py`, with tests in
+`tests/test_sim_catalogue.py` and `benchmarks/mapsim/catalogue_vs_cosmocnc.py`
+(job 7515722, 4 min).
+- **Code test against cosmocnc_jax's pure functions,** identical inputs (our
+  E(z), D_A, χ, χ*, ρ_c and G/c²; the same fits): per-halo ln q̄ and ln p̄
+  agree to 4×10⁻¹⁵ at the fiducial point and two prior corners.
+- **Our fits of the paper's tables** reproduce cosmocnc's coefficients exactly.
+- **7 tests pass:**
+  - the scatter widths, the correlation (r = 0.5) and the noise layers
+    (dof = 2) per halo;
+  - the halo number and redshift distribution against the cell rates;
+  - the selected p against each drawn halo's exact conditional expectation
+    (z −0.27);
+  - the mean of 120 catalogues against an independent quadrature: all 20
+    counts within 2.3σ, 15,471 selected against 15,466, mean p 0.30723
+    against 0.30712 (z +0.14). An earlier run with 30 catalogues gave z +2.6
+    for the mean p, which was chance;
+  - batched and single draws are identical.
+- **Expected data vector at the fiducial point** (paper tables, 40% of the
+  sky): 15,466 selected, 15,263 in the grid, mean p 0.3071.
+  - The paper quotes about 16,000. Our mass function gives 0.65% fewer halos
+    than cosmocnc's linear-in-Δ default.
+  - SO_sim_0 (other settings, masses down to 1.2e13) has 15,798 selected.
+- **Speed:** one catalogue takes 1.1 s on one CPU node (16 cores): 720,000
+  halos, 15,500 selected.
+- **For the training set:**
+  - the heaviest prior corner has about 2.7 million halos, so the generator
+    uses capacity classes;
+  - the ω_c prior is clipped at 0.200, the emulators' training edge (the
+    paper's prior reaches 0.204).
