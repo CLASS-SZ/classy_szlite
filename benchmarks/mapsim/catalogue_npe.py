@@ -184,13 +184,16 @@ def main():
     for item in args.apply:
         name, f = item.split("=", 1)
         ta, xa = load(f)
-        mu, sd, mu_d, sd_d = [], [], [], []
-        for xo in xa:
+        mu, sd, mu_d, sd_d, rk = [], [], [], [], []
+        for xo, to in zip(xa, ta):
             sm_ = samples(xo, args.samples)
             mu.append(sm_.mean(0)); sd.append(sm_.std(0))
+            rk.append(np.mean(sm_ < to[None, :], axis=0))          # posterior rank of the truth
             d = np.stack(derived(sm_), 1)
             mu_d.append(d.mean(0)); sd_d.append(d.std(0))
-        mu, sd, mu_d, sd_d = map(np.array, (mu, sd, mu_d, sd_d))
+        mu, sd, mu_d, sd_d, rk = map(np.array, (mu, sd, mu_d, sd_d, rk))
+        np.savez(os.path.join(DATA, f"npe_{tag}_applied_{name}.npz"), theta=ta, mu=mu, sd=sd, mu_derived=mu_d,
+                 sd_derived=sd_d, rank=rk, names=np.array(NAMES))
         b = (mu - ta) / sd
         td = np.stack(derived(ta), 1)
         bd = (mu_d - td) / sd_d
@@ -200,6 +203,17 @@ def main():
         for j, n in enumerate(("Omega_m", "S8")):
             P(f"   {n:10s} {bd[:, j].mean():+7.3f} +- {bd[:, j].std(ddof=1) / np.sqrt(len(bd)):.3f}"
               f"   (median sigma {np.median(sd_d[:, j]):.4f})")
+        if np.ptp(ta[:, 0]) > 0:                                # prior draws: coverage, and bias against sigma8
+            cov = {lv: np.mean(np.abs(rk - 0.5) < lv / 2, axis=0) for lv in (0.5, 0.9)}
+            P("   coverage of the central 50% and 90% intervals (true parameters of the set):")
+            for j, n in enumerate(NAMES[:4]):
+                P(f"   {n:10s} {cov[0.5][j]:.2f}  {cov[0.9][j]:.2f}")
+            edges = np.quantile(ta[:, 0], [0, 1 / 3, 2 / 3, 1])
+            P("   bias (sigma8, omega_cdm, A_SZ, alpha_SZ) in thirds of the true sigma8:")
+            for a_, b_ in zip(edges[:-1], edges[1:]):
+                m = (ta[:, 0] >= a_) & (ta[:, 0] <= b_)
+                P(f"   sigma8 {a_:.3f}-{b_:.3f} ({m.sum()}): " + "  ".join(
+                    f"{b[m, j].mean():+.2f}+-{b[m, j].std(ddof=1) / np.sqrt(m.sum()):.2f}" for j in range(4)))
         res.setdefault("applied", {})[name] = dict(file=f, bias=b.mean(0).tolist(),
                                                    bias_err=(b.std(0, ddof=1) / np.sqrt(len(b))).tolist(),
                                                    bias_derived=bd.mean(0).tolist(),

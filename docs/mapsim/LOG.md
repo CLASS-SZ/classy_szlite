@@ -1288,3 +1288,43 @@ Output: `/mnt/ceph/users/bbolliet/mapsim/qcal/`.
     of parameter space carry across the prior?
   - Next: a catalogue model calibrated this way (variant (ii)), retrained and
     applied to the same mocks.
+
+## 2026-11-21: the bias test with the calibrated catalogue model
+
+**The model (variant (ii)).** `catalogue_trainset.py --variant calib41`
+(`CatalogueConfig.qcal`; job 7516323, 19 min). It is the paper's catalogue
+model of the 41-tile survey, with the finder's behaviour measured on the
+map-level mocks (qcal.py):
+- each tile's noise is the finder's final-pass noise, averaged over 20 mocks;
+- per redshift bin, q_obs = √((s q)² + k) + w N(0,1) with loss f, using
+  s 0.990–0.993, k 1.0–1.4, w 1.03–1.20 and f 0.001–0.030 (z > 1.5: s 1.007,
+  k −0.14, w 1.35);
+- all of this is fixed at the fiducial point and held over the prior.
+
+**Tests.** Twelve tests pass. The calibrated simulations match their
+expectation: z-scores within 1.3, mean p 0.2909 against 0.2900. With no
+calibration the simulator is bit-identical to before.
+
+**Results.**
+- **Validation on its own simulations:**
+  - unbiased at the fiducial point (within 0.09σ);
+  - TARP area −0.009;
+  - intervals slightly narrow for A_SZ (KS p < 0.001; 41% at 50%) and σ8
+    (KS p 0.04; 45% at 50%).
+- **Bias on the 100 map-level mocks** (posterior σ):
+
+  | | σ8 | ω_c | A_SZ | α_SZ | Ω_m | S8 |
+  |---|---|---|---|---|---|---|
+  | plain catalogue model | +2.04 | −0.97 | −1.37 | −5.45 | −1.58 | −0.41 |
+  | calibrated catalogue model | +0.04 ± 0.10 | +0.09 ± 0.06 | +0.01 ± 0.08 | **+0.65 ± 0.09** | +0.12 ± 0.08 | +0.11 ± 0.08 |
+  | map-level posterior | −0.05 | +0.04 | +0.02 | +0.15 | | |
+
+**Reading.**
+- The calibration removes almost all of the bias. A residual of +0.65σ
+  remains in α_SZ; the map-level posterior has +0.15σ there.
+- This is the favourable case: the calibration was made at the mocks' own
+  parameters.
+- The open test is whether it holds across the prior, where the confusion
+  noise changes with σ8. Next: apply both catalogue posteriors and the
+  map-level one to the 500 map-level held-out prior draws
+  (`calib_prior.sh`): coverage, and bias in thirds of σ8.
