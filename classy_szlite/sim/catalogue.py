@@ -178,6 +178,12 @@ class CatalogueConfig(NamedTuple):
     # redshift bin row (z_upper, s0, s1..s4, k0, k1..k4, w0, w1..w4, f0, f1..f4) gives s = s0 + s.x etc.
     # It replaces qcal.
     qcal_theta: tuple | None = None
+    # Calibration through the finder's noise level (variant (iv), qcal_grid.py fit --model conf): None, or
+    # (fid4, width4, u_coef (15,), sig_ab (15 x 2), rows (n_z x 13)). u = ln of the finder's noise at 2'
+    # relative to the fiducial point, quadratic in x (features 1, x_i, x_i x_j for i <= j); ln sigma at
+    # filter size j shifts by a_j + b_j u; per redshift bin row (z_upper, s0, s1, s2, k0, k1, k2, w0, w1,
+    # w2, f0, f1, f2) gives s = s0 + s1 u + s2 u^2 etc. It replaces qcal and qcal_theta.
+    qcal_conf: tuple | None = None
 
 
 class Catalogue(NamedTuple):
@@ -264,10 +270,7 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
         k_patch = jax.random.fold_in(key, 0x5A7C)
         patch = jax.vmap(lambda c, j: jax.random.randint(
             jax.random.fold_in(jax.random.fold_in(k_patch, c), j), (), 0, sz_fit.lnsig.shape[0]))(cell, j_in_cell)
-    qc = cfg.qcal
-    if cfg.qcal_theta is not None:
-        qc, dln = qcal_theta_eval(cfg.qcal_theta, theta)
-        sz_fit = sz_fit._replace(lnsig=sz_fit.lnsig + dln[None, :])
+    qc, sz_fit = _calibration(cfg, theta, sz_fit)
     qbar, pbar = _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
     r = cfg.corr_lnq_lnp
     q_true = qbar * jnp.exp(theta.sigma_lnq * G[:, 0])
@@ -295,6 +298,37 @@ def qcal_params(qcal, z):
 
 
 QCAL_PARAMS = ("sigma8", "omega_cdm", "A_SZ", "alpha_SZ")
+
+
+def _calibration(cfg, theta, sz_fit):
+    """The observation table (or None) and the noise table at theta, for the config's calibration."""
+    if cfg.qcal_conf is not None:
+        qc, dln = qcal_conf_eval(cfg.qcal_conf, theta)
+    elif cfg.qcal_theta is not None:
+        qc, dln = qcal_theta_eval(cfg.qcal_theta, theta)
+    else:
+        return cfg.qcal, sz_fit
+    return qc, sz_fit._replace(lnsig=sz_fit.lnsig + dln[None, :])
+
+
+def quad_features(x):
+    """1, x_i, x_i x_j (i <= j): 15 features of the 4 scaled parameters."""
+    q = [x[i] * x[j] for i in range(4) for j in range(i, 4)]
+    return jnp.concatenate([jnp.ones(1, x.dtype), x, jnp.stack(q)])
+
+
+def qcal_conf_eval(qc, theta):
+    """Variant (iv) (CatalogueConfig.qcal_conf) at theta: the (n_z, 5) observation table and the shift of
+    ln sigma at the 15 filter sizes, both through the finder's noise level u."""
+    fid, width, u_coef, sig_ab, rows = qc
+    x = jnp.stack([(getattr(theta, n) - fid[i]) / width[i] for i, n in enumerate(QCAL_PARAMS)])
+    u = quad_features(x) @ jnp.asarray(np.asarray(u_coef, dtype=np.float64))
+    ab = jnp.asarray(np.asarray(sig_ab, dtype=np.float64))
+    dln = ab[:, 0] + ab[:, 1] * u
+    R = jnp.asarray(np.asarray(rows, dtype=np.float64))
+    poly = lambda c: R[:, c] + R[:, c + 1] * u + R[:, c + 2] * u * u
+    tab = jnp.stack([R[:, 0], poly(1), poly(4), jnp.maximum(poly(7), 0.05), jnp.clip(poly(10), 0.0, 0.5)], 1)
+    return tab, dln
 
 
 def qcal_theta_eval(qt, theta):
@@ -368,10 +402,7 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
     inz = [(zb == j).astype(wt.dtype) for j in range(5)]
     for pa in range(n_patch):
         patch = None if n_patch == 1 else jnp.full(zz.shape, pa)
-        qc, szf = cfg.qcal, sz_fit
-        if cfg.qcal_theta is not None:
-            qc, dln = qcal_theta_eval(cfg.qcal_theta, theta)
-            szf = sz_fit._replace(lnsig=sz_fit.lnsig + dln[None, :])
+        qc, szf = _calibration(cfg, theta, sz_fit)
         qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, szf, lens_fit, cfg, patch)
         if qc is None:
             s_, k_, w_, f_ = 1.0, cfg.dof, 1.0, 0.0
