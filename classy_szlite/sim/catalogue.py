@@ -167,6 +167,11 @@ class CatalogueConfig(NamedTuple):
     corr_lnq_lnp: float = 0.0
     a_lens: float = 1.0
     clamp: bool = False              # hold the noise fits at the table ends
+    # Calibrated observation (variant (ii), from the finder on map-level simulations, qcal.py):
+    # None, or per redshift bin a tuple (z_upper, s, k, w, f): a halo is lost with probability f,
+    # otherwise q_obs = sqrt((s q_true)^2 + k) + w N(0, 1). The last bin extends to any z. dof is
+    # then unused.
+    qcal: tuple | None = None
 
 
 class Catalogue(NamedTuple):
@@ -257,10 +262,33 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
     r = cfg.corr_lnq_lnp
     q_true = qbar * jnp.exp(theta.sigma_lnq * G[:, 0])
     p_true = pbar * jnp.exp(theta.sigma_lnp * (r * G[:, 0] + np.sqrt(1.0 - r * r) * G[:, 1]))
-    q_obs = jnp.sqrt(q_true ** 2 + cfg.dof) + G[:, 2]
+    if cfg.qcal is None:
+        q_obs = jnp.sqrt(q_true ** 2 + cfg.dof) + G[:, 2]
+    else:                                                     # calibrated; the loss from its own key
+        s_, k_, w_, f_ = qcal_params(cfg.qcal, z)
+        q_obs = jnp.sqrt(jnp.maximum((s_ * q_true) ** 2 + k_, 0.0)) + w_ * G[:, 2]
+        k_loss = jax.random.fold_in(key, 0x1055)
+        u = jax.vmap(lambda c, j: jax.random.uniform(jax.random.fold_in(jax.random.fold_in(k_loss, c), j), (),
+                                                     dtype=jnp.float64))(cell, j_in_cell)
+        q_obs = jnp.where(u < f_, -jnp.inf, q_obs)
     p_obs = p_true + G[:, 3]
     return HaloDraw(z=z, M=M, qbar=qbar, pbar=pbar, q_true=q_true, p_true=p_true, q_obs=q_obs,
                     p_obs=p_obs, valid=valid, total=total)
+
+
+def qcal_params(qcal, z):
+    """(s, k, w, f) of each z from the calibration table (see CatalogueConfig.qcal)."""
+    t = np.asarray(qcal, dtype=np.float64)
+    i = jnp.clip(jnp.searchsorted(jnp.asarray(t[:, 0]), z, side="left"), 0, t.shape[0] - 1)
+    return tuple(jnp.asarray(t[:, c])[i] for c in (1, 2, 3, 4))
+
+
+def load_qcal(path):
+    """Calibration from qcal.py (calibration.npz): the CatalogueConfig.qcal tuple and the PatchTable
+    of the finder's noise (per tile, mean over the mocks)."""
+    d = np.load(path)
+    qc = tuple(tuple(float(v) for v in row) for row in np.stack([d["z_upper"], d["s"], d["k"], d["w"], d["f"]], 1))
+    return qc, PatchTable(lnth=jnp.asarray(d["lnth"]), lnsig=jnp.asarray(np.log(d["sigma"])))
 
 
 def summarise(h: HaloDraw, cfg: CatalogueConfig = CatalogueConfig()) -> Catalogue:
@@ -314,11 +342,16 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
     for pa in range(n_patch):
         patch = None if n_patch == 1 else jnp.full(zz.shape, pa)
         qbar, pbar = _qbar_pbar(MM, zz, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch)
+        if cfg.qcal is None:
+            s_, k_, w_, f_ = 1.0, cfg.dof, 1.0, 0.0
+        else:
+            s_, k_, w_, f_ = qcal_params(cfg.qcal, zz)
         for a in range(n_gh):
-            qt = jnp.sqrt((qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + cfg.dof)
-            cdf = norm.cdf(qe[None, None, None, None, :] - qt[..., None])          # P(q_obs < edge)
-            P_bin = cdf[..., 1:] - cdf[..., :-1]                                  # (.., 4)
-            P_sel = 1.0 - norm.cdf(cfg.q_min - qt)
+            qt = jnp.sqrt(jnp.maximum((s_ * qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + k_, 0.0))
+            wq = w_ if cfg.qcal is None else w_[..., None]
+            cdf = norm.cdf((qe[None, None, None, None, :] - qt[..., None]) / wq)   # P(q_obs < edge)
+            P_bin = (1.0 - (f_ if cfg.qcal is None else f_[..., None])) * (cdf[..., 1:] - cdf[..., :-1])
+            P_sel = (1.0 - f_) * (1.0 - norm.cdf((cfg.q_min - qt) / w_))
             # E[exp(sigma_lnp (r g1 + sqrt(1-r^2) g2))] over g2 at fixed g1
             e_p = jnp.exp(theta.sigma_lnp * r * g[a] + 0.5 * (theta.sigma_lnp ** 2) * (1.0 - r * r))
             ww = wt * gwj[a] / n_patch
