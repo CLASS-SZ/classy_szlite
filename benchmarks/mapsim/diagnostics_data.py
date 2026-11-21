@@ -368,6 +368,11 @@ def szifi_part():
     return out
 
 
+def npe_part(tag="n10000_s0"):
+    """Catalogue-level NPE: catalogue_npe.py's results (bias at the true point, coverage, TARP)."""
+    return json.load(open(f"{OUT}/catalogue_npe/npe_{tag}.json"))
+
+
 def priors_part():
     pc = json.load(open(f"{OUT}/priors/prior_corners.json"))
     out = dict(fiducial=pc["fiducial"], boxes={})
@@ -481,6 +486,8 @@ def main():
     out["tile"] = tile_part()
     if os.path.exists(f"{OUT}/mss2/szifi_compare/summary.json"):
         out["szifi"] = szifi_part()
+    if os.path.exists(f"{OUT}/catalogue_npe/npe_n10000_s0.json"):
+        out["npe"] = npe_part()
     os.makedirs(f"{OUT}/diagnostics", exist_ok=True)
     path = f"{OUT}/diagnostics/diagnostics.json"
     with open(path, "w") as fh:

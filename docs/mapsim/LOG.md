@@ -1158,9 +1158,14 @@ paper's text, checked by a reviewer):
   - **Ranks:** the true values' ranks are uniform for all ten parameters (KS
     p 0.24–0.98).
   - **TARP:** area to the diagonal −0.013, KS p 1.00.
-  - **Central intervals:** the 30%, 50%, 70% and 90% intervals are within
-    0.04 of nominal, except the 90% intervals of σ8 (0.86) and A_SZ (0.85),
-    about 3σ low on 500 draws. The posterior is slightly overconfident in the
-    tails there; an ensemble or more simulations should fix it.
+  - **Central intervals:** within 0.04 of nominal for eight parameters.
+    - σ8's intervals are narrow at every level: 0.27, 0.45, 0.64 and 0.86 for
+      30%, 50%, 70% and 90%. That is 4–6% below nominal from 50% up, outside
+      the ±2σ band of 500 draws from 50% to 80%.
+    - A_SZ's are 3–5% low.
+    - The KS rank tests and TARP are less sensitive to widths and pass.
+    - The posterior slightly underestimates the σ8 uncertainty; an ensemble
+      or more simulations should fix it before σ8 widths are quoted.
+    - (Corrected the same day: first reported as a tail effect only.)
 - **Cost of a full validation:** 17.5 min, mostly TARP's 1,000 samples for 500
   draws (rejection sampling at the prior edges is slow).
