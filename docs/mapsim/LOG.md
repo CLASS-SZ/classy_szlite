@@ -1633,3 +1633,43 @@ overdense regions, so projection and confusion are correlated with mass (the
 two-halo term), and this tail is likely larger in real data. Paper 1's tests
 are self-consistent, but the map-level simulator's realism needs halo
 clustering. This is now on the list.
+
+## 2026-11-22: robustness of the map-level posterior (forecast noise)
+
+**The run** (`npe_robust.sh`, CPU job 7522787, 19 min). Six networks
+trained in parallel:
+- five with seeds 11–15 on the 10⁴ map-level training simulations;
+- one on 5,000 of them.
+
+Each was applied to the 100 mocks and the 500 prior draws. The ensemble is
+an equal mixture (`npe_ensemble.py`).
+
+**Bias on the 100 mocks** (σ8, ω_c, A_SZ, α_SZ, in posterior σ):
+- **The five networks:**
+  - σ8 from −0.17 to +0.02;
+  - ω_c from +0.02 to +0.16;
+  - A_SZ from −0.13 to +0.06;
+  - α_SZ from +0.01 to +0.20.
+- **Mixture:** −0.05 ± 0.10, +0.10 ± 0.07, −0.05 ± 0.09, +0.08 ± 0.08.
+- **5,000 simulations:** −0.05, −0.01, +0.02, +0.16.
+- **Seed scatter:** the networks' posterior means differ by 0.08–0.11
+  posterior σ on the mocks, and 0.12–0.15 on the prior draws.
+
+**Coverage at 50% / 90%:**
+- mixture: σ8 0.46/0.90, ω_c 0.47/0.87, A_SZ 0.49/0.89, α_SZ 0.44/0.86;
+- each network within 0.04 of that;
+- 5,000 simulations: the same;
+- TARP −0.009 to −0.029.
+
+**Reading.**
+- The +0.15σ in α_SZ of the first map-level run was the network's own
+  scatter. Across seeds it ranges from +0.01 to +0.20, and the ensemble has
+  +0.08 ± 0.08.
+- No bias is detected in the map-level posterior at the 0.1σ level.
+- One slight imprecision remains, the same in every network and with half
+  the simulations: α_SZ intervals are a little narrow (86% at 90%, about 3
+  binomial σ low).
+  - It is not cured by ensembling or by doubling the simulations.
+  - It is more likely the flow's flexibility, or the 21-number summary.
+- At 40% of the sky the seed scatter of about 0.1σ stays, in units of a
+  posterior twice as narrow. An ensemble of 5 is a cheap default.
