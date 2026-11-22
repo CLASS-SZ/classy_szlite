@@ -33,6 +33,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 ZB = [0.01, 0.31, 0.61, 0.90, 1.20, 1.50, 99.0]
+SB = [0.0, 1.0, 2.0, 4.0, 1e9]          # theta500 size bins [arcmin], for --size
+N_MIN = 400                              # halos with q > 2 needed to fit a (z, size) cell
 PARAMS = ("sigma8", "omega_cdm", "A_SZ", "alpha_SZ")
 SEED = 20261127
 
@@ -48,6 +50,22 @@ def points(n, box):
     lo = np.array([box[p][0] for p in PARAMS])
     hi = np.array([box[p][1] for p in PARAMS])
     return lo + u * (hi - lo)
+
+
+def calib_fit_cells(H):
+    """Per (z, size) cell (s, k, w, f, n) against q_fsig on halos with q_fsig > 2; NaN where fewer than
+    N_MIN halos."""
+    from qcal import censored_fit
+    qf, qo, z, th = (H[k].astype(float) for k in ("q_fsig", "q_obs", "z", "theta500"))
+    out = np.full((len(ZB) - 1, len(SB) - 1, 5), np.nan)
+    for i, (a, b) in enumerate(zip(ZB[:-1], ZB[1:])):
+        for j, (c, d) in enumerate(zip(SB[:-1], SB[1:])):
+            m = (z > a) & (z <= b) & (th > c) & (th <= d) & (qf > 2)
+            out[i, j, 4] = m.sum()
+            if m.sum() >= N_MIN:
+                r = censored_fit(qf[m], qo[m])
+                out[i, j, :4] = (r["s"], r["k"], r["w"], r["f"])
+    return out
 
 
 def calib_fit(H, T):
@@ -81,18 +99,22 @@ def run(args):
     lam = [float(lam_f(t)) for t in thetas]
     heavy = thetas[int(np.argmax(lam))]
     print(f"{len(P)} points (the fiducial one first); halos per tile {min(lam):.0f}-{max(lam):.0f}; buffers at {dict(zip(PARAMS, np.round(P[int(np.argmax(lam))], 4)))}", flush=True)
-    path = os.path.join(out, "calib_grid.npz")
+    path = os.path.join(out, "calib_grid_zs.npz" if args.size else "calib_grid.npz")
+    os.makedirs(os.path.join(out, "points"), exist_ok=True)
     done = {}
     if os.path.exists(path):                                   # resume
         old = np.load(path)
         if np.array_equal(old["theta"], P):
-            done = {int(i): (old["rows"][i], old["sigma"][i]) for i in np.flatnonzero(old["done"])}
+            done = {int(i): (old["rows"][i], old["sigma"][i], old["cells"][i] if args.size else None) for i in np.flatnonzero(old["done"])}
             print(f"resuming: {len(done)} points done", flush=True)
     rows = np.full((len(P), len(ZB) - 1, 5), np.nan)
     sig = np.full((len(P), mt.N_TILES, 15), np.nan)
     flag = np.zeros(len(P), bool)
-    for i, (r, sg) in done.items():
+    cells = np.full((len(P), len(ZB) - 1, len(SB) - 1, 5), np.nan)
+    for i, (r, sg, cl) in done.items():
         rows[i], sig[i], flag[i] = r, sg, True
+        if cl is not None:
+            cells[i] = cl
     t0 = time.time()
     for i, th in enumerate(thetas):
         if flag[i]:
@@ -100,9 +122,16 @@ def run(args):
         H, T = qcal.table(args.noise, args.mocks, theta=th, base_key=jax.random.fold_in(jax.random.key(SEED), i),
                           setup_theta=heavy, cap=args.cap, light=True, log=lambda m: None)
         rows[i], sig[i] = calib_fit(H, T)
+        if args.size:
+            cells[i] = calib_fit_cells(H)
+        # keep the halos that matter (q_fsig > 1.5) for later refits without the GPU
+        keep = H["q_fsig"] > 1.5
+        np.savez_compressed(os.path.join(out, "points", f"point_{i:02d}.npz"),
+                            **{k: H[k][keep] for k in ("mock", "tile", "z", "lnM", "theta500", "y0", "q_model", "q_fsig", "q_obs")},
+                            sigma=T["sigma"], sigma_tile=T["tile"], theta=P[i])
         flag[i] = True
-        np.savez(path, theta=P, rows=rows, sigma=sig, done=flag, params=np.array(PARAMS), z_upper=np.array(ZB[1:]),
-                 lnth=T["lnth"], specs=T["specs"], noise=args.noise, mocks=args.mocks)
+        np.savez(path, theta=P, rows=rows, sigma=sig, cells=cells, done=flag, params=np.array(PARAMS), z_upper=np.array(ZB[1:]),
+                 size_upper=np.array(SB[1:]), lnth=T["lnth"], specs=T["specs"], noise=args.noise, mocks=args.mocks)
         r = rows[i]
         print(f"[{time.time() - t0:6.0f} s] point {i}: {dict(zip(PARAMS, np.round(P[i], 4)))}; {len(H)} halos; "
               f"sigma/fid at 2' {np.mean(sig[i][:, 7]) / np.mean(sig[0][:, 7]) if flag[0] else float('nan'):.4f}; "
@@ -167,10 +196,23 @@ def fit_conf(args):
     import maps_trainset as mt
     from classy_szlite.sim import simulator as simu
     out = out_dir(args.noise)
-    d = np.load(os.path.join(out, "calib_grid.npz"))
+    d = np.load(os.path.join(out, "calib_grid_zs.npz" if args.size else "calib_grid.npz"))
     assert d["done"].all(), "not all points done"
     P, rows, sig = d["theta"], d["rows"], d["sigma"]
     n = len(P)
+    if args.size:
+        # one row per (z, size) cell, z-major; a cell with too few halos at a point takes that point's z-bin value
+        C = d["cells"]                                                  # (n, nz, ns, 5)
+        nz, ns = C.shape[1], C.shape[2]
+        filled = np.where(np.isnan(C[..., :4]), rows[:, :, None, :4], C[..., :4])
+        Pr0 = [f"(z, size) cells: halos with q > 2 at the fiducial point " + "; ".join(
+            f"z<={ZB[i + 1]:.2f}: " + "/".join(str(int(C[0, i, j, 4])) for j in range(ns)) for i in range(nz))]
+        Pr0.append("cells fitted at all 25 points: " + " ".join(f"z{i}s{j}" for i in range(nz) for j in range(ns) if not np.isnan(C[:, i, j, 0]).any()))
+        rows = filled.reshape(n, nz * ns, 4)
+        cell_upper = [(ZB[i + 1], SB[j + 1]) for i in range(nz) for j in range(ns)]
+    else:
+        Pr0 = []
+        cell_upper = [(ZB[b + 1],) for b in range(len(ZB) - 1)]
     fid = np.array([getattr(simu.THETA_FID, p) for p in PARAMS])
     width = np.array([mt.UNIFORM[p][1] - mt.UNIFORM[p][0] for p in PARAMS])
     x = (P - fid) / width
@@ -191,6 +233,8 @@ def fit_conf(args):
             c, *_ = np.linalg.lstsq(F[m], y[m], rcond=None)
             e.append(y[i] - F[i] @ c)
         return float(np.sqrt(np.mean(np.square(e))))
+    for m_ in Pr0:
+        Pr(m_)
     u_coef, *_ = np.linalg.lstsq(Fq, u, rcond=None)
     Pr(f"u = ln(noise at 2' / fiducial): spread {u.std():.4f}; leave-one-out rms: linear in the parameters {loo(Fl, u):.4f},"
        f" quadratic {loo(Fq, u):.4f}")
@@ -199,19 +243,22 @@ def fit_conf(args):
     Pr("ln sigma at each size against u: leave-one-out rms " + " ".join(f"{loo(Fu, lsig[:, j]):.4f}" for j in range(15)))
     Fu2 = np.c_[np.ones(n), u, u * u]
     out_rows = []
-    for b in range(len(ZB) - 1):
-        r = [ZB[b + 1]]
+    for b, up in enumerate(cell_upper):
+        r = list(up)
         msg = []
         for c, nm in enumerate("skwf"):
             y = rows[:, b, c]
             r += list(np.linalg.lstsq(Fu2, y, rcond=None)[0])
-            msg.append(f"{nm} {loo(Fl, y):.4f}->{loo(Fu2, y):.4f}")
+            msg.append(f"{nm} {y[0]:.3f} ({loo(Fl, y):.4f}->{loo(Fu2, y):.4f})")
         out_rows.append(r)
-        Pr(f"   z <= {ZB[b + 1]:5.2f} leave-one-out rms, linear in the parameters -> quadratic in u: " + "; ".join(msg))
-    np.savez(os.path.join(out, "calib_conf.npz"), fid=fid, width=width, u_coef=u_coef, sig_ab=sig_ab, rows=np.array(out_rows),
-             sigma=sig[0], lnth=d["lnth"], specs=d["specs"], noise=str(d["noise"]))
-    open(os.path.join(out, "calib_conf.txt"), "w").write("\n".join(lines) + "\n")
-    Pr(f"written {os.path.join(out, 'calib_conf.npz')}")
+        Pr(f"   cell {' '.join(f'{v:g}' for v in up)}: fiducial value (leave-one-out rms, linear in the parameters -> quadratic in u): "
+           + "; ".join(msg))
+    name = "calib_conf_zs" if args.size else "calib_conf"
+    np.savez(os.path.join(out, name + ".npz"), fid=fid, width=width, u_coef=u_coef, sig_ab=sig_ab, rows=np.array(out_rows),
+             sigma=sig[0], lnth=d["lnth"], specs=d["specs"], noise=str(d["noise"]),
+             size_upper=np.array(SB[1:]) if args.size else np.array([]))
+    open(os.path.join(out, name + ".txt"), "w").write("\n".join(lines) + "\n")
+    Pr(f"written {os.path.join(out, name + '.npz')}")
 
 
 def load_calib_conf(path):
@@ -221,7 +268,8 @@ def load_calib_conf(path):
     d = np.load(path)
     tup = lambda a: tuple(tuple(float(v) for v in r) for r in np.atleast_2d(a))
     qc = (tuple(map(float, d["fid"])), tuple(map(float, d["width"])), tuple(map(float, d["u_coef"])), tup(d["sig_ab"]), tup(d["rows"]))
-    return qc, ct.PatchTable(lnth=jnp.asarray(d["lnth"]), lnsig=jnp.asarray(np.log(d["sigma"])))
+    size = tuple(map(float, d["size_upper"])) if "size_upper" in d.files and len(d["size_upper"]) else None
+    return qc, ct.PatchTable(lnth=jnp.asarray(d["lnth"]), lnsig=jnp.asarray(np.log(d["sigma"]))), size
 
 
 def load_calib_theta(path):
@@ -241,6 +289,8 @@ def main():
     ap.add_argument("--mocks", type=int, default=5)
     ap.add_argument("--cap", type=int, default=16384)
     ap.add_argument("--noise", choices=("mss2", "forecast"), default="forecast")
+    ap.add_argument("--size", action="store_true", help="run: also fit per (z, size) cell (calib_grid_zs.npz); "
+                    "fit --model conf: per (z, size) cell (calib_conf_zs.npz)")
     ap.add_argument("--model", choices=("theta", "conf"), default="theta",
                     help="theta: linear in the parameters (calib_theta.npz); conf: through the noise level (calib_conf.npz)")
     args = ap.parse_args()
