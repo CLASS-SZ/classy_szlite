@@ -34,8 +34,10 @@ TH = simu.THETA_FID
 
 @pytest.fixture(scope="module")
 def setup():
+    if not HAVE_TABLES:
+        pytest.skip("the paper's noise tables (COSMOCNC_DATA) are absent")
     cells = ct.survey_cells()
-    sz, le = ct.paper_tables() if HAVE_TABLES else (None, None)
+    sz, le = ct.paper_tables()
     return cells, sz, le
 
 
