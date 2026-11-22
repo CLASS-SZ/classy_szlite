@@ -1536,3 +1536,49 @@ The model is fitted on the 25 calibration points of variant (iii):
   cluster size: k −0.02 and w 1.28 for θ500 < 1′, against k 1.3 and w 1.05
   at 2–4′. That bears directly on the slope.
 - Next: calibrate per redshift and size.
+
+## 2026-11-22: the catalogue calibration per redshift and cluster size
+
+**The run** (job 7521746, 20 min; `calib_size.sh`).
+- **Points:** the 25 calibration points re-measured with the same keys,
+  with fits per (z, θ500) cell. The size edges are 1′, 2′ and 4′, with
+  N_MIN = 400 halos with q > 2 per cell.
+  - A short cell takes that point's z-bin value.
+  - 10 of the 24 cells are fitted at all 25 points.
+- **Per-cluster tables** saved:
+  `qcal_grid_forecast/points/point_XX.npz` (halos with q_fsig > 1.5).
+- **Model:** through the noise level (calib_conf_zs.npz), catalogue variant
+  calibcsf41.
+
+**The cell fits.**
+- **The size dependence is real:** at 1.2 < z < 1.5, θ500 < 1′, k = 0.29 and
+  w = 1.24; at 2–4′, k = 0.61 and w = 1.23.
+- **Several cells are noisy across the points:** the k leave-one-out error
+  reaches 1.7–2.6 where a cell switches between its own fit and the z-bin
+  fallback.
+
+**Results:**
+
+| | at the truth: σ8, ω_c, A_SZ, α_SZ | across the prior: σ8, α_SZ bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| through the noise level, per z | −0.07, +0.11, +0.09, +0.62 | +0.23, +0.52 | 0.46/0.90, 0.47/0.89, 0.48/0.88, 0.42/0.78 |
+| through the noise level, per (z, size) | −0.23, +0.15, +0.09, +0.67 | +0.07, +0.63 | 0.48/0.91, 0.48/0.88, 0.49/0.89, 0.40/0.76 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+- **σ8 bias in thirds of σ8:** +0.41, +0.07, −0.28.
+- **α_SZ bias in thirds of σ8:** +0.42, +0.54, +0.94.
+
+**Reading.**
+- Binning the calibration by cluster size does not remove the α_SZ bias
+  (+0.6σ, 76% at 90%). So it does not come from a size-dependent lift or
+  scatter that a per-halo, independent observation model can carry.
+- Remaining candidates are correlations a per-halo model cannot represent:
+  - the tSZ of halos below 5e13 projected onto detected clusters, a
+    mass-dependent boost that would act on the slope;
+  - blending with neighbours;
+  - confirmation crediting the heaviest halo within 1.5′.
+- The saved per-cluster tables allow these to be diagnosed without the GPU.
+- **For paper 1:** even the best catalogue calibration (25 map-level points,
+  through the noise level, per z and size) leaves the slope biased by
+  +0.6σ at 10% of the sky (about +1.2σ at 40%). Map-level inference has
+  +0.15σ.
