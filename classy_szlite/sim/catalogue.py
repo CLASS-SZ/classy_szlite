@@ -184,6 +184,10 @@ class CatalogueConfig(NamedTuple):
     # filter size j shifts by a_j + b_j u; per redshift bin row (z_upper, s0, s1, s2, k0, k1, k2, w0, w1,
     # w2, f0, f1, f2) gives s = s0 + s1 u + s2 u^2 etc. It replaces qcal and qcal_theta.
     qcal_conf: tuple | None = None
+    # Size bins for the calibration (with qcal_conf): None, or the upper theta500 edges [arcmin] of the size
+    # bins; the calibration rows are then per (redshift, size) cell, redshift-major, each row (z_upper,
+    # th_upper, s0, s1, s2, k0, ..., f2), and a halo takes the row of its cell.
+    qcal_size: tuple | None = None
 
 
 class Catalogue(NamedTuple):
@@ -206,6 +210,12 @@ def survey_rates(theta, cells):
     cs = simu.cosmology_stage(theta, cells)
     s = SR_FULL / hl.OMEGA_TILE
     return cs.lam * s, cs.d2N * s, cs.cg, cs.chi_star
+
+
+def _theta500(M, z, theta, cg):
+    """theta500 [arcmin] of halos (M500 [M_sun], z)."""
+    Ez = jnp.interp(z, cg.z, cg.Hz) / (theta.h * 100.0 / lensing.C_KMS)
+    return theta500_arcmin(M, Ez, jnp.interp(z, cg.z, cg.Da), theta.h, theta.one_minus_b)
 
 
 def _qbar_pbar(M, z, theta, cg, chi_s, sz_fit, lens_fit, cfg, patch=None):
@@ -278,7 +288,7 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
     if qc is None:
         q_obs = jnp.sqrt(q_true ** 2 + cfg.dof) + G[:, 2]
     else:                                                     # calibrated; the loss from its own key
-        s_, k_, w_, f_ = qcal_params(qc, z)
+        s_, k_, w_, f_ = qcal_params(qc, z, _theta500(M, z, theta, cg) if cfg.qcal_size else None, cfg.qcal_size)
         q_obs = jnp.sqrt(jnp.maximum((s_ * q_true) ** 2 + k_, 0.0)) + w_ * G[:, 2]
         k_loss = jax.random.fold_in(key, 0x1055)
         u = jax.vmap(lambda c, j: jax.random.uniform(jax.random.fold_in(jax.random.fold_in(k_loss, c), j), (),
@@ -289,11 +299,19 @@ def draw(key, theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCo
                     p_obs=p_obs, valid=valid, total=total)
 
 
-def qcal_params(qcal, z):
-    """(s, k, w, f) of each z from the calibration table (see CatalogueConfig.qcal; a tuple, or an
-    array from qcal_theta_eval)."""
+def qcal_params(qcal, z, th=None, size_edges=None):
+    """(s, k, w, f) of each halo from the calibration table (see CatalogueConfig.qcal; a tuple, or an
+    array from qcal_theta_eval / qcal_conf_eval). With size_edges (CatalogueConfig.qcal_size) the table
+    has one row per (redshift, size) cell, redshift-major, and th gives each halo's theta500 [arcmin]."""
     t = jnp.asarray(np.asarray(qcal, dtype=np.float64)) if isinstance(qcal, tuple) else qcal
-    i = jnp.clip(jnp.searchsorted(t[:, 0], z, side="left"), 0, t.shape[0] - 1)
+    if size_edges is None:
+        i = jnp.clip(jnp.searchsorted(t[:, 0], z, side="left"), 0, t.shape[0] - 1)
+    else:
+        ns = len(size_edges)
+        nz = t.shape[0] // ns
+        iz = jnp.clip(jnp.searchsorted(t[::ns, 0], z, side="left"), 0, nz - 1)
+        js = jnp.clip(jnp.searchsorted(jnp.asarray(np.asarray(size_edges, dtype=np.float64)), th, side="left"), 0, ns - 1)
+        i = iz * ns + js
     return tuple(t[:, c][i] for c in (1, 2, 3, 4))
 
 
@@ -326,8 +344,9 @@ def qcal_conf_eval(qc, theta):
     ab = jnp.asarray(np.asarray(sig_ab, dtype=np.float64))
     dln = ab[:, 0] + ab[:, 1] * u
     R = jnp.asarray(np.asarray(rows, dtype=np.float64))
-    poly = lambda c: R[:, c] + R[:, c + 1] * u + R[:, c + 2] * u * u
-    tab = jnp.stack([R[:, 0], poly(1), poly(4), jnp.maximum(poly(7), 0.05), jnp.clip(poly(10), 0.0, 0.5)], 1)
+    o = R.shape[1] - 12                        # 1 (z_upper) or 2 (z_upper, th_upper: per (z, size) cell)
+    poly = lambda c: R[:, o + c] + R[:, o + c + 1] * u + R[:, o + c + 2] * u * u
+    tab = jnp.stack([R[:, 0], poly(0), poly(3), jnp.maximum(poly(6), 0.05), jnp.clip(poly(9), 0.0, 0.5)], 1)
     return tab, dln
 
 
@@ -407,7 +426,7 @@ def expected(theta, cells, sz_fit, lens_fit, cfg: CatalogueConfig = CatalogueCon
         if qc is None:
             s_, k_, w_, f_ = 1.0, cfg.dof, 1.0, 0.0
         else:
-            s_, k_, w_, f_ = qcal_params(qc, zz)
+            s_, k_, w_, f_ = qcal_params(qc, zz, _theta500(MM, zz, theta, cg) if cfg.qcal_size else None, cfg.qcal_size)
         for a in range(n_gh):
             qt = jnp.sqrt(jnp.maximum((s_ * qbar * jnp.exp(theta.sigma_lnq * g[a])) ** 2 + k_, 0.0))
             wq = w_ if qc is None else w_[..., None]

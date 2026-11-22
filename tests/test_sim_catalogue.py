@@ -335,6 +335,46 @@ def test_calibration_through_noise_level_simulations_match_expectation(setup):
     assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
 
 
+def test_calibration_per_size_cells(setup):
+    """qcal_size: with identical rows in every size cell, the same catalogue as the redshift-only table;
+    with different rows per size, simulations against the expectation, which differs."""
+    cells, sz, le = setup
+    th_nodes = np.geomspace(0.5, 15.0, 15)
+    tab = ct.PatchTable(lnth=jnp.log(jnp.asarray(th_nodes)), lnsig=jnp.log(jnp.asarray(ct.eval_fit(sz, jnp.asarray(th_nodes))))[None])
+    qc = ((0.5, 0.92, 2.0, 1.1, 0.05), (1.0, 1.05, 0.5, 0.9, 0.0), (9.9, 0.97, 1.3, 1.3, 0.02))
+    base = _qcal_conf(qc)
+    edges = (1.0, 3.0, 1e9)
+    rows_same = tuple((r[0], e) + tuple(r[1:]) for r in base[4] for e in edges)
+    th = TH._replace(sigma8=0.83)
+    cfg = ct.CatalogueConfig(f_sky=0.05, capacity=2 ** 18, qcal_conf=base)
+    a = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg))(jax.random.key(17))
+    b = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg._replace(qcal_conf=base[:4] + (rows_same,), qcal_size=edges)))(jax.random.key(17))
+    assert np.array_equal(np.asarray(a.counts), np.asarray(b.counts)) and float(a.p_sum) == float(b.p_sum)
+    # different search lift and scatter per size: small clusters k = 0, w = 1.3; large k = 2.5, w = 1.0
+    per = {1.0: (0.0, 1.3), 3.0: (1.2, 1.1), 1e9: (2.5, 1.0)}
+    rows_diff = tuple((r[0], e, r[1], 0.0, 0.0, per[e][0], 0.0, 0.0, per[e][1], 0.0, 0.0, r[10], 0.0, 0.0) for r in base[4] for e in edges)
+    cfg2 = ct.CatalogueConfig(f_sky=0.1, capacity=2 ** 19, qcal_conf=base[:4] + (rows_diff,), qcal_size=edges)
+    ec, en, ep = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg2))(th)
+    ec, en, ep = np.asarray(ec), float(en), float(ep)
+    _, n0, _ = jax.jit(lambda t: ct.expected(t, cells, tab, le, cfg))(th)
+    assert abs(en / float(n0) - 1) > 0.02
+    f = jax.jit(lambda k: ct.simulate(k, th, cells, tab, le, cfg2))
+    R = 40
+    C, Ns, Ps = [], [], []
+    for r in range(R):
+        c = f(jax.random.key(4900 + r))
+        assert not bool(c.overflow)
+        C.append(np.asarray(c.counts, float)); Ns.append(int(c.n_sel)); Ps.append(float(c.p_sum))
+    C, Ns = np.array(C), np.array(Ns, float)
+    keep = ec > 1.0
+    zc = (C.mean(0)[keep] - ec[keep]) / np.sqrt(ec[keep] / R)
+    print("calibration per size cell, counts z-scores:", np.round(zc, 2).tolist(),
+          f"selected {Ns.mean():.1f} against {en:.1f} (redshift-only {float(n0):.1f})")
+    assert np.all(np.abs(zc) < 4.5)
+    assert abs(Ns.mean() - en) / np.sqrt(en / R) < 4.5
+    assert abs(np.sum(Ps) / Ns.sum() - ep / en) < 0.01
+
+
 def test_calibration_none_is_unchanged(setup):
     """qcal=None leaves the paper-exact simulator bit-identical."""
     cells, sz, le = setup
