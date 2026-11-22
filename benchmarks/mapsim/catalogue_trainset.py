@@ -102,9 +102,10 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--chunk", type=int, default=512)
     ap.add_argument("--variant", choices=("paper", "survey41", "forecast41", "calib41", "calibf41", "calibt41", "calibtf41", "calibc41", "calibcf41", "calibcs41", "calibcsf41"), default="paper")
+    ap.add_argument("--tiles", type=int, default=41, help="survey size in tiles (the map-level survey's)")
     args = ap.parse_args()
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
-    out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant)
+    out = OUT if args.variant == "paper" else os.path.join(OUT, args.variant + (f"_t{args.tiles}" if args.tiles != 41 else ""))
     os.makedirs(out, exist_ok=True)
     path = os.path.join(out, f"{args.set}.npz")
     rng = np.random.default_rng(SEED[args.set])
@@ -117,6 +118,7 @@ def main():
         import maps_trainset as mt
         from classy_szlite.sim import noise as nz, instrument as ins
         import spike
+        mt.N_TILES = args.tiles
         prior = mt.draw_prior
         nt, _ = nz.load_mss2(mt.SPECTRA, "mean")
         specs = mt.survey_spectra(nt.F.shape[0])
@@ -129,13 +131,13 @@ def main():
                                     "calib_conf_zs.npz" if args.variant.startswith("calibcs") else "calib_conf.npz")
             qcal_conf, tab, qcal_size = qcal_grid.load_calib_conf(cal_path)
             sig, lnth = np.exp(np.asarray(tab.lnsig)), np.asarray(tab.lnth)
-            assert np.array_equal(np.load(cal_path)["specs"], specs)
+            assert args.tiles != 41 or np.array_equal(np.load(cal_path)["specs"], specs)
         elif args.variant in ("calibt41", "calibtf41"):  # calibration following the parameters (qcal_grid.py)
             import qcal_grid
             cal_path = os.path.join(qcal_grid.out_dir("forecast" if args.variant == "calibtf41" else "mss2"), "calib_theta.npz")
             qcal_theta, tab = qcal_grid.load_calib_theta(cal_path)
             sig, lnth = np.exp(np.asarray(tab.lnsig)), np.asarray(tab.lnth)
-            assert np.array_equal(np.load(cal_path)["specs"], specs)
+            assert args.tiles != 41 or np.array_equal(np.load(cal_path)["specs"], specs)
         elif args.variant == "forecast41":            # the same survey with the 2019 forecast noise (goal)
             sig, lnth = ct.analytic_sigma_y0_forecast(cmb, "goal")
         elif args.variant in ("calib41", "calibf41"):   # the finder's noise and observation, from qcal.py
@@ -143,9 +145,14 @@ def main():
                                     "calibration.npz")
             qcal, tab = ct.load_qcal(cal_path)
             sig, lnth = np.exp(np.asarray(tab.lnsig)), np.asarray(tab.lnth)
-            assert np.array_equal(np.load(cal_path)["specs"], specs)
+            assert args.tiles != 41 or np.array_equal(np.load(cal_path)["specs"], specs)
         else:
             sig, lnth = ct.analytic_sigma_y0(nt, specs, cmb)
+        if args.tiles != 41 and sig.shape[0] == 41:
+            # a calibration measured on the 41-tile survey, applied to a larger one: with the forecast noise every
+            # tile has the same spectra, so the per-tile tables differ only by sampling; use their mean
+            assert "f" in args.variant.replace("calib", ""), "per-tile MSS2 calibrations do not extend to other surveys"
+            sig = sig.mean(0, keepdims=True)
         sz = ct.PatchTable(lnth=jnp.asarray(lnth), lnsig=jnp.asarray(np.log(sig)))
         le = ct.lens_table("goal")
         cfg0 = ct.CatalogueConfig(f_sky=mt.N_TILES * hl.OMEGA_TILE / ct.SR_FULL, capacity=2 ** 19, qcal=qcal,

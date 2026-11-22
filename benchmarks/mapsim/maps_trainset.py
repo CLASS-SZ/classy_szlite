@@ -8,6 +8,9 @@
 plus atmospheric, correlated within a tube: the simulator's default) instead of MSS2, the same
 keys (so the same halos and CMB), output in maps_npe_forecast/ (PLAN section 10, paper 1).
 
+--tiles 168: the same with 168 tiles (40.7% of the sky; the first 41 are the 41-tile survey's skies), output
+in maps_npe[_forecast]_t168/.
+
 The survey: 41 periodic 10-degree tiles (about 10% of the sky), each with its own MSS2 noise
 (noise.py: the tile's measured 6 x 6 spectra, four-split mean, depth 1), the same 41 spectra in
 every simulation (a fixed footprint), drawn without replacement from the 107 measured tiles
@@ -73,7 +76,9 @@ def draw_prior(n, rng):
 
 
 def survey_spectra(n_spec):
-    return np.sort(np.random.default_rng(SURVEY_SEED).choice(n_spec, N_TILES, replace=False)).astype(np.int32)
+    """The survey's MSS2 spectra: N_TILES of the n_spec measured, without replacement when possible (the
+    41-tile survey), with replacement beyond (the 168-tile one)."""
+    return np.sort(np.random.default_rng(SURVEY_SEED).choice(n_spec, N_TILES, replace=N_TILES > n_spec)).astype(np.int32)
 
 
 def theta_of(row):
@@ -109,10 +114,14 @@ def main():
     ap.add_argument("--chunk", type=int, default=21, help="tiles per vectorised batch")
     ap.add_argument("--save-every", type=int, default=200)
     ap.add_argument("--noise", choices=("mss2", "forecast"), default="mss2")
+    ap.add_argument("--tiles", type=int, default=41, help="survey size: 41 tiles (10%% of the sky) or e.g. 168 (40.7%%)")
     args = ap.parse_args()
-    global OUT
+    global OUT, N_TILES
+    N_TILES = args.tiles
     if args.noise == "forecast":
         OUT = OUT + "_forecast"
+    if N_TILES != 41:
+        OUT = OUT + f"_t{N_TILES}"
     n = args.n or {"train": 10000, "heldout": 500, "truth": 100}[args.set]
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{args.set}.npz")
