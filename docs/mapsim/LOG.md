@@ -1582,3 +1582,54 @@ The model is fitted on the 25 calibration points of variant (iii):
   through the noise level, per z and size) leaves the slope biased by
   +0.6σ at 10% of the sky (about +1.2σ at 40%). Map-level inference has
   +0.15σ.
+
+## 2026-11-22: why the calibrated catalogue model still biases the slope
+
+**Data and scripts.** The per-cluster tables of the 25 points
+(`qcal_grid_forecast/points/`, 234 MB, analysed locally), with
+`benchmarks/mapsim/qcal_diag_counts.py` and `qcal_diag_tail.py`. Forecast
+noise.
+
+1. **At the true parameters, maps against the calibrated catalogue model**
+   (calibcf41 truth set, 100 each). The maps have 1–4% more clusters above
+   q = 8.4 (z-scores up to 4.9), and +7% and +4% in the brightest bin at
+   z < 0.6. The mean p agrees (0.2486 against 0.2476). More bright clusters
+   than the model allows pushes the inferred slope up: α_SZ +0.6σ.
+2. **At each of the 25 points, with each halo's own q and that point's own
+   calibration** (no interpolation):
+   - the counts above q = 8.4 are under-predicted by about 1%
+     (1.010 ± 0.005);
+   - the residuals (q_obs − μ)/w of detected halos have a mean of −0.03 to
+     −0.09 at q_fsig > 12, and a positive skewness of +1.1 (from −0.1 to
+     +2.9) that grows with ω_c (+1.2 per prior width) and A_SZ (+1.4);
+   - χ²/20 of the counts is 0.6–1.0 at the low-tSZ points and 4–6 at the
+     high-tSZ ones.
+3. **The upward tail.** For bright detected halos (q_fsig > 10), the
+   fraction with r > 2.5 is 1.2–1.7%, against 0.62% for a Gaussian.
+   - It is 1.5–1.7% at the high-tSZ points (9, 22) and about 0.8% at the
+     low-tSZ points (12, 14).
+   - It depends little on θ500.
+   - Downward fluctuations of small clusters are fewer than Gaussian.
+4. **An exponential upward tail** (an exponentially modified Gaussian,
+   censored fits at 6 points):
+   - it fits single halos far better (Δln L up to 2,000 per z bin), with a
+     tail mean of 0.05–0.9 that grows with redshift and with the tSZ;
+   - but it predicts the counts worse (χ²/20 of 6–25 against 2–7). It
+     under-predicts the top q bin by 4–7% and over-predicts the lowest by
+     2–3%. So the tail's shape changes with q, and one exponential cannot
+     carry it.
+
+**Reading.**
+- The finder's q has an upward tail, 2–3× the Gaussian rate of +2.5σ
+  fluctuations, and it grows with the amount of tSZ on the sky: the chance
+  projection of other halos' signal onto a cluster.
+- A per-cluster Gaussian cannot carry it. A catalogue model would need the
+  full, q- and tSZ-dependent distribution of the finder's errors, which
+  means emulating the finder.
+
+**A caveat this raises for the simulator itself.** Halos are placed with
+uniform positions, so there is no spatial clustering. Real clusters sit in
+overdense regions, so projection and confusion are correlated with mass (the
+two-halo term), and this tail is likely larger in real data. Paper 1's tests
+are self-consistent, but the map-level simulator's realism needs halo
+clustering. This is now on the list.
