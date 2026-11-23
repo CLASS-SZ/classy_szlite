@@ -10,6 +10,7 @@ memory.
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+%config InlineBackend.figure_format = "retina"
 import jax
 jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import tile, priors
@@ -19,7 +20,7 @@ o = tile.stages()          # the first tile of the first mock of the published '
 print(f"{time.time() - t0:.0f} s")
 ```
 
-    19 s
+    22 s
 
 
 ## The maps
@@ -47,6 +48,13 @@ plt.tight_layout()
 ![png](one-tile_files/one-tile_3_0.png)
     
 
+
+The top row splits the 145 GHz map into its parts on a common scale: the clusters' tSZ (a decrement of
+up to about 100 μK), the lensed CMB (±200 μK on degree scales) and the forecast noise (its atmospheric part
+dominates the largest scales). No cluster is visible in their sum: the finder combines all six channels with
+the clusters' known spectrum and shape. Its signal-to-noise before masking is held down by the bright
+clusters' own power in the noise estimate; the masking pass covers them (black discs), and the final
+signal-to-noise shows the detections as bright points.
 
 ## The catalogue
 
@@ -79,6 +87,10 @@ for i in order:
         29.8   2.7'  z 0.56  M 6.1e+14  q_model 35.2
 
 
+The brightest detections all sit on massive halos, and the catalogue model's $q$ of each halo is a few
+per cent above the finder's $q$. A detection without a halo is a noise peak or a blend of halos below the
+confirmation mass; there are few above $q = 5$.
+
 ## The finder's noise
 
 The finder estimates its noise from the maps, which contain the tSZ of every cluster. Before masking, the
@@ -101,9 +113,13 @@ print("after masking, at 2': ", round(float(o["sigma_final"][7] / o["sigma_model
 
 
     
-![png](one-tile_files/one-tile_7_1.png)
+![png](one-tile_files/one-tile_9_1.png)
     
 
+
+The first-pass curve peaks on 2–8′ scales, the size of typical clusters, whose power the noise estimate
+includes. After masking, the curve drops to 4–8% above 1: the confusion noise of the faint clusters that stay
+unmasked. On a single tile the numbers fluctuate by about a per cent from tile to tile.
 
 ## Detected q against the catalogue model's q
 
@@ -124,16 +140,20 @@ plt.xlim(3, 80); plt.ylim(4, 80); plt.xlabel("catalogue model's q"); plt.ylabel(
 
 
 
-    <matplotlib.legend.Legend at 0x115610380>
+    <matplotlib.legend.Legend at 0x112721850>
 
 
 
 
     
-![png](one-tile_files/one-tile_9_1.png)
+![png](one-tile_files/one-tile_12_1.png)
     
 
+
+On one tile the trend is noisy, but the bright clusters sit below the dashed line (the finder's higher
+noise), while near the threshold detections scatter above it (the search over positions and sizes). The
+Finder page measures both effects on 3.6 million halos.
 
 ---
 
-*Generated from [`examples/notebooks/one_tile.ipynb`](https://github.com/CLASS-SZ/classy_szlite/blob/mapsim/examples/notebooks/one_tile.ipynb), executed on an Apple M1 Pro laptop.*
+*Generated from [`examples/notebooks/one_tile.ipynb`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/notebooks/one_tile.ipynb), executed on an Apple M1 Pro laptop.*

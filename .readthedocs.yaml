@@ -1,19 +1,11 @@
 version: 2
 
+# The docs are a Zensical site (zensical.toml); Read the Docs builds and serves the same site as GitHub Pages.
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.11"
-
-python:
-  install:
-    - requirements: docs/requirements.txt
-    - method: pip
-      path: .
-
-sphinx:
-  configuration: docs/conf.py
-
-formats:
-  - htmlzip
-  - pdf
+    python: "3.12"
+  commands:
+    - pip install zensical "mkdocstrings[python]" -e .
+    - zensical build --clean
+    - mkdir -p $READTHEDOCS_OUTPUT/html && cp -r site/* $READTHEDOCS_OUTPUT/html/

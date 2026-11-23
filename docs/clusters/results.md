@@ -11,7 +11,18 @@ prior, all applied to the same map-level skies. Public 2019 SO forecast noise, g
 
 ## Bias at the true parameters
 
-![Bias of four posteriors at two survey sizes](figures/bias.png)
+<figure markdown="span">
+  ![Bias of four posteriors at two survey sizes](figures/bias.png)
+  <figcaption>The bias of each posterior on 100 map-level mocks at the true parameters: the mean of
+  (posterior mean − truth) / posterior standard deviation, with its error of the mean (smaller than the
+  symbols), for σ8, ω_c, A_SZ and α_SZ, at 10% (left) and 40.7% of the sky (right). Zero is unbiased; one
+  is a shift of one posterior width.</figcaption>
+</figure>
+
+The published catalogue model (orange) is far off: $\sigma_8$ high and the slope $\alpha_\mathrm{SZ}$ very low,
+and more so in the larger survey, where its posteriors are narrower. Both calibrated models (green, violet)
+are within 0.2 widths for $\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$, but keep $\alpha_\mathrm{SZ}$ about 0.5–0.7
+widths high at both sizes. The map-level posterior (blue) is within 0.12 widths everywhere.
 
 Mean over 100 mocks of (posterior mean − truth) / posterior standard deviation:
 
@@ -33,9 +44,45 @@ The published model's bias grows with the survey by a factor of about 1.5 (poste
 2, because the six Gaussian-prior parameters do not narrow). The shifts in $\sigma_8$ and $\Omega_m$
 partly cancel in $S_8$ (−0.30 widths at 10%).
 
+## The posterior at 40% of the sky
+
+<figure markdown="span">
+  ![Posteriors of one mock at 40.7% of the sky](figures/corner_40.png){ width="680" }
+  <figcaption>The posteriors of the first map-level mock of the 168-tile survey (40.7% of the sky), in σ8,
+  Ω_m, A_SZ and α_SZ: trained on the published catalogue model (orange, one network), on the model calibrated
+  at one point (green, one network), on the model calibrated through the noise level (violet, five networks
+  pooled) and on map-level simulations (blue, five networks pooled). Contours: 68% and 95%; diagonal: the
+  marginals; black: the true values.</figcaption>
+</figure>
+
+This is what a survey of SO's size would see. With four times the area, every posterior is about half as wide
+as at 10% of the sky, and the published catalogue model's errors stand out: on this mock it gives
+$\sigma_8 = 0.823 \pm 0.004$ against a true 0.811 (3.3 widths), $\alpha_\mathrm{SZ} = 1.034 \pm 0.011$ against
+1.123 (8 widths), and $\Omega_m$ and $A_\mathrm{SZ}$ low, the degenerate directions that let it explain too few
+bright clusters with a shallower mass slope. The three other posteriors agree with each other and contain the
+truth: $\sigma_8 = 0.812 \pm 0.003$ at map level. On a single mock at the true parameters the calibrated
+models look as good as map-level inference; where they differ is across the prior (next section) and in the
+systematic $+0.5$–$0.7$ width shift of $\alpha_\mathrm{SZ}$ over 100 mocks (the table above), which one mock
+cannot show.
+
 ## Calibration over the prior
 
-![Coverage over the prior](figures/coverage.png)
+<figure markdown="span">
+  ![Coverage over the prior](figures/coverage.png)
+  <figcaption>Coverage on 500 map-level skies drawn from the prior: the fraction of skies whose true value lies
+  in the central credible interval, against the interval's level, for each of the four parameters, at 10%
+  (top) and 40.7% of the sky (bottom). Dotted: the diagonal of a calibrated posterior; below it, the posterior
+  is overconfident. Map-level and noise-level curves are ensembles of five networks; at 40.7% the model
+  calibrated at one point is one network, and the published model was not run on these skies (its posteriors
+  fall outside the prior box).</figcaption>
+</figure>
+
+A single bias at the true parameters can hide a posterior that is wrong elsewhere; coverage over the prior
+tests every part of it. The model calibrated at one point (green) falls well below the diagonal for
+$\sigma_8$ and $\omega_c$, and further at 40.7%: its intervals are too narrow for skies away from its
+calibration point. The calibration that follows the parameters (dashed, violet) brings $\sigma_8$, $\omega_c$
+and $A_\mathrm{SZ}$ onto the diagonal, but not $\alpha_\mathrm{SZ}$. The map-level posterior (blue) follows the
+diagonal for all four at both sizes.
 
 How often the central interval contains the true value, on 500 map-level skies drawn from the prior:
 

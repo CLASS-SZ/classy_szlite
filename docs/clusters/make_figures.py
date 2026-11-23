@@ -37,7 +37,7 @@ LABEL = dict(map="map level", published="catalogue, as published", point="catalo
              theta="catalogue, calibrated (linear in θ)", noise="catalogue, calibrated (noise level)")
 P4 = ["σ8", "ω_c", "A_SZ", "α_SZ"]
 NAMES10 = ["σ8", "ω_c", "A_SZ", "α_SZ", "h", "ω_b", "n_s", "σ_SZ", "β_lens", "σ_lens"]
-plt.rcParams.update({"figure.dpi": 150, "savefig.dpi": 150, "font.size": 9, "axes.spines.top": False,
+plt.rcParams.update({"figure.dpi": 220, "savefig.dpi": 220, "font.size": 10, "axes.spines.top": False,
                      "axes.spines.right": False, "axes.grid": True, "grid.color": "#e6e8ec", "grid.linewidth": 0.6,
                      "legend.frameon": False, "savefig.bbox": "tight", "savefig.facecolor": "white"})
 NUM = {}
@@ -129,31 +129,37 @@ def fig_tile():
 
 
 def fig_noise(R, o):
+    """The finder's noise over the instrument-plus-CMB noise, against filter size."""
     g = np.load(os.path.join(R, "qcal_grid_forecast", "calib_grid.npz"))
     th = np.geomspace(0.5, 15, 15)
     ratio_fid = g["sigma"][0] / o["sigma_model"][None]
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3.4))
-    a = ax[0]
+    fig, a = plt.subplots(figsize=(6.2, 3.6))
     a.fill_between(th, np.quantile(ratio_fid, 0.05, 0), np.quantile(ratio_fid, 0.95, 0), color=C["map"], alpha=0.2, lw=0)
-    a.plot(th, ratio_fid.mean(0), color=C["map"], lw=2, label="finder, after masking (41 tiles)")
-    a.plot(th, o["sigma_first"] / o["sigma_model"], color=C["published"], lw=1.5, ls="--", label="finder, first pass (one tile)")
-    a.axhline(1, color="gray", ls=":", lw=1)
+    a.plot(th, ratio_fid.mean(0), color=C["map"], lw=2.2, label="after the masking pass (mean of 41 tiles, 5–95% band)")
+    a.plot(th, o["sigma_first"] / o["sigma_model"], color=C["published"], lw=1.8, ls="--", label="first pass, before masking (one tile)")
+    a.axhline(1, color="gray", ls=":", lw=1.2, label="instrument + CMB only (catalogue model)")
     a.set_xscale("log"); a.set_xticks([0.5, 1, 2, 4, 8, 15]); a.set_xticklabels(["0.5′", "1′", "2′", "4′", "8′", "15′"])
-    a.set_xlabel("filter size θ"); a.set_ylabel("σ finder / σ instrument + CMB"); a.legend(fontsize=8)
-    a.set_title("The finder's noise at the true parameters", fontsize=9)
-    a = ax[1]
-    u = np.log(g["sigma"][:, :, 7].mean(1) / g["sigma"][0, :, 7].mean())
-    P = g["theta"]
-    sc = a.scatter(np.exp(u), g["rows"][:, 1, 1], c=P[:, 2], cmap="cividis", s=28, label="search lift k (0.31 < z < 0.61)")
-    a.set_xlabel("finder noise at 2′, relative to the true parameters"); a.set_ylabel("search lift k")
-    a2 = a.twinx()
-    a2.scatter(np.exp(u), g["rows"][:, 1, 2], marker="^", c=P[:, 2], cmap="cividis", s=22)
-    a2.set_ylabel("scatter w (triangles)"); a2.grid(False)
-    cb = fig.colorbar(sc, ax=a2, fraction=0.05, pad=0.12); cb.set_label("A_SZ of the point", fontsize=8)
-    a.set_title("The calibration at 25 points of the prior", fontsize=9)
+    a.set_xlabel("filter size θ"); a.set_ylabel("σ_finder / σ_instrument+CMB"); a.set_ylim(0.97, 1.34)
+    a.legend(fontsize=8.5, loc="upper left")
     save(fig, "finder_noise.png")
-    NUM["noise"] = dict(ratio_mean=ratio_fid.mean(0).round(3).tolist(), u_range=[float(np.exp(u).min()), float(np.exp(u).max())],
-                        k_range=[float(g["rows"][:, 1, 1].min()), float(g["rows"][:, 1, 1].max())])
+    NUM["noise"] = dict(ratio_mean=ratio_fid.mean(0).round(3).tolist())
+
+
+def fig_grid(R):
+    """The calibration at the 25 points: search lift and scatter against the finder's noise level."""
+    g = np.load(os.path.join(R, "qcal_grid_forecast", "calib_grid.npz"))
+    u = g["sigma"][:, :, 7].mean(1) / g["sigma"][0, :, 7].mean()
+    P = g["theta"]
+    fig, ax = plt.subplots(1, 2, figsize=(10.5, 3.8))
+    for a, (c, lab) in zip(ax, ((1, "search lift k"), (2, "scatter w"))):
+        sc = a.scatter(u, g["rows"][:, 1, c], c=P[:, 2], cmap="cividis", s=36, edgecolors="k", linewidths=0.3)
+        a.scatter(u[0], g["rows"][0, 1, c], s=140, facecolors="none", edgecolors="#d03b3b", lw=1.5, label="the true parameters")
+        a.set_xlabel("finder noise at 2′, relative to the true parameters"); a.set_ylabel(lab + "  (0.31 < z < 0.61)")
+        a.legend(fontsize=8.5, loc="upper right" if c == 1 else "upper left")
+    cb = fig.colorbar(sc, ax=ax, fraction=0.025, pad=0.02); cb.set_label("A_SZ of the point")
+    save(fig, "calibration_grid.png")
+    NUM["grid"] = dict(noise_range=[float(u.min()), float(u.max())], k_range=[float(g["rows"][:, 1, 1].min()), float(g["rows"][:, 1, 1].max())],
+                       w_range=[float(g["rows"][:, 1, 2].min()), float(g["rows"][:, 1, 2].max())])
 
 
 def fig_relation(R):
@@ -250,25 +256,30 @@ def fig_coverage(R):
             "noise": "catalogue_npe/calibcf41/npe_t2calc_applied_mapheld.npz"}
     cov = {k: coverage(summary(os.path.join(R, v))) for k, v in sets.items()}
     cov["map"] = coverage(ensemble(sorted(glob.glob(os.path.join(R, "maps_npe_forecast", "npe_e*_applied_held.npz")))))
-    fig, ax = plt.subplots(1, 4, figsize=(11, 2.9), sharey=True)
-    for jj, a in enumerate(ax):
-        a.plot([0, 1], [0, 1], color="gray", ls=":", lw=1)
-        for k in ("point", "theta", "noise", "map"):
-            a.plot(np.r_[0, LEV, 1], np.r_[0, cov[k][:, jj], 1], color=C[k], lw=1.8, ls="--" if k == "theta" else "-", label=LABEL[k])
-        a.set_title(P4[jj], fontsize=9); a.set_xlabel("credible level")
-    ax[0].set_ylabel("fraction of skies covered")
-    ax[-1].legend(fontsize=7, loc="lower right")
-    fig.suptitle("Coverage on 500 map-level skies drawn from the prior (10% of the sky)", fontsize=10, y=1.03)
-    save(fig, "coverage.png")
     for k, v in cov.items():
         out[k] = dict(c50=v[4, :4].round(2).tolist(), c90=v[8, :4].round(2).tolist())
-    # 40%
     c40 = {"noise": ensemble(sorted(glob.glob(os.path.join(R, "catalogue_npe", "calibcf41_t168", "npe_noise_e*_applied_held.npz")))),
            "map": ensemble(sorted(glob.glob(os.path.join(R, "maps_npe_forecast_t168", "npe_map_e*_applied_held.npz"))))}
     f12 = os.path.join(R, "catalogue_npe", "calibf41_t168", "npe_fixed_e12_applied_held.npz")
     if os.path.exists(f12):
         c40["point"] = summary(f12)
-    out["40"] = {k: dict(c50=coverage(v)[4, :4].round(2).tolist(), c90=coverage(v)[8, :4].round(2).tolist()) for k, v in c40.items()}
+    cov40 = {k: coverage(v) for k, v in c40.items()}
+    out["40"] = {k: dict(c50=v[4, :4].round(2).tolist(), c90=v[8, :4].round(2).tolist()) for k, v in cov40.items()}
+    fig, ax = plt.subplots(2, 4, figsize=(11.5, 6.2), sharex=True, sharey=True)
+    for row, (cc, sky) in enumerate(((cov, "10% of the sky"), (cov40, "40.7% of the sky"))):
+        for jj in range(4):
+            a = ax[row, jj]
+            a.plot([0, 1], [0, 1], color="gray", ls=":", lw=1.2)
+            for k in ("point", "theta", "noise", "map"):
+                if k in cc:
+                    a.plot(np.r_[0, LEV, 1], np.r_[0, cc[k][:, jj], 1], color=C[k], lw=2, ls="--" if k == "theta" else "-", label=LABEL[k])
+            a.set_title(f"{P4[jj]}, {sky}", fontsize=9.5)
+            if row == 1:
+                a.set_xlabel("credible level")
+        ax[row, 0].set_ylabel("fraction of skies covered")
+    h, l = ax[0, 0].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=4, fontsize=8.5, bbox_to_anchor=(0.5, -0.04))
+    save(fig, "coverage.png")
     NUM["coverage"] = out
     # bias of sigma8 in thirds of the true parameters, calibrated models
     th = {}
@@ -290,19 +301,39 @@ def fig_coverage(R):
     NUM["thirds"] = th
 
 
-def fig_corner(R):
+def fig_ensemble(R):
+    """Bias of the map-level posterior for each of five training seeds and their ensemble, 10% of the sky."""
+    files = sorted(glob.glob(os.path.join(R, "maps_npe_forecast", "npe_e*_applied_mocks.npz")))
+    fig, a = plt.subplots(figsize=(6.6, 3.4))
+    for n, f in enumerate(files):
+        b, e = bias(summary(f))
+        a.errorbar(np.arange(4) - 0.24 + 0.08 * n, b[:4], yerr=e[:4], fmt="o", ms=4, color=C["map"], alpha=0.45,
+                   label="one network (five seeds)" if n == 0 else None)
+    b, e = bias(ensemble(files))
+    a.errorbar(np.arange(4) + 0.24, b[:4], yerr=e[:4], fmt="D", ms=6, color=C["ink"], label="ensemble of the five")
+    a.axhline(0, color="gray", ls=":", lw=1.2)
+    a.set_xticks(range(4)); a.set_xticklabels(P4); a.set_ylabel("bias (posterior σ)"); a.legend(fontsize=8.5)
+    save(fig, "ensemble.png")
+
+
+def corner(post, name, truth=None, rng=None):
+    """Corner plot of sigma8, Omega_m, A_SZ, alpha_SZ for several posteriors {key: samples (n, 10)}."""
     nu = 3 * 0.02 / 93.14
 
     def four(s):
         om = (s[:, 1] + s[:, 5] + nu) / s[:, 4] ** 2
         return np.c_[s[:, 0], om, s[:, 2], s[:, 3]]
-    post = {"published": four(np.load(os.path.join(R, "catalogue_npe/forecast41/npe_t2_samples.npz"))["maps"]),
-            "noise": four(np.load(os.path.join(R, "catalogue_npe/calibcf41/npe_t2calc_samples.npz"))["maps"]),
-            "map": four(np.load(os.path.join(R, "maps_npe_forecast/npe_t1_samples.npz"))["truth"])}
-    truth = [0.811, (0.121 + 0.0222 + nu) / 0.674 ** 2, -4.3054, 1.1233]
+    post = {k: four(v) for k, v in post.items()}
+    truth = truth or [0.811, (0.121 + 0.0222 + nu) / 0.674 ** 2, -4.3054, 1.1233]
     lab = ["σ8", "Ω_m", "A_SZ", "α_SZ"]
-    rng = [(0.77, 0.86), (0.27, 0.36), (-4.55, -4.05), (0.95, 1.30)]
-    fig, ax = plt.subplots(4, 4, figsize=(7.2, 7.2))
+    if rng is None:                                   # every posterior's 0.2-99.8% range and the truth, padded
+        rng = []
+        for i in range(4):
+            lo = min(min(np.quantile(v[:, i], 0.002) for v in post.values()), truth[i])
+            hi = max(max(np.quantile(v[:, i], 0.998) for v in post.values()), truth[i])
+            pad = 0.08 * (hi - lo)
+            rng.append((lo - pad, hi + pad))
+    fig, ax = plt.subplots(4, 4, figsize=(7.6, 7.6))
     for i in range(4):
         for jj in range(4):
             a = ax[i, jj]
@@ -312,40 +343,58 @@ def fig_corner(R):
             for k, s in post.items():
                 if i == jj:
                     h, e = np.histogram(s[:, i], 60, range=rng[i], density=True)
-                    a.plot(0.5 * (e[1:] + e[:-1]), gaussian_filter1d(h, 1.5), color=C[k], lw=1.5)
+                    a.plot(0.5 * (e[1:] + e[:-1]), gaussian_filter1d(h, 1.5), color=C[k], lw=1.6)
                 else:
                     H, xe, ye = np.histogram2d(s[:, jj], s[:, i], 50, range=[rng[jj], rng[i]])
                     H = gaussian_filter(H, 1.3); fl = np.sort(H.ravel())[::-1]; cs = np.cumsum(fl) / fl.sum()
                     lv = sorted(fl[np.searchsorted(cs, l)] for l in (0.68, 0.95))
-                    a.contour(0.5 * (xe[1:] + xe[:-1]), 0.5 * (ye[1:] + ye[:-1]), H.T, levels=lv, colors=C[k], linewidths=[0.8, 1.6])
+                    if lv[0] < lv[1]:
+                        a.contour(0.5 * (xe[1:] + xe[:-1]), 0.5 * (ye[1:] + ye[:-1]), H.T, levels=lv, colors=C[k], linewidths=[0.8, 1.6])
             if i == jj:
                 a.axvline(truth[i], color=C["ink"], ls=":", lw=1); a.set_yticks([])
             else:
                 a.plot(truth[jj], truth[i], "o", color=C["ink"], ms=4)
-            a.set_xlim(rng[jj])
-            if i != jj:
                 a.set_ylim(rng[i])
+            a.set_xlim(rng[jj])
             if i == 3:
-                a.set_xlabel(lab[jj])
+                a.set_xlabel(lab[jj]); a.tick_params(axis="x", labelrotation=35, labelsize=8)
             else:
                 a.set_xticklabels([])
             if jj == 0 and i > 0:
-                a.set_ylabel(lab[i])
+                a.set_ylabel(lab[i]); a.tick_params(axis="y", labelsize=8)
             elif jj > 0:
                 a.set_yticklabels([])
     for k in post:
         ax[0, 3].plot([], [], color=C[k], label=LABEL[k])
-    ax[0, 3].plot([], [], "o", color=C["ink"], label="truth"); ax[0, 3].legend(loc="upper right", fontsize=8)
-    save(fig, "corner.png")
+    ax[0, 3].plot([], [], "o", color=C["ink"], label="truth"); ax[0, 3].legend(loc="upper right", fontsize=8.5)
+    save(fig, name)
+
+
+def fig_corner(R):
+    L = lambda p, k: np.load(os.path.join(R, p))[k]
+    corner({"published": L("catalogue_npe/forecast41/npe_t2_samples.npz", "maps"),
+            "noise": L("catalogue_npe/calibcf41/npe_t2calc_samples.npz", "maps"),
+            "map": L("maps_npe_forecast/npe_t1_samples.npz", "truth")}, "corner.png",
+           rng=[(0.77, 0.86), (0.27, 0.36), (-4.55, -4.05), (0.95, 1.30)])
+    # 40.7% of the sky: ensembles of five networks where they exist (samples pooled), else one network
+    pool = lambda pat: np.concatenate([np.load(f)["mocks"] for f in sorted(glob.glob(os.path.join(R, pat)))])
+    post40 = {"published": L("catalogue_npe/forecast41_t168/npe_plain_local_samples.npz", "mocks"),
+              "point": L("catalogue_npe/calibf41_t168/npe_fixed_e12_samples.npz", "mocks"),
+              "noise": pool("catalogue_npe/calibcf41_t168/npe_noise_e1*_samples.npz"),
+              "map": pool("maps_npe_forecast_t168/npe_map_e1*_samples.npz")}
+    corner(post40, "corner_40.png")
+    NUM["corner_40"] = {k: dict(mean=v[:, :4].mean(0).round(4).tolist(), sd=v[:, :4].std(0).round(4).tolist()) for k, v in post40.items()}
 
 
 def main(R):
     o = fig_tile()
     fig_noise(R, o)
+    fig_grid(R)
     fig_relation(R)
     fig_counts(R)
     fig_bias(R)
     fig_coverage(R)
+    fig_ensemble(R)
     fig_corner(R)
     json.dump(NUM, open(os.path.join(FIG, "numbers.json"), "w"), indent=1, default=float)
     print("wrote numbers.json")
