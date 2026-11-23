@@ -8,6 +8,7 @@ calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+%config InlineBackend.figure_format = "retina"
 import jax
 jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import survey, catalogue as ct, priors, summaries as sm
@@ -41,7 +42,7 @@ plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()
 
 
 
-    <matplotlib.legend.Legend at 0x114c9b4d0>
+    <matplotlib.legend.Legend at 0x111d9ca70>
 
 
 
@@ -50,6 +51,10 @@ plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()
 ![png](catalogues_files/catalogues_3_1.png)
     
 
+
+The two tables belong to different filters and surveys: ours is computed for our filter and the 2019
+forecast noise, the paper's for its own set-up. Both fall with the cluster's size, because a larger template
+collects more signal against the same noise.
 
 ## Expected counts and simulations
 
@@ -69,7 +74,7 @@ print(np.round(np.asarray(ec)).astype(int))
 print(f"selected (q > 5): expected {float(en):.0f}, simulated {np.mean([int(c.n_sel) for c in cats]):.0f}; mean p {float(ep / en):.4f}")
 ```
 
-    20 catalogues in 2.7 s (including compilation)
+    20 catalogues in 2.9 s (including compilation)
 
 
     expected counts (rows: q 5-8.4, 8.4-14, 14-24, 24-40; columns: z bins of 0.3):
@@ -79,6 +84,10 @@ print(f"selected (q > 5): expected {float(en):.0f}, simulated {np.mean([int(c.n_
      [  74  149   88   33   10]]
     selected (q > 5): expected 14570, simulated 14569; mean p 0.2500
 
+
+The table is the expected number of clusters in each bin of $q$ (rows) and redshift (columns) for 10% of
+the sky. Most clusters sit just above the threshold and at intermediate redshift. The simulated catalogues
+scatter around the expectation by their Poisson and noise fluctuations.
 
 ## Calibrated on map-level simulations
 
@@ -111,10 +120,15 @@ print(f"selected: published {float(en):.0f}, calibrated {float(en_cal):.0f}")
 
 
     
-![png](catalogues_files/catalogues_7_1.png)
+![png](catalogues_files/catalogues_9_1.png)
     
 
 
+Calibrated, the model expects 10–25% fewer bright clusters (red cells in the upper rows), because the
+finder's noise is higher than the instrument's, and slightly more faint ones at high redshift, because of the
+search lift. These are the differences the map-level mocks show against the published model (the Finder
+page). The calibrated model reproduces them at the true parameters, but only there.
+
 ---
 
-*Generated from [`examples/notebooks/catalogue_models.ipynb`](https://github.com/CLASS-SZ/classy_szlite/blob/mapsim/examples/notebooks/catalogue_models.ipynb), executed on an Apple M1 Pro laptop.*
+*Generated from [`examples/notebooks/catalogue_models.ipynb`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/notebooks/catalogue_models.ipynb), executed on an Apple M1 Pro laptop.*

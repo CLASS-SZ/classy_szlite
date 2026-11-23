@@ -30,6 +30,7 @@ memory.""",
     """import time
 import numpy as np
 import matplotlib.pyplot as plt
+%config InlineBackend.figure_format = "retina"
 import jax
 jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import tile, priors
@@ -52,6 +53,12 @@ for a, (k, t, cm, lo, hi) in zip(ax.ravel(), panels):
     a.imshow(down(m), cmap=cm, vmin=lo, vmax=hi, origin="lower", extent=[0, 10, 0, 10])
     a.set_title(t, fontsize=9); a.set_xticks([]); a.set_yticks([])
 plt.tight_layout()""",
+    """md:The top row splits the 145 GHz map into its parts on a common scale: the clusters' tSZ (a decrement of
+up to about 100 μK), the lensed CMB (±200 μK on degree scales) and the forecast noise (its atmospheric part
+dominates the largest scales). No cluster is visible in their sum: the finder combines all six channels with
+the clusters' known spectrum and shape. Its signal-to-noise before masking is held down by the bright
+clusters' own power in the noise estimate; the masking pass covers them (black discs), and the final
+signal-to-noise shows the detections as bright points.""",
     """md:## The catalogue
 
 Halos above $5\\times10^{13}\\,M_\\odot$, and the finder's kept peaks with $q > 4$; a peak is confirmed if
@@ -65,6 +72,9 @@ print("brightest detections: q, size [arcmin], the halo's z, M500 [Msun] and cat
 for i in order:
     j = p["halo"][i]
     print(f"  {p['q'][i]:6.1f}  {p['size'][i]:4.1f}'  " + (f"z {h['z'][j]:.2f}  M {h['M500'][j]:.1e}  q_model {h['q_model'][j]:.1f}" if j >= 0 else "no halo"))""",
+    """md:The brightest detections all sit on massive halos, and the catalogue model's $q$ of each halo is a few
+per cent above the finder's $q$. A detection without a halo is a noise peak or a blend of halos below the
+confirmation mass; there are few above $q = 5$.""",
     """md:## The finder's noise
 
 The finder estimates its noise from the maps, which contain the tSZ of every cluster. Before masking, the
@@ -77,6 +87,9 @@ plt.plot(th, o["sigma_final"] / o["sigma_model"], label="after masking")
 plt.axhline(1, color="gray", ls=":")
 plt.xscale("log"); plt.xlabel("filter size θ [arcmin]"); plt.ylabel("σ finder / σ instrument + CMB"); plt.legend()
 print("after masking, at 2': ", round(float(o["sigma_final"][7] / o["sigma_model"][7]), 3))""",
+    """md:The first-pass curve peaks on 2–8′ scales, the size of typical clusters, whose power the noise estimate
+includes. After masking, the curve drops to 4–8% above 1: the confusion noise of the faint clusters that stay
+unmasked. On a single tile the numbers fluctuate by about a per cent from tile to tile.""",
     """md:## Detected q against the catalogue model's q
 
 For every confirmed detection, the finder's $q$ against the catalogue model's $q$ of its halo. Above
@@ -88,6 +101,9 @@ plt.figure(figsize=(4.2, 4))
 plt.loglog(qm, qo, ".", ms=3, alpha=0.6)
 plt.plot([3, 80], [3, 80], "k--", lw=1, label="catalogue model: q_obs = q")
 plt.xlim(3, 80); plt.ylim(4, 80); plt.xlabel("catalogue model's q"); plt.ylabel("finder's q"); plt.legend()""",
+    """md:On one tile the trend is noisy, but the bright clusters sit below the dashed line (the finder's higher
+noise), while near the threshold detections scatter above it (the search over positions and sizes). The
+Finder page measures both effects on 3.6 million halos.""",
 ]
 
 CATALOGUES = [
@@ -98,6 +114,7 @@ calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.""",
     """import time
 import numpy as np
 import matplotlib.pyplot as plt
+%config InlineBackend.figure_format = "retina"
 import jax
 jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import survey, catalogue as ct, priors, summaries as sm
@@ -118,6 +135,9 @@ plt.figure(figsize=(5, 3.2))
 plt.loglog(tt, np.asarray(ct.noise_sigma(sz, jnp.asarray(tt))), label="our filter, forecast noise")
 plt.loglog(tt, np.asarray(ct.noise_sigma(paper_sz, jnp.asarray(tt))), "--", label="the paper's table")
 plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()""",
+    """md:The two tables belong to different filters and surveys: ours is computed for our filter and the 2019
+forecast noise, the paper's for its own set-up. Both fall with the cluster's size, because a larger template
+collects more signal against the same noise.""",
     """md:## Expected counts and simulations
 
 `catalogue.expected` integrates the model; `catalogue.simulate` draws catalogues (the halos, their scatter and
@@ -131,6 +151,9 @@ C = np.array([np.asarray(c.counts) for c in cats])
 print("expected counts (rows: q 5-8.4, 8.4-14, 14-24, 24-40; columns: z bins of 0.3):")
 print(np.round(np.asarray(ec)).astype(int))
 print(f"selected (q > 5): expected {float(en):.0f}, simulated {np.mean([int(c.n_sel) for c in cats]):.0f}; mean p {float(ep / en):.4f}")""",
+    """md:The table is the expected number of clusters in each bin of $q$ (rows) and redshift (columns) for 10% of
+the sky. Most clusters sit just above the threshold and at intermediate redshift. The simulated catalogues
+scatter around the expectation by their Poisson and noise fluctuations.""",
     """md:## Calibrated on map-level simulations
 
 A calibration replaces the instrument-plus-CMB noise by the finder's own noise and, per redshift bin, draws
@@ -152,6 +175,10 @@ for i in range(4):
         plt.text(j, i, f"{r[i, j]:.2f}", ha="center", va="center", fontsize=8)
 plt.xlabel("redshift bin"); plt.ylabel("q bin"); plt.title("calibrated / published expected counts", fontsize=9); plt.colorbar()
 print(f"selected: published {float(en):.0f}, calibrated {float(en_cal):.0f}")""",
+    """md:Calibrated, the model expects 10–25% fewer bright clusters (red cells in the upper rows), because the
+finder's noise is higher than the instrument's, and slightly more faint ones at high redshift, because of the
+search lift. These are the differences the map-level mocks show against the published model (the Finder
+page). The calibrated model reproduces them at the true parameters, but only there.""",
 ]
 
 POSTERIOR = [
@@ -163,6 +190,7 @@ the published runs use 10,000 simulations and five networks.""",
     """import time
 import numpy as np
 import matplotlib.pyplot as plt
+%config InlineBackend.figure_format = "retina"
 import jax
 jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import survey, catalogue as ct, priors, npe, simulator
@@ -190,6 +218,8 @@ print(f"2,000 training catalogues in {time.time() - t0:.0f} s")""",
     """md:## Training""",
     """post, info = npe.train(th_train, x_train, box="map", seed=11)
 info""",
+    """md:Training stops when the validation loss has not improved for 50 epochs. With 2,000 simulations it takes
+a minute or two on a laptop; the published runs use 10,000.""",
     """md:## One mock
 
 A catalogue at the true parameters, and the posterior of the four parameters the counts constrain.""",
@@ -202,6 +232,8 @@ for j, a in enumerate(ax):
     a.axvline(th_mock[0, j], color="k", ls=":")
     a.set_xlabel(priors.LABELS[j])
 plt.tight_layout()""",
+    """md:The dotted lines mark the true values. With 2,000 training simulations and one mock, the posteriors should
+contain the truth, but expect them to be wider and less regular than those of the published runs.""",
     """md:## Coverage
 
 On 100 prior draws: the fraction whose true value lies in each central credible interval. A calibrated
@@ -217,6 +249,9 @@ plt.plot([0, 1], [0, 1], "k:")
 for j in range(4):
     plt.plot(np.r_[0, npe.LEVELS, 1], np.r_[0, cov[:, j], 1], label=priors.LABELS[j])
 plt.xlabel("credible level"); plt.ylabel("coverage"); plt.legend()""",
+    """md:Here the test data come from the same catalogue model as the training set, so the curves should follow
+the diagonal within the scatter of 100 draws: the network is calibrated for its own model. The bias test on the
+Results page applies such networks to map-level skies instead, where they are not.""",
 ]
 
 for name, cells in (("one_tile", ONE_TILE), ("catalogue_models", CATALOGUES), ("posterior", POSTERIOR)):

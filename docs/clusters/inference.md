@@ -18,12 +18,20 @@ after 50 epochs without improvement.
 The posterior is only right for data that its model describes. Applied to map-level data, a posterior
 trained on catalogues answers the catalogue model's question; the tests below measure the consequence.
 
-![Posteriors of one map-level mock](figures/corner.png)
+<figure markdown="span">
+  ![Posteriors of one map-level mock](figures/corner.png){ width="640" }
+  <figcaption>The posteriors of the first map-level mock (10% of the sky) in σ8, Ω_m, A_SZ and α_SZ, from
+  three networks: trained on the published catalogue model (orange), on the model calibrated through the noise
+  level (violet), and on map-level simulations (blue). Contours: 68% and 95%; diagonal: the marginals; black:
+  the true values. Ω_m is derived from ω_c, ω_b and h.</figcaption>
+</figure>
 
-The first map-level mock, three posteriors (68% and 95% contours; $\Omega_m$ derived from $\omega_c$,
-$\omega_b$ and $h$). The catalogue model as published puts $\sigma_8$ high and $\alpha_\mathrm{SZ}$ low;
-calibrated through the noise level it is close to the map-level posterior. All three have similar widths:
-map-level inference is not more precise on this summary, it is right.
+The posterior trained on the published catalogue model misses the truth: it puts $\sigma_8$ about two
+widths high and $\alpha_\mathrm{SZ}$ several widths low, and $\Omega_m$ low, along the directions that let it
+explain the deficit of bright clusters with a shallower mass slope. The calibrated catalogue posterior and the
+map-level one both contain the truth. All three have similar widths: on this summary, map-level inference is
+not more precise, it is correct. One mock is one draw; the systematic statement comes from the 100 mocks of
+[Results](results.md).
 
 ## Checks
 
@@ -48,6 +56,17 @@ of balls around random reference points; its area to the diagonal is 0 for a cal
 **Ensembles.** A single network's posterior mean moves by about 0.1 posterior widths from one training seed
 to the next. Averaging five networks trained with different seeds (an equal mixture: mean of the means,
 variance = mean variance + variance of the means) removes that scatter.
+
+<figure markdown="span">
+  ![Bias of five networks and their ensemble](figures/ensemble.png){ width="620" }
+  <figcaption>The map-level posterior's bias on 100 mocks at the true parameters (10% of the sky), for five
+  networks that differ only in their training seed (light blue), and for their equal mixture (black), with the
+  errors of the mean.</figcaption>
+</figure>
+
+Each network's bias moves by about 0.1 posterior widths from seed to seed, comparable to the error of the
+mean from 100 mocks; a single network's +0.2 in $\alpha_\mathrm{SZ}$ is that scatter, not a bias. The ensemble
+is within one error of zero in every parameter.
 
 | Map-level posterior, 10% of the sky | $\sigma_8$ | $\omega_c$ | $A_\mathrm{SZ}$ | $\alpha_\mathrm{SZ}$ |
 |---|---|---|---|---|

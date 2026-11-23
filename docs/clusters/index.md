@@ -10,9 +10,7 @@ estimation trained on these simulations infers the cosmological and scaling-rela
 The same package also simulates the catalogue-level model that the paper used, so the two can be
 compared on the same skies.
 
-## The result in one figure
-
-![Bias of four posteriors on map-level mocks](figures/bias.png)
+## The result
 
 On map-level mocks at known parameters (100 per survey size), the posterior trained on the paper's
 catalogue model is biased by up to 5.3 posterior widths at 10% of the sky and 8.3 at 40%. Calibrating
@@ -28,8 +26,8 @@ trained on map-level simulations is unbiased (within 0.1 width) and calibrated o
 | map level (5 networks) | −0.05 | +0.10 | −0.05 | +0.08 | 90% |
 
 Bias = mean over the mocks of (posterior mean − truth) / posterior standard deviation, errors 0.06–0.11.
-All numbers on these pages use the public 2019 SO forecast noise. [Results](results.md) has both survey
-sizes and the coverage tests.
+All numbers on these pages use the public 2019 SO forecast noise. [Results](results.md) has the figures,
+both survey sizes and the coverage tests.
 
 ## How these pages are organised
 

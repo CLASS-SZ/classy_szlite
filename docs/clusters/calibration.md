@@ -56,11 +56,20 @@ The finder's noise, lift, scatter and losses all depend on how much tSZ the sky 
 set. `mapsim calibrate grid` measures the calibration at the true point and a Latin hypercube of 24 points
 over the flat box (5 mocks each), keeping the halo tables for later refits.
 
-![The calibration across the prior](figures/finder_noise.png)
+<figure markdown="span">
+  ![The calibration at 25 points of the prior](figures/calibration_grid.png)
+  <figcaption>The calibration at the 25 points (the true parameters, circled, and a Latin hypercube of 24 over
+  the flat prior), in the redshift bin 0.31–0.61: the search lift k (left) and the scatter w (right), each
+  fitted on 5 map-level mocks, against the finder's noise at 2′ relative to its value at the true parameters.
+  Colour: the point's A_SZ.</figcaption>
+</figure>
 
-Across those points the finder's noise at 2′ ranges from 0.95 to 1.13 of its value at the true parameters,
-and the search lift from 2.4 down to 0.2 (to −0.5 at the heaviest points in some bins). Two ways to
-interpolate:
+The finder's noise moves by −5% to +13% across the prior: more tSZ on the sky (higher $A_\mathrm{SZ}$,
+yellow, or higher $\omega_c$ and $\sigma_8$) means more confusion noise. As the noise rises, the search lift
+falls from 2.4 to 0.2 and the scatter grows from 0.98 to 1.10: a noisier map makes each faint cluster's own
+fluctuations matter less, and the confusion adds scatter. Both follow the noise level more closely than any
+single parameter; points with very different $A_\mathrm{SZ}$ lie on the same curve. A calibration made at the
+circled point is wrong everywhere else. Two ways to interpolate:
 
 **Linear in the parameters** (`calibrated-theta`, `fit_theta`). With $\boldsymbol x = (\boldsymbol\theta -
 \boldsymbol\theta_\mathrm{fid})/\Delta\boldsymbol\theta$ over $(\sigma_8, \omega_c, A_\mathrm{SZ},
@@ -93,11 +102,19 @@ for $\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$ (90%, 89%, 88% at the 90% level).
 $\alpha_\mathrm{SZ}$ (78%, and a bias of about +0.6 widths), even when the calibration is also split by
 cluster size (`--size`).
 
-![σ8 bias by the true parameters](figures/bias_thirds.png)
+<figure markdown="span">
+  ![σ8 bias by the true parameters](figures/bias_thirds.png)
+  <figcaption>The bias of σ8 (posterior mean minus truth, in posterior σ) on 500 map-level skies drawn from
+  the prior, averaged in thirds of each sky's true ω_c, A_SZ and α_SZ, for the catalogue model calibrated at
+  one point (green) and through the noise level (violet). 10% of the sky.</figcaption>
+</figure>
 
-Calibrated at one point, the $\sigma_8$ bias rises with the true $\omega_c$ and $A_\mathrm{SZ}$, the
-parameters that set the amount of faint-cluster tSZ, up to +2.6 widths; through the noise level that trend
-is mostly gone.
+Calibrated at one point, the model is right near that point (the middle third) and increasingly wrong away
+from it: where the true $\omega_c$ or $A_\mathrm{SZ}$ is high, the sky holds more faint-cluster tSZ than the
+calibration assumed, the real noise is higher, and the posterior reads the missing bright clusters as a
+higher $\sigma_8$, by up to +2.6 widths. A lower slope $\alpha_\mathrm{SZ}$ also means more faint-cluster
+signal, hence the opposite trend. Through the noise level the calibration follows these changes and the
+trends mostly disappear; what remains is below 0.6 widths.
 
 ## What a per-cluster model cannot carry
 

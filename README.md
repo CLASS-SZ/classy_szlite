@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/CLASS-SZ/classy_szlite/branch/main/graph/badge.svg)](https://codecov.io/gh/CLASS-SZ/classy_szlite)
 [![PyPI version](https://img.shields.io/pypi/v/classy-szlite.svg?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/classy-szlite/)
 [![Python versions](https://img.shields.io/pypi/pyversions/classy-szlite.svg?logo=python&logoColor=white)](https://pypi.org/project/classy-szlite/)
-[![Documentation Status](https://readthedocs.org/projects/classy-szlite/badge/?version=latest)](https://classy-szlite.readthedocs.io/en/latest/)
+[![Documentation](https://img.shields.io/badge/docs-class--sz.github.io-blue)](https://class-sz.github.io/classy_szlite/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Fast, differentiable cosmology in pure JAX.**
@@ -25,7 +25,7 @@ retrained on the CLASS-EDE training set of the `v2` emulators used in the
 [ACT DR6 extended-cosmology analysis](https://arxiv.org/abs/2503.14454) (2025) and the
 [ACT DR6 + DESI DR2 analysis](https://arxiv.org/abs/2505.08051) by
 Poulin et al. (2025). See
-[Installation](https://classy-szlite.readthedocs.io/en/latest/installation.html)
+[Installation](https://class-sz.github.io/classy_szlite/installation/)
 for the emulator-coverage details.
 
 Runtime dependencies: `jax`, `numpy`, `mcfit`.
@@ -46,7 +46,7 @@ pip install -e .
 
 You also need the CosmoPower emulator `.npz` files at `~/class_sz_data/`
 (or the path in `$CLASSY_SZLITE_DATA_DIR`). See
-[Installation](https://classy-szlite.readthedocs.io/en/latest/installation.html).
+[Installation](https://class-sz.github.io/classy_szlite/installation/).
 
 ## Quick start
 
@@ -107,7 +107,7 @@ Warm-call timing, n = 100 calls per benchmark, freshly randomised inputs:
 | `cl_yy_factory + jax.grad` | 17.12 ± 1.01 | 58 ± 3 |
 
 Reference platform: macOS arm64 (M-series CPU), single-thread JAX. See
-[Throughput](https://classy-szlite.readthedocs.io/en/latest/throughput.html)
+[Throughput](https://class-sz.github.io/classy_szlite/throughput/)
 for a more detailed table + reproduction script.
 
 ## JAX gradients
@@ -128,11 +128,11 @@ d_loss = jax.grad(loss, argnums=(0, 1))(8.13, 5.48)
 
 Gradients also work through the full pipeline (cosmology + profile) and
 w.r.t. the whole `CosmoParams` pytree — see
-[Gradients](https://classy-szlite.readthedocs.io/en/latest/gradients.html).
+[Gradients](https://class-sz.github.io/classy_szlite/gradients/).
 
 ## Documentation
 
-Full docs at **https://classy-szlite.readthedocs.io**.
+Full docs at **https://class-sz.github.io/classy_szlite/**, including [Cluster counts from maps](https://class-sz.github.io/classy_szlite/clusters/): a map-level simulator of SZ cluster counts, its cluster finder, catalogue-level models and their calibration, and simulation-based inference (`classy_szlite.sim`, the `mapsim` command).
 
 ## License
 

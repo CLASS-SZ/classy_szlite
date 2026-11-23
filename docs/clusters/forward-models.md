@@ -129,11 +129,31 @@ $$
 with $S \simeq 0.663$ and $\sigma_\kappa$ SO's lensing-noise table at goal depth. The lensing signal is
 drawn per detected halo, the same way in both inferences.
 
-![One tile, stage by stage](figures/tile_stages.png)
+### One tile, stage by stage
 
-One tile at the true parameters (`mapsim tile`, or `classy_szlite.sim.tile.stages()`): 4,292 halos above
-$5\times10^{13}\,M_\odot$ and 324 confirmed detections with $q > 5$. The first pass's noise holds the bright
-clusters' power, so its $q$ is low; masking them and estimating the noise again raises $q$ everywhere.
+<figure markdown="span">
+  ![One tile, stage by stage](figures/tile_stages.png)
+  <figcaption>One 10° × 10° tile at the true parameters, forecast noise. Top: the painted Compton-y map
+  (×10⁵), then the 145 GHz map's three parts on a common ±200 μK scale: tSZ, lensed CMB, noise. Bottom: their
+  sum, the finder's signal-to-noise (best of its 15 sizes) before masking, the masking discs, and the
+  signal-to-noise after masking. Maps are shown at half resolution.</figcaption>
+</figure>
+
+The figure follows one tile (`mapsim tile`, or `classy_szlite.sim.tile.stages()`) through the simulator.
+
+- **The y map** holds every halo above $10^{13}\,M_\odot$; most are too faint to see, and the bright dots are
+  the few hundred massive clusters.
+- **At 145 GHz** the tSZ is a decrement of up to about 100 μK in the cores of the brightest clusters (the
+  tSZ spectrum gives −2.7 K per unit y there), small against the CMB's ±200 μK on degree scales, and the forecast noise's atmospheric component dominates on the
+  largest scales. In the sum, no cluster is visible by eye: the finder needs all six channels and the
+  cluster's known shape and spectrum.
+- **The finder's first pass** estimates its noise from maps that contain the clusters, so the brightest
+  clusters' own power raises the noise and lowers every $q$. The **mask** covers each $q > 4$ peak with a
+  disc of three times its size; the large discs are the bright, nearby clusters. **After masking**, the noise
+  is estimated without them and the detections stand out more (yellow dots).
+
+This tile holds 4,292 halos above $5\times10^{13}\,M_\odot$; the finder keeps 324 confirmed detections with
+$q > 5$. [The finder](finder.md) zooms into it.
 
 ## The catalogue model
 
