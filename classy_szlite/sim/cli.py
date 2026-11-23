@@ -18,7 +18,7 @@ Everything is written under OUT:
     compare_t{tiles}.json                        bias and coverage of every trained posterior
 
 Each step resumes where it stopped. The noise is the public 2019 SO forecast (goal depth) throughout;
-``--noise mss2 --spectra PATH`` selects measured per-tile noise spectra instead (maps, calibrate).
+``--noise measured --spectra PATH`` selects measured per-tile noise spectra instead (maps, calibrate).
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def cmd_maps(a):
     _jax()
     from . import survey, priors
     theta = priors.draws(a.set, a.n, box="map", seeds=priors.SEEDS_MAP)
-    path = os.path.join(a.out, f"maps_t{a.tiles}" + ("" if a.noise == "forecast" else f"_{a.noise}"), f"{a.set}.npz")
+    path = os.path.join(a.out, f"maps_t{a.tiles}" + ("" if a.noise == "forecast" else "_measured"), f"{a.set}.npz")
     survey.simulate_map_set(path, theta, priors.SEEDS_MAP[a.set], n_tiles=a.tiles, noise=a.noise, spectra=a.spectra,
                             chunk=a.chunk, log=log)
 
@@ -174,14 +174,14 @@ def main(argv=None):
     p.add_argument("--set", choices=("truth", "heldout", "train"), required=True)
     p.add_argument("--n", type=int, default=None)
     p.add_argument("--chunk", type=int, default=21, help="tiles per vectorised batch")
-    p.add_argument("--noise", choices=("forecast", "mss2"), default="forecast")
+    p.add_argument("--noise", choices=("forecast", "measured", "mss2"), default="forecast")
     p.add_argument("--spectra", default=None)
     p = common(sub.add_parser("calibrate", help="calibrate the catalogue model on map-level mocks"))
     p.add_argument("what", choices=("point", "grid", "fit-noise", "fit-theta"))
     p.add_argument("--mocks", type=int, default=None, help="mocks per point (default 20 for point, 5 for grid)")
     p.add_argument("--points", type=int, default=24)
     p.add_argument("--size", action="store_true", help="also per (redshift, size) cell")
-    p.add_argument("--noise", choices=("forecast", "mss2"), default="forecast")
+    p.add_argument("--noise", choices=("forecast", "measured", "mss2"), default="forecast")
     p.add_argument("--spectra", default=None)
     p = common(sub.add_parser("catalogues", help="catalogue-level simulations"))
     p.add_argument("--model", choices=("published", "calibrated-point", "calibrated-noise", "calibrated-theta", "paper"), required=True)

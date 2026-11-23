@@ -1,0 +1,6 @@
+/* wide tables scroll inside their own box */
+.md-typeset table:not([class]) { font-size: 0.72rem; }
+.md-typeset .tabular { font-variant-numeric: tabular-nums; }
+figure img { border-radius: 4px; }
+/* numbers with their errors stay on one line; the first column (labels) wraps */
+.md-typeset table:not([class]) td:not(:first-child) { white-space: nowrap; }

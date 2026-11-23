@@ -26,7 +26,7 @@ import jax.numpy as jnp
 from . import simulator as simu, catalogue as ct, halos as hl, noise as nz, priors
 from .setup import tile_setup, default_cmb
 
-SURVEY_SEED = 20261121          # choice of MSS2 tiles (internal noise path only)
+SURVEY_SEED = 20261121          # choice of measured noise spectra per tile (measured-noise path only)
 N_CLASSES = 3                   # buffer-size classes of the map-level sets
 CATALOGUE_CAPACITIES = (2 ** 18, 2 ** 19, 2 ** 20, 2 ** 21, 2 ** 22, 2 ** 23)
 
@@ -75,15 +75,15 @@ def simulate_map_set(path, theta, seed, n_tiles=41, noise="forecast", spectra=No
                      n_classes=N_CLASSES, cmb_cl=None, log=print):
     """Map-level simulations of the parameter vectors ``theta`` (n, 10), written to ``path`` (resumes).
 
-    noise: "forecast" (the 2019 SO forecast, goal depth; public) or "mss2" with ``spectra`` the path to
-    measured per-tile noise spectra (noise.load_mss2). Buffers come in ``n_classes`` classes by expected
+    noise: "forecast" (the 2019 SO forecast, goal depth; public) or "measured" with ``spectra`` the path to
+    a file of measured per-tile noise spectra (see the noise module). Buffers come in ``n_classes`` classes by expected
     halo number, each sized at its heaviest draw; a simulation that overflows is rerun in the next class
     with the same keys. Returns the dict that was saved."""
     n = len(theta)
     forecast = noise == "forecast"
     if forecast:
         nt, specs = None, np.zeros(n_tiles, np.int32)
-    else:
+    else:                                       # "measured" (also accepted: "mss2")
         nt, _ = nz.load_mss2(spectra, "mean")
         specs = survey_spectra(nt.F.shape[0], n_tiles)
     cmb = cmb_cl or default_cmb()
@@ -111,7 +111,7 @@ def simulate_map_set(path, theta, seed, n_tiles=41, noise="forecast", spectra=No
                                          done=np.zeros(n, bool))
     if r["done"].any():
         log(f"resuming: {r['done'].sum()} done")
-    settings = json.dumps(dict(n_tiles=n_tiles, noise="2019 SO forecast, goal" if forecast else "MSS2 four-split mean, depth 1",
+    settings = json.dumps(dict(n_tiles=n_tiles, noise="2019 SO forecast, goal" if forecast else "measured per-tile spectra",
                                lens_table="goal", seed=seed, survey_seed=SURVEY_SEED, classes=n_classes))
 
     def save():

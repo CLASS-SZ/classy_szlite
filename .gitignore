@@ -11,3 +11,4 @@ dist/
 .env
 _emu_data_test/
 /.coverage
+site/

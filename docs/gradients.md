@@ -1,7 +1,7 @@
 # JAX gradients
 
 Every public function in `classy_szlite` is **JAX-traceable**.
-:class:`~classy_szlite.CosmoParams` and :class:`~classy_szlite.ProfileParamsA10`
+[`CosmoParams`](api.md#classy_szlite.params.CosmoParams) and [`ProfileParamsA10`](api.md#classy_szlite.params.ProfileParamsA10)
 are JAX pytrees (`NamedTuple`s of arrays), so you can differentiate w.r.t.
 any field directly.
 
@@ -102,8 +102,8 @@ print(grads.omega_b, grads.omega_cdm, grads.fEDE, grads.log10z_c)
 
 ## Jacobians (Fisher matrix building block)
 
-Use `jax.jacfwd` for $\partial C_\ell/\partial\theta$ when ``len(ℓ) >>
-len(θ)`` (the usual case in cosmology):
+Use `jax.jacfwd` for $\partial C_\ell/\partial\theta$ when `len(ℓ) >> len(θ)`
+(the usual case in cosmology):
 
 ```python
 def Cl_vec(P0, beta):

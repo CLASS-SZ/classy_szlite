@@ -135,7 +135,7 @@ def analytic_sigma_y0_forecast(cmb_cl, mode="goal", fs=None):
 
 
 def analytic_sigma_y0(noise_tables, specs, cmb_cl, fs=None):
-    """sigma_y0 of our matched filter at its 15 scales (mmf.THETAS15) for the noise of the MSS2
+    """sigma_y0 of our matched filter at its 15 scales (mmf.THETAS15) for measured per-tile noise
     spectra `specs` (noise.NoiseTables rows) plus the lensed CMB, without tSZ: the covariance is
     each mode's noise power (F F^T, per-mode units of noise.draw: E|X|^2 = N^2 C) plus
     B_i B_j C_l N^2 / Omega_pix, averaged over the filter's bins as mmf's estimate is.
