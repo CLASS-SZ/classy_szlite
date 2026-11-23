@@ -11,27 +11,28 @@ $$
 $$
 
 which, with enough simulations and a flexible enough density, converges to the posterior of the model
-that made the simulations. We follow the paper (`classy_szlite.sim.npe`): sbi's NPE with a masked
+that made the simulations. We follow Zubeldia et al. (2025) (`classy_szlite.sim.npe`): sbi's NPE with a masked
 autoregressive flow of default size, one round, 10,000 simulations, learning rate $5\times10^{-4}$, stop
 after 50 epochs without improvement.
 
 The posterior is only right for data that its model describes. Applied to map-level data, a posterior
-trained on catalogues answers the catalogue model's question; the tests below measure the consequence.
+trained on the uncalibrated catalogue model answers that model's question; on our skies the tests below
+measure the consequence ([Scope](results.md#scope)).
 
 <figure markdown="span">
   ![Posteriors of one map-level mock](figures/corner.png){ width="640" }
   <figcaption>The posteriors of the first map-level mock (10% of the sky) in σ8, Ω_m, A_SZ and α_SZ, from
-  three networks: trained on the published catalogue model (orange), on the model calibrated through the noise
+  three networks: trained on the uncalibrated catalogue model (orange), on the model calibrated through the noise
   level (violet), and on map-level simulations (blue). Contours: 68% and 95%; diagonal: the marginals; black:
   the true values. Ω_m is derived from ω_c, ω_b and h.</figcaption>
 </figure>
 
-The posterior trained on the published catalogue model misses the truth: it puts $\sigma_8$ about two
-widths high and $\alpha_\mathrm{SZ}$ several widths low, and $\Omega_m$ low, along the directions that let it
-explain the deficit of bright clusters with a shallower mass slope. The calibrated catalogue posterior and the
-map-level one both contain the truth. All three have similar widths: on this summary, map-level inference is
-not more precise, it is correct. One mock is one draw; the systematic statement comes from the 100 mocks of
-[Results](results.md).
+The posterior trained on the uncalibrated catalogue model misses the truth on this mock: it puts $\sigma_8$
+about two widths high and $\alpha_\mathrm{SZ}$ several widths low, and $\Omega_m$ low, along the directions
+that let it explain the deficit of bright clusters with a shallower mass slope. The calibrated catalogue
+posterior and the map-level one both contain the truth. All three have similar widths: on this summary and
+this mock, map-level inference is not more precise than the calibrated model. One mock is one draw; the systematic statement comes
+from the 100 mocks of [Results](results.md).
 
 ## Checks
 

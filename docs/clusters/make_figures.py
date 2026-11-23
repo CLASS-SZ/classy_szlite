@@ -1,13 +1,13 @@
 """The figures of the cluster-count pages (docs/clusters/figures/*.png) and the numbers of their tables
-(docs/clusters/figures/numbers.json), from the pipeline's outputs (public forecast-noise runs).
+(docs/clusters/figures/numbers.json), from the pipeline's outputs (runs with the 2019 SO forecast noise).
 
     python docs/clusters/make_figures.py RESULTS_DIR
 
-RESULTS_DIR holds the published runs' files in this layout (the research scripts' output folders):
+RESULTS_DIR holds the files of the runs on these pages in this layout (the research scripts' output folders):
 
     maps_npe_forecast/          truth.npz, npe_t1.json, npe_t1_samples.npz, npe_e{0-4}_applied_{mocks,held}.npz
     maps_npe_forecast_t168/     npe_map_e{11-15}_applied_{mocks,held}.npz
-    catalogue_npe/forecast41/   truth.npz, npe_t2.json, npe_t2_samples.npz           (published model)
+    catalogue_npe/forecast41/   truth.npz, npe_t2.json, npe_t2_samples.npz           (uncalibrated model)
     catalogue_npe/calibf41/     npe_t2cal*                                          (calibrated at one point)
     catalogue_npe/calibtf41/    npe_t2calt*                                         (calibrated, linear in theta)
     catalogue_npe/calibcf41/    truth.npz, npe_t2calc*                              (calibrated, noise level)
@@ -34,7 +34,7 @@ from scipy.ndimage import gaussian_filter, gaussian_filter1d  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIG = os.path.join(HERE, "figures")
 C = dict(map="#2a78d6", published="#eb6834", point="#1baf7a", noise="#6250d6", theta="#52514e", ink="#14171c")
-LABEL = dict(map="map level", published="catalogue, as published", point="catalogue, calibrated at one point",
+LABEL = dict(map="map level", published="catalogue, uncalibrated", point="catalogue, calibrated at one point",
              theta=r"catalogue, calibrated (linear in $\theta$)", noise="catalogue, calibrated through the noise level")
 P4 = [r"$\sigma_8$", r"$\omega_\mathrm{c}$", r"$A_\mathrm{SZ}$", r"$\alpha_\mathrm{SZ}$"]
 NAMES10 = P4 + [r"$h$", r"$\omega_\mathrm{b}$", r"$n_\mathrm{s}$", r"$\sigma_\mathrm{SZ}$", r"$\beta_\mathrm{lens}$",
@@ -221,7 +221,7 @@ def fig_counts(R):
     from classy_szlite.sim.summaries import Q_EDGES, Z_EDGES     # the data vector's bin edges
     zlab = [f"{e:.2f}" for e in Z_EDGES]
     qlab = [f"{e:.1f}".removesuffix(".0") for e in Q_EDGES]
-    for a, (name, d, title) in zip(ax, [("published", "forecast41", "as published"), ("noise", "calibcf41", "calibrated through the noise level")]):
+    for a, (name, d, title) in zip(ax, [("published", "forecast41", "uncalibrated"), ("noise", "calibcf41", "calibrated through the noise level")]):
         c = np.load(os.path.join(R, "catalogue_npe", d, "truth.npz"))["x"][:, :20]
         r = (m.mean(0) / c.mean(0)).reshape(4, 5)
         out[name] = r.round(3).tolist()

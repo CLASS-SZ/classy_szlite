@@ -1,8 +1,8 @@
 # A posterior, and how to check it
 
-Neural posterior estimation on a small set of catalogue-level simulations (the published model, 10% of the
+Neural posterior estimation on a small set of catalogue-level simulations (the uncalibrated model, 10% of the
 sky), its posterior for one mock, and its coverage. Needs the `sbi` extra. Runs on a laptop in about 10 min;
-the published runs use 10,000 simulations and five networks.
+the runs on the Results page use 10,000 simulations and one to five networks.
 
 
 ```python
@@ -348,7 +348,7 @@ info
 
 
 Training stops when the validation loss has not improved for 50 epochs. With 2,000 simulations it takes
-a minute or two on a laptop; the published runs use 10,000.
+a minute or two on a laptop; the runs on the Results page use 10,000.
 
 ## One mock
 
@@ -374,7 +374,7 @@ plt.tight_layout()
 
 
 The dotted lines mark the true values. With 2,000 training simulations and one mock, the posteriors should
-contain the truth, but expect them to be wider and less regular than those of the published runs.
+contain the truth, but expect them to be wider and less regular than those of the runs on the Results page.
 
 ## Coverage
 
@@ -413,8 +413,9 @@ plt.xlabel("credible level"); plt.ylabel("coverage"); plt.legend()
 
 
 Here the test data come from the same catalogue model as the training set, so the curves should follow
-the diagonal within the scatter of 100 draws: the network is calibrated for its own model. The bias test on the
-Results page applies such networks to map-level skies instead, where they are not.
+the diagonal within the scatter of 100 draws: the network has correct coverage for its own model. The bias test on the
+Results page applies such networks to our map-level skies at goal-depth forecast noise instead, where they
+are not ([Scope](../results.md#scope)).
 
 ---
 

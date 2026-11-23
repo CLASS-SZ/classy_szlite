@@ -1,6 +1,7 @@
 # Calibration
 
-Can the catalogue model be fixed by calibrating it on map-level simulations? This page builds three
+Can the uncalibrated catalogue model be brought into line with the finder by calibrating it on map-level
+simulations? This page builds three
 calibrated versions, each a file that `survey.catalogue_model` reads (`mapsim calibrate`).
 
 ## The calibrated observation model
@@ -14,7 +15,7 @@ q_\mathrm{obs} = \begin{cases} \text{lost} & \text{with probability } f_b,\\
 \sqrt{(s_b\,q)^2 + k_b} + w_b\,\mathcal N(0,1) & \text{otherwise.} \end{cases}
 $$
 
-The published model is $s = 1$, $k = 0$, $w = 1$, $f = 0$ with $\sigma_{y_0}$ in place of
+The uncalibrated model is $s = 1$, $k = 0$, $w = 1$, $f = 0$ with $\sigma_{y_0}$ in place of
 $\sigma_\mathrm{finder}$.
 
 ## Fitting it: a censored likelihood
@@ -69,7 +70,7 @@ yellow, or higher $\omega_c$ and $\sigma_8$) means more confusion noise. As the 
 falls from 2.4 to 0.2 and the scatter grows from 0.98 to 1.10: a noisier map makes each faint cluster's own
 fluctuations matter less, and the confusion adds scatter. Both follow the noise level more closely than any
 single parameter; points with very different $A_\mathrm{SZ}$ lie on the same curve. A calibration made at the
-circled point is wrong everywhere else. Two ways to interpolate:
+circled point does not follow these changes. Two ways to interpolate:
 
 **Linear in the parameters** (`calibrated-theta`, `fit_theta`). With $\boldsymbol x = (\boldsymbol\theta -
 \boldsymbol\theta_\mathrm{fid})/\Delta\boldsymbol\theta$ over $(\sigma_8, \omega_c, A_\mathrm{SZ},

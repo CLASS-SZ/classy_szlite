@@ -16,11 +16,11 @@ jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import tile, priors
 
 t0 = time.time()
-o = tile.stages()          # the first tile of the first mock of the published 'truth' set
+o = tile.stages()          # the first tile of the first mock of the 'truth' set
 print(f"{time.time() - t0:.0f} s")
 ```
 
-    22 s
+    19 s
 
 
 ## The maps
@@ -105,10 +105,10 @@ plt.plot(th, o["sigma_first"] / o["sigma_model"], label="first pass")
 plt.plot(th, o["sigma_final"] / o["sigma_model"], label="after masking")
 plt.axhline(1, color="gray", ls=":")
 plt.xscale("log"); plt.xlabel("filter size θ [arcmin]"); plt.ylabel("σ finder / σ instrument + CMB"); plt.legend()
-print("after masking, at 2': ", round(float(o["sigma_final"][7] / o["sigma_model"][7]), 3))
+print("after masking, at 2.7': ", round(float(o["sigma_final"][7] / o["sigma_model"][7]), 3))
 ```
 
-    after masking, at 2':  1.082
+    after masking, at 2.7':  1.082
 
 
 
@@ -140,7 +140,7 @@ plt.xlim(3, 80); plt.ylim(4, 80); plt.xlabel("catalogue model's q"); plt.ylabel(
 
 
 
-    <matplotlib.legend.Legend at 0x112721850>
+    <matplotlib.legend.Legend at 0x1120e8590>
 
 
 

@@ -1,7 +1,7 @@
 # Catalogue models
 
-The catalogue-level model of Zubeldia et al. (2025) for the 41-tile survey (10% of the sky), as published and
-calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.
+A catalogue-level model in the form of Zubeldia et al. (2025) for the 41-tile survey (10% of the sky):
+uncalibrated (code name `published`), and calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.
 
 
 ```python
@@ -24,9 +24,9 @@ print(f"f_sky = {cfg.f_sky:.4f}")
 
 ## The noise table
 
-The published model's $q$ is $\bar y_0 / \sigma_{y_0}(\theta_{500})$, with $\sigma_{y_0}$ the matched
+The uncalibrated model's $q$ is $\bar y_0 / \sigma_{y_0}(\theta_{500})$, with $\sigma_{y_0}$ the matched
 filter's noise for the instrument and the CMB: here computed analytically for our filter and the 2019 SO
-forecast noise. The paper's own table (for its filter and 40% of the sky) is shown for comparison.
+forecast noise. The table of Zubeldia et al. (2025), for their filter and 40% of the sky, is shown for comparison.
 
 
 ```python
@@ -35,14 +35,14 @@ paper_sz, _ = ct.paper_tables()
 tt = np.geomspace(0.5, 15, 50)
 plt.figure(figsize=(5, 3.2))
 plt.loglog(tt, np.asarray(ct.noise_sigma(sz, jnp.asarray(tt))), label="our filter, forecast noise")
-plt.loglog(tt, np.asarray(ct.noise_sigma(paper_sz, jnp.asarray(tt))), "--", label="the paper's table")
+plt.loglog(tt, np.asarray(ct.noise_sigma(paper_sz, jnp.asarray(tt))), "--", label="Zubeldia et al. (2025) table")
 plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()
 ```
 
 
 
 
-    <matplotlib.legend.Legend at 0x111d9ca70>
+    <matplotlib.legend.Legend at 0x11503b380>
 
 
 
@@ -53,7 +53,7 @@ plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()
 
 
 The two tables belong to different filters and surveys: ours is computed for our filter and the 2019
-forecast noise, the paper's for its own set-up. Both fall with the cluster's size, because a larger template
+forecast noise, that of Zubeldia et al. (2025) for theirs. Both fall with the cluster's size, because a larger template
 collects more signal against the same noise.
 
 ## Expected counts and simulations
@@ -74,7 +74,7 @@ print(np.round(np.asarray(ec)).astype(int))
 print(f"selected (q > 5): expected {float(en):.0f}, simulated {np.mean([int(c.n_sel) for c in cats]):.0f}; mean p {float(ep / en):.4f}")
 ```
 
-    20 catalogues in 2.9 s (including compilation)
+    20 catalogues in 2.6 s (including compilation)
 
 
     expected counts (rows: q 5-8.4, 8.4-14, 14-24, 24-40; columns: z bins of 0.3):
@@ -94,7 +94,7 @@ scatter around the expectation by their Poisson and noise fluctuations.
 A calibration replaces the instrument-plus-CMB noise by the finder's own noise and, per redshift bin, draws
 $q_\mathrm{obs} = \sqrt{(s q)^2 + k} + w\,\mathcal N(0,1)$, with a loss rate $f$. Here the values measured on 20
 map-level mocks at the true parameters (the table on the Calibration page), with the finder's noise 7.6% above
-the analytic one at 2′ (and the measured ratio at each filter size).
+the analytic one at 2.7′ (and the measured ratio at each filter size).
 
 
 ```python
@@ -111,11 +111,11 @@ plt.imshow(r, cmap="RdBu", vmin=0.8, vmax=1.2, origin="lower")
 for i in range(4):
     for j in range(5):
         plt.text(j, i, f"{r[i, j]:.2f}", ha="center", va="center", fontsize=8)
-plt.xlabel("redshift bin"); plt.ylabel("q bin"); plt.title("calibrated / published expected counts", fontsize=9); plt.colorbar()
-print(f"selected: published {float(en):.0f}, calibrated {float(en_cal):.0f}")
+plt.xlabel("redshift bin"); plt.ylabel("q bin"); plt.title("calibrated / uncalibrated expected counts", fontsize=9); plt.colorbar()
+print(f"selected: uncalibrated {float(en):.0f}, calibrated {float(en_cal):.0f}")
 ```
 
-    selected: published 14570, calibrated 13993
+    selected: uncalibrated 14570, calibrated 13993
 
 
 
@@ -126,8 +126,8 @@ print(f"selected: published {float(en):.0f}, calibrated {float(en_cal):.0f}")
 
 Calibrated, the model expects 10–25% fewer bright clusters (red cells in the upper rows), because the
 finder's noise is higher than the instrument's, and slightly more faint ones at high redshift, because of the
-search lift. These are the differences the map-level mocks show against the published model (the Finder
-page). The calibrated model reproduces them at the true parameters, but only there.
+search lift. These are the differences the map-level mocks show against the uncalibrated model at goal-depth
+forecast noise (the Finder page). The calibrated model reproduces them at the true parameters, but only there.
 
 ---
 
