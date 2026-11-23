@@ -1,7 +1,9 @@
 # The finder
 
-The cluster finder is a multi-frequency matched filter (Melin et al. 2006; as in SZiFi), written in JAX so
-that it runs on a GPU inside the simulator (`classy_szlite.sim.mmf`, `summaries`).
+The cluster finder is a multi-frequency matched filter (Melin et al. 2006). It follows the conventions of
+SZiFi (Zubeldia et al. 2023a,b) for the peak rule, the masking pass and the covariance bins, but the code is
+our own, written in JAX so that it runs on a GPU inside the simulator (`classy_szlite.sim.mmf`, `summaries`).
+[How it differs from SZiFi](#how-it-differs-from-szifi) is at the end of this page.
 
 ## The matched filter
 
@@ -29,7 +31,8 @@ $$
 2. **Masking pass.** The first covariance includes the clusters' own signal, which raises
    $\sigma_\theta$ and lowers $q$. Every peak with $q > 4$ is masked with a disc of radius $3\theta_j$, the
    covariance is estimated again outside the discs (after whitening each mode with the first estimate, so
-   the disc edges do not leak low-$\ell$ power), and the filter runs once more, as in SZiFi.
+   the disc edges do not leak low-$\ell$ power), and the filter runs once more. The masking pass is SZiFi's
+idea; the whitened estimate of the covariance is ours (SZiFi fills the discs by inpainting).
 3. **Merging.** A peak closer than 1.5′ to a higher one is dropped.
 4. **Confirmation.** A peak is confirmed if a halo above $5\times10^{13}\,M_\odot$ lies within 1.5′ (the one
    with the largest $y_0$), and takes that halo's redshift. This stands in for optical follow-up.
@@ -125,3 +128,34 @@ At the true parameters and goal-depth forecast noise, the map-level mocks have 9
 above $q = 8.4$ than the uncalibrated catalogue model predicts, and up to 7% more faint ones at high redshift. Calibrated
 through the noise level, the model comes within 0–4% in most bins, but the brightest bin still differs by up
 to 7%; what remains is the subject of [Calibration](calibration.md#what-a-per-cluster-model-cannot-carry).
+
+## How it differs from SZiFi
+
+The two finders decide the same way what a cluster is: a peak with $q > 4$ above its four neighbouring
+pixels and its neighbouring sizes, discs of radius $3\theta_j$ around every peak with $q > 4$, one masking
+pass, covariance bins of width `bin_fac` = 4, sizes from 0.5′ to 15′, and the Arnaud et al. (2010) profile
+cut at $5R_{500}$ and normalised at its centre. No SZiFi code is used; SZiFi was run, from its own source,
+only to check our filter.
+
+| | SZiFi | Our finder |
+|---|---|---|
+| Runs on | CPU, numpy and scipy, one tile at a time | GPU, compiled with JAX, inside the simulator |
+| Template | a pixel template from a line-of-sight integral, convolved in real space | the profile's analytic Fourier transform, applied in Fourier space |
+| Covariance | NaMaster flat-sky bins; default $100 \le \ell \le 2500$ | the mean of the in-band Fourier modes of each bin; $100 \le \ell \le 20\,000$ |
+| After masking | inpaints the discs, blends the original map back in with a cosine weight | whitens with the first-pass covariance, masks, divides by the kept fraction, un-whitens |
+| Map edges | apodised cut-outs of a real sky (HEALPix or CAR) | periodic simulated tiles |
+| Merging | catalogues merged by nearest match or friends-of-friends (10′ by default) | a peak within 1.5′ of a higher one is dropped |
+| Confirmation | none | a halo above $5\times10^{13}\,M_\odot$ within 1.5′ (stands in for optical follow-up) |
+| Also has | the spectrally constrained filter for the CIB, relativistic tSZ, point sources | none of these |
+
+The **spectrally constrained filter** (Zubeldia, Chluba & Battye 2023) addresses emission that sits on
+the cluster, such as the cosmic infrared background (CIB) of its galaxies. A standard matched filter weights
+the channels by $C^{-1}\boldsymbol a$, the least noise with unit response to the tSZ spectrum; emission
+correlated with the cluster is not noise to it, so part of it leaks into $\hat y_0$. In Planck-like Websky
+mocks this biased $q$ by about half a standard deviation per cluster. The constrained filter adds a zero
+response to an assumed CIB spectrum $\boldsymbol b$ (and optionally to its derivatives in spectral index and
+temperature), with weights proportional to
+$C^{-1}\boldsymbol a - (\boldsymbol a^\top C^{-1}\boldsymbol b / \boldsymbol b^\top C^{-1}\boldsymbol b)\, C^{-1}\boldsymbol b$,
+at the cost of a larger noise. Our maps have no CIB, so our finder does not need it; in our code it would
+change only the weights of each $\ell$ bin.
+

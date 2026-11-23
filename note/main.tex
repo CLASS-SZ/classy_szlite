@@ -1,0 +1,88 @@
+\documentclass[fleqn,usenatbib]{mnras}
+\usepackage[T1]{fontenc}
+\usepackage{ae,aecompl}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\hypersetup{hypertexnames=false,colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
+
+\newcommand{\todo}[1]{}
+\newcommand{\asz}{A_\mathrm{SZ}}
+\newcommand{\alsz}{\alpha_\mathrm{SZ}}
+\newcommand{\ssz}{\sigma_\mathrm{SZ}}
+\newcommand{\blens}{\beta_\mathrm{lens}}
+\newcommand{\slens}{\sigma_\mathrm{lens}}
+\newcommand{\qobs}{q_\mathrm{obs}}
+\newcommand{\qtrue}{q_\mathrm{true}}
+\newcommand{\msun}{\mathrm{M}_\odot}
+\newcommand{\sfinder}{\sigma_\mathrm{finder}}
+\newcommand{\classyszlite}{\textsc{classy\_szlite}}
+\newcommand{\omc}{\omega_\mathrm{c}}
+\newcommand{\omb}{\omega_\mathrm{b}}
+\newcommand{\Omm}{\Omega_\mathrm{m}}
+\newcommand{\cov}{\mathcal{C}}
+
+\title[Cluster counts from maps]{Cluster counts from maps: simulation-based inference of
+Sunyaev--Zel'dovich cluster abundances with a map-level forward model}
+\author[]{}
+\date{}
+\pubyear{2026}
+
+\begin{document}
+\label{firstpage}
+\pagerange{\pageref{firstpage}--\pageref{lastpage}}
+\maketitle
+
+\input{sections/abstract}
+
+\begin{keywords}
+galaxies: clusters: general -- cosmological parameters -- methods: statistical -- cosmic background radiation
+\end{keywords}
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/finder}
+\input{sections/calibration}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusions}
+
+\section*{Acknowledgements}
+Our cluster finder follows the conventions of \textsc{SZiFi} \citep{Zubeldia2023a,Zubeldia2023} for its
+peak criteria, masking threshold and radius, and the binning of the covariance. We ran \textsc{SZiFi}
+(commit \texttt{73626fb}) from its unmodified source, through our own scripts, only to validate our filter, and none of its code is used in
+\classyszlite{}. The SO-like survey, the tSZ--mass relation and the prior follow \citet{Zubeldia2025} and
+its \textsc{cosmocnc} set-up \citep{ZubeldiaBolliet2024}. The two noise tables of \citet{Zubeldia2025} are
+distributed with \classyszlite{}, copied unchanged from \textsc{cosmocnc} under its MIT licence, for
+reference and validation only. They do not enter our results. Parts of the simulator (the instrument
+model, the painting of the haloes and the whitened covariance estimate of the masking pass) are adapted
+from earlier code (\textsc{szsim}, in \url{https://github.com/borisbolliet/sz-poisson-blending}). The Tinker
+mass function follows the \textsc{class\_sz} notebooks \citep{Bolliet2023}. The FFTLog of \classyszlite{}
+\citep{Hamilton2000} is adapted from \textsc{mcfit} (\url{https://github.com/eelregit/mcfit}), and that file
+is distributed under the GNU General Public License, version 3, as \textsc{mcfit} is.
+This work used JAX \citep{Bradbury2018}, NumPy \citep{Harris2020}, SciPy \citep{Virtanen2020},
+Matplotlib \citep{Hunter2007}, \textsc{sbi} \citep{Tejero2020}, PyTorch \citep{Paszke2019}, \textsc{nflows},
+\textsc{camb} \citep{Lewis2000}, \textsc{colossus} \citep{Diemer2018}, the CosmoPower emulators
+\citep{SpurioMancini2022} and the SO noise models \citep{SO2019}. The simulations were run on the
+\textit{rusty} cluster of the Flatiron Institute.
+
+\section*{Data Availability}
+The simulator, the pipeline that produced every result in this paper, and its documentation are public in
+\classyszlite{} (\url{https://github.com/CLASS-SZ/classy_szlite}; documentation at
+\url{https://class-sz.github.io/classy_szlite/}). All inputs are public: the 2019 SO forecast noise curves (instrument and CMB
+lensing) and a \textsc{camb} CMB spectrum, computed by a public script
+(\texttt{analysis/realistic/step1/s01\_camb\_cmb.py} in \url{https://github.com/borisbolliet/sz-poisson-blending}).
+
+\bibliographystyle{mnras}
+\bibliography{refs}
+
+\appendix
+\input{sections/appendix}
+
+\bsp
+\label{lastpage}
+\end{document}

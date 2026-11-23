@@ -50,6 +50,9 @@ Bias = mean over the mocks of (posterior mean − truth) / posterior standard de
 All numbers on these pages use the public 2019 SO forecast noise. [Results](results.md) has the figures,
 both survey sizes and the coverage tests.
 
+A write-up of this work as a note in MNRAS format: [Cluster counts from maps (PDF)](https://github.com/CLASS-SZ/classy_szlite/blob/main/note/main.pdf),
+with its LaTeX source in [`note/`](https://github.com/CLASS-SZ/classy_szlite/tree/main/note).
+
 ## How these pages are organised
 
 | Page | What it covers |
@@ -60,6 +63,7 @@ both survey sizes and the coverage tests.
 | [Inference](inference.md) | Neural posterior estimation and the checks (bias, coverage, TARP, ensembles) |
 | [Results](results.md) | The map-level posterior, the calibrated models and the uncalibrated reference, at 10% and 40.7% of the sky: bias and coverage |
 | [Pipeline](pipeline.md) | The `mapsim` command, its outputs, Slurm templates, and the time and memory each step takes |
+| [Credits](credits.md) | What the code takes from SZiFi, cosmocnc, mcfit and earlier code, and the software it uses |
 | Tutorials | [One tile](tutorials/one-tile.md), [catalogue models](tutorials/catalogues.md), [a posterior](tutorials/posterior.md): notebooks that run on a laptop |
 
 ## What it costs

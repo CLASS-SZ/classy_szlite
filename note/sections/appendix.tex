@@ -1,0 +1,90 @@
+\section{Robustness of the neural posteriors}\label{app:robust}
+
+The posteriors in this paper are neural density estimates, which we train by neural posterior estimation
+\citep{Papamakarios2016,Greenberg2019} with a masked autoregressive flow \citep{Papamakarios2017}, using the
+\textsc{sbi} package \citep{Tejero2020}. A trained network depends on its random seed, which sets the
+initial weights and the random choices made during training, and on the number of training simulations.
+In this appendix we check that the map-level results at 10 per cent of the sky depend on neither, and we
+test the joint posterior in all ten parameters.
+
+\paragraph*{Ensembles.} We train five networks on the same 10\,000 map-level simulations, differing only in
+their seed, and combine them into an equal mixture as in equation~(\ref{eq:ensemble}). All ensembles in this
+paper, with the numbers of networks given in Tables~\ref{tab:bias} and \ref{tab:coverage}, are built in
+this way.
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/ensemble.png}
+\caption{Bias $\mathcal{B}$ of the map-level posterior at the true parameters (10 per cent of the sky), in
+posterior widths, for $\sigma_8$, $\omc$, $\asz$ and $\alsz$. Light blue circles show five networks trained
+on the same 10\,000 simulations with different seeds, and black diamonds their equal mixture,
+equation~(\ref{eq:ensemble}). The error bars are the errors of the
+mean over 100 map-level mocks, and the dotted line marks zero bias.}
+\label{fig:ensemble}
+\end{figure}
+
+\begin{table}
+\centering
+\caption{Robustness of the map-level posterior at 10 per cent of the sky, for five networks trained on
+10\,000 simulations with different seeds (smallest and largest value), their ensemble, and one network
+trained on 5000 simulations. The top block gives the bias $\mathcal{B}$ in posterior widths, on 100 mocks
+at the true parameters, and the bottom block the 90 per cent coverage $\cov(0.9)$ of $\alsz$ on 500 skies
+drawn from the prior. The ensemble's coverage in the other parameters is given in Table~\ref{tab:coverage}.}
+\label{tab:robust}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccc}
+\toprule
+ & seeds (min, max) & ensemble & 5000 sims \\
+\midrule
+\multicolumn{4}{l}{\emph{bias $\mathcal{B}$}}\\
+$\sigma_8$ & $-0.17$, $+0.02$ & $-0.05\pm0.10$ & $-0.05$ \\
+$\omc$     & $+0.02$, $+0.16$ & $+0.10\pm0.07$ & $-0.01$ \\
+$\asz$     & $-0.13$, $+0.06$ & $-0.05\pm0.08$ & $+0.02$ \\
+$\alsz$    & $+0.01$, $+0.20$ & $+0.08\pm0.08$ & $+0.16$ \\
+\midrule
+\multicolumn{4}{l}{\emph{coverage $\cov(0.9)$}}\\
+$\alsz$    & 0.84, 0.86 & 0.86 & 0.85 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The biases of the five networks and of their ensemble (Fig.~\ref{fig:ensemble} and
+Table~\ref{tab:robust}) show that the bias of a single network moves by about 0.1 widths from seed to seed.
+This scatter is comparable to the error of the mean from 100 mocks. We therefore read the five values for each
+parameter as repeated measurements of the same quantity, whose spread is the scatter due to training
+alone. In particular, the largest single values, $-0.17$ in $\sigma_8$ and $+0.20$ in $\alsz$, reflect this
+scatter rather than a bias of the method. The ensemble (black) is within one error of zero in $\sigma_8$,
+$\asz$ and $\alsz$, and gives $+0.10\pm0.07$ in $\omc$.
+
+\paragraph*{Number of simulations.} A single network trained on half the simulations, 5000, has biases of
+$-0.05$, $-0.01$, $+0.02$ and $+0.16$ widths in $\sigma_8$, $\omc$, $\asz$ and $\alsz$, respectively. These
+values are comparable to the seed-to-seed scatter of about 0.1 widths among the networks trained on 10\,000. In
+every case the $\alsz$ intervals are slightly too narrow at 10 per cent of the sky, with 90 per cent
+coverage of 0.84--0.86 for the five networks, 0.86 for their ensemble and 0.85 for the network trained on
+5000 simulations (Table~\ref{tab:robust}). Since doubling the number of simulations does not change this
+coverage, more simulations would probably not remove the deficit. At 40.7 per cent of the sky, by
+contrast, the same intervals have correct coverage (0.88, Table~\ref{tab:coverage}).
+
+\paragraph*{Joint coverage: TARP.} Whereas the coverage of equation~(\ref{eq:coverage}) tests one parameter
+at a time, the test of accuracy with random points \citep[TARP;][]{Lemos2023} tests the joint posterior in
+all ten parameters. We first rescale the parameters to the unit interval over the range of the true values. For each prior draw $n$, we then draw a reference point $\bm\theta_{\mathrm{ref},n}$ uniformly in
+that range and compute
+\begin{equation}
+f_n = \frac{1}{K}\sum_{k=1}^{K}\mathbf 1\!\left[\,\lVert\bm\theta_{n,k}-\bm\theta_{\mathrm{ref},n}\rVert
+<\lVert\bm\theta^\star_n-\bm\theta_{\mathrm{ref},n}\rVert\right],
+\label{eq:tarp_f}
+\end{equation}
+the fraction of the $K$ posterior samples $\bm\theta_{n,k}$ that lie closer to the reference point than the
+truth $\bm\theta^\star_n$ does. The expected coverage probability at credible level $\gamma$,
+$\mathrm{ECP}(\gamma)$, is then the fraction of the $N_\mathrm{draw}$ draws with $f_n<\gamma$, and it
+equals $\gamma$ for a posterior with correct coverage. We summarise it by the signed area
+\begin{equation}
+A_\mathrm{TARP} = \int_{1/2}^{1}\left[\mathrm{ECP}(\gamma)-\gamma\right]\mathrm{d}\gamma,
+\label{eq:tarp_a}
+\end{equation}
+which is 0 for a posterior with correct coverage, negative for one that is too narrow and positive for one
+that is too wide. Using the implementation in \textsc{sbi} on the 500 prior skies at 10 per cent of the
+sky, we find $A_\mathrm{TARP}$ between $-0.009$ and $-0.029$ for the five map-level networks. The joint
+posterior is therefore slightly too narrow, consistent with the 90 per cent coverage of 0.84--0.86 in
+$\alsz$ for the same networks.

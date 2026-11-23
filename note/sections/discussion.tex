@@ -1,0 +1,237 @@
+\section{Discussion}\label{sec:discussion}
+
+\subsection{Map-level inference at survey scale}\label{sec:discussion:maplevel}
+
+Because the map-level posterior is trained on simulations that run the cluster finder on multi-frequency
+maps, the effects of the finder enter its forward model by construction. These include the confusion
+noise, the search lift, neighbours and the full shape of the finder's errors, upward tail included, so that
+we need neither a functional form for these errors nor fits at chosen points of the prior. In our tests,
+this approach gives posteriors within 0.12 widths of the truth and with close to correct coverage at both
+survey sizes (Section~\ref{sec:results}). We now discuss what it costs, what it gains as the survey grows
+and what still limits it.
+
+\paragraph*{Cost.} At 40.7 per cent of the sky, which is about the area of SO \citep{SO2019}, one survey
+simulation takes 1.6\,s on one GPU and a training set of 10\,000 surveys takes 4.6\,h
+(Table~\ref{tab:cost}). With the present simulator, map-level SBI is therefore affordable at the scale of
+SO. We note that testing any posterior, whether map-level or catalogue-level, requires map-level
+simulations as well, since the bias and coverage tests of Section~\ref{sec:results} use 100 map-level mocks
+and 500 map-level prior draws.
+
+\paragraph*{Gain with survey area.} The value of a correct forward model can grow with the size of the
+survey. If an error in the forward model shifts the posterior mean of a parameter $\theta$ by $\Delta$, the
+bias statistic of equation~(\ref{eq:bias}) becomes
+\begin{equation}
+\mathcal{B} \simeq \frac{\Delta}{\mathrm{sd}[\theta\mid\bm x]},
+\label{eq:disc_bias}
+\end{equation}
+where $\Delta$ depends on the model error but hardly on the survey area, whereas the posterior width
+shrinks as the area grows. For a parameter constrained by the counts alone, the width scales as
+$f_\mathrm{sky}^{-1/2}$, with $f_\mathrm{sky}$ the fraction of the sky covered, so that
+$\mathcal{B}\propto f_\mathrm{sky}^{1/2}$ grows by a factor of 2 from 10 to 40.7 per cent of the sky. For
+the uncalibrated reference, whose shift is large, the bias in widths grows by about 1.5 instead, because
+the shift of its posterior mean hardly changes with area while its widths shrink 1.3--1.7 times
+(Section~\ref{sec:results:bias}). We expect the widths to shrink by less than a factor of 2 for two reasons,
+although we have not tested either. Six of the ten parameters have Gaussian priors that the counts do not
+tighten, so that their uncertainty propagates into the four main parameters, and the edges of the flat
+prior may also limit the shrinking. The calibrated models, in contrast, do not show this growth, since
+their bias in $\alsz$ changes little between the two survey sizes, from 0.50 to 0.52 widths with the
+one-point calibration and from 0.62 to 0.67 widths with the noise-level calibration
+(Table~\ref{tab:bias}). Their shift thus does not stay fixed as the area grows, for reasons we have not
+determined. In general, however, a model error whose shift does not change with area can matter more at
+the area of SO than at 10 per cent of the sky. The map-level posterior, in contrast, stays within 0.12 widths at both
+sizes.
+
+\paragraph*{Current limits.} The map-level approach is limited, first, by the simulator, which needs the
+additions of Section~\ref{sec:discussion:limits} before it is applied to data, each of which makes a
+simulation more expensive. Second, the neural posterior at 10 per cent of the sky gives $\alsz$ intervals that are slightly
+too narrow (90 per cent coverage of 0.86), and it may have a small offset in $\omc$
+(Section~\ref{sec:discussion:omegac}). Finally, with the 21-element data vector of \citet{Zubeldia2025} as
+its summary, the map-level posterior is not more precise than the catalogue-level ones
+(Fig.~\ref{fig:corner}), although a richer summary can be added without changing the forward model
+(Section~\ref{sec:discussion:limits}).
+
+\subsection{Catalogue models calibrated on maps}\label{sec:discussion:calibrated}
+
+Analyses of real data usually estimate the noise of the filter on the observed maps \citep[e.g.][]{Planck2016XXIV,Bocquet2019,Hilton2021}, and
+this noise includes the confusion noise of the observed sky. Of the models in this paper, our one-point
+calibration comes closest to this practice, because it uses the finder's noise measured on map-level mocks
+at the true parameters and also fits the search lift, the scatter and the losses there
+(Section~\ref{sec:calib-point}). At the true parameters it is within 0.2 widths of the truth in $\sigma_8$,
+$\omc$ and $\asz$, while $\alsz$ is 0.50 widths high at 10 per cent of the sky and 0.52 widths high at 40.7
+per cent (Table~\ref{tab:bias}). Halo by halo, the scale factor is $s=0.990$ against the finder's own noise
+but 0.921 against the noise of the instrument and the CMB (Section~\ref{sec:finder_fit}), which shows that
+most of the offset of the uncalibrated model comes from the noise. A catalogue model that used the measured
+noise of each test sky with unit Gaussian scatter would separate the effect of the noise from those of the
+lift, the scatter and the tail, but we have not run such a model.
+
+\paragraph*{Shortcomings of the calibration.} A calibration has to carry the three effects of the finder
+and the upward tail. The catalogue model leaves out three effects of the finder: confusion noise, the search lift
+and neighbours; and it assumes Gaussian scatter, which the finder's errors break through an upward tail.
+After masking, the confusion noise makes the finder's noise 4--8 per cent higher than that of the instrument and the CMB. All of these effects change with the amount of tSZ signal on the sky, and hence
+with the parameters (Section~\ref{sec:calib-grid}). A calibration at a single point does not follow these
+changes. Across the prior, the 90 per cent intervals of the one-point calibration therefore contain the true
+$\sigma_8$ for only 0.65 of the skies at 10 per cent of the sky and 0.59 at 40.7 per cent
+(Table~\ref{tab:coverage}). A calibration that follows the parameters through the noise level, fitted at
+25 points, brings $\sigma_8$, $\omc$ and $\asz$ close to correct coverage, with 0.86--0.90 at the 90 per
+cent level. However, it does not follow the slope, since $\alsz$ stays 0.62 and 0.67 widths high at the
+true parameters and its 90 per cent coverage is 0.78 and 0.74, at 10 and 40.7 per cent of the sky,
+respectively.
+
+\paragraph*{Requirements for a better calibration.} We attribute the remaining bias in $\alsz$ to the
+upward tail of Section~\ref{sec:finder_tail}, which changes with $q$ and with the amount of tSZ signal on the
+sky. Our functional form, a Gaussian scatter around $\sqrt{(sq)^2+k}$ with a loss rate
+(equation~\ref{eq:qobs_fit}), cannot carry such a tail. Splitting the calibration by cluster size does not change
+this bias (Section~\ref{sec:calib-size}). To carry the tail, a catalogue model would need to emulate the
+full error distribution of the finder as a function of $q$ and of the parameters, and building and
+validating such an emulator also costs map-level simulations. Our calibrations use 25 points with 5 mocks
+each, or 125 map-level survey simulations, compared with the 10\,000 of a map-level training set. The tests of
+any catalogue model, however, need map-level mocks and prior draws as well
+(Section~\ref{sec:discussion:maplevel}), so that once a map-level simulator exists and has been validated,
+training on it adds only the cost of one training set.
+
+None of these effects is specific to our finder, since any matched filter that estimates its noise from the
+maps sees the tSZ signal of faint haloes, any search over positions and sizes has a search lift, and any
+finder meets neighbours. How much these effects matter depends on the depth of the survey, on the noise
+used by the catalogue model and on the priors (Section~\ref{sec:discussion:scope}), so that other surveys
+and noise levels would need their own simulations.
+
+\subsection{Scope of the uncalibrated reference}\label{sec:discussion:scope}
+
+We include the uncalibrated catalogue model, which, as in forecasts, uses a noise table for the instrument
+and the CMB only, as a reference and not as a test of analyses that calibrate on maps. Since both
+forward models share the haloes, the scaling relations, the instrument and the CMB
+(Section~\ref{sec:sims}), its bias comes from the observation step, that is, from the finder and the
+confirmation. On our skies, the uncalibrated model is biased by up to 5.3 widths at 10 per cent of the sky
+and 8.3 widths at 40.7 per cent, mostly in $\sigma_8$ and $\alsz$. In $S_8$, by contrast, it is 0.30 widths
+low at 10 per cent of the sky (not measured at 40.7 per cent). This bias therefore measures the size of the
+finder's effects at goal depth, and it depends on three choices, which we discuss in turn.
+
+\paragraph*{Noise level.} We adopt the goal-depth forecast noise of \citet{SO2019}, the deepest of its
+levels. At lower noise, the finder detects more faint clusters, for which the search lift matters most,
+and the confusion noise makes up a larger part of the total. Conversely, at higher instrument noise the
+confusion noise, which adds in quadrature, makes up a smaller part. We therefore expect a smaller bias at
+higher noise, and closer agreement with the finder's counts than at goal depth, where the counts above
+$q=8.4$ are 9--25 per cent below the model at the true parameters (Section~\ref{sec:finder_counts}),
+although we have not run other noise levels.
+
+\paragraph*{Noise of the catalogue model.} A noise measured on the maps includes the confusion noise.
+With it, and with the fitted lift, scatter and losses of our one-point calibration, most of the bias
+disappears at the true parameters, leaving a slope bias of about half a width and a coverage that depends
+on how the calibration follows the parameters (Section~\ref{sec:discussion:calibrated}).
+
+\paragraph*{Prior on the slope.} The prior on $\alsz$ is flat, $\mathcal U(1.00,1.24)$. Most of the bias goes into the slope and its degeneracy with $\sigma_8$, as the posterior explains the deficit of
+bright clusters on the maps (Fig.~\ref{fig:counts}) with a shallower tSZ--mass relation. On the mock of
+Fig.~\ref{fig:corner40}, the uncalibrated posterior lies about three widths above the lower edge of the
+prior, so that the edge truncates little of it. Informative priors on the tSZ--mass relation, for example
+from weak-lensing mass calibration, would restrict this direction. Although we have not tested this, we
+expect them to reduce the bias, with part of the error possibly going into the cosmological parameters
+instead.
+
+\subsection{Limitations}\label{sec:discussion:limits}
+
+Every test in this paper compares inferences on the same simulated skies, so that our conclusions rest on
+the difference between the two forward models rather than on how realistic the skies are. An analysis of
+real data, however, would need a more realistic simulator, and we discuss each of our simplifications in
+turn.
+
+\paragraph*{No halo clustering.} We place the haloes at uniform random positions on each tile and
+therefore neglect halo clustering. On the real sky, massive clusters sit in overdense regions and are
+surrounded by more haloes than average. The tSZ signal projected onto a cluster by other haloes is then
+correlated with the cluster's mass, and the confusion noise around a massive cluster is larger than its
+average over the tile. We therefore expect the upward tail of the finder's errors
+(Section~\ref{sec:finder_tail}) and the effects of neighbours to be larger on the real sky than in our
+simulations, although we have not simulated this. In addition, clustering adds sample variance to the counts,
+which would widen the posteriors of both forward models. For these reasons, the simulator needs clustered
+haloes before it is applied to data.
+
+\paragraph*{Gaussian stationary noise.} Our noise is Gaussian, with the same power spectrum everywhere on a
+tile and on every tile (equation~\ref{eq:noise}), whereas real maps have a depth that varies across the
+footprint, scan-synchronous stripes and patchy atmosphere. Because the finder estimates its covariance per
+tile, it can follow slow changes in depth but not changes within a tile. A real analysis would simulate the
+noise from the data or from simulations of the scanning, which the map-level approach can include
+directly.
+
+\paragraph*{No foregrounds.} The maps contain neither the cosmic infrared background (CIB), which matters
+most at high frequencies, nor radio sources, which matter most at low frequencies. Both are correlated
+with clusters, since radio galaxies in clusters fill in part of the tSZ decrement at low frequency
+\citep{Gupta2017} and the CIB adds emission where the tSZ signal is an excess \citep{Melin2018}.
+In a standard matched filter, the weights of the channels at each multipole, $C(\ell)^{-1}\bm a(\ell)$,
+minimise the variance of $\hat y_0$ under the single condition that the response to the tSZ spectrum is
+unity. Emission that is correlated with the cluster, such as the CIB of its member galaxies, is therefore
+not suppressed as noise, and part of it passes into $\hat y_0$. In Planck-like mocks from the Websky
+simulation, \citet{Zubeldia2023} found that this biases the tSZ observables by about half a standard
+deviation per cluster, and leads to about 20 per cent fewer detections when all the Planck high-frequency
+channels are used. Their spectrally constrained filter, which is implemented in \textsc{SZiFi}, adds a
+second condition, namely a zero response to an assumed CIB spectrum $\bm b(\ell)$, a modified blackbody.
+Optionally, it also sets a zero response to the derivatives of that spectrum with respect to its spectral
+index and temperature, which makes the filter robust to errors in the assumed spectrum. With a single
+constraint, the weights become proportional to $C^{-1}\bm a-(\bm a^{\top}C^{-1}\bm b/\bm b^{\top}C^{-1}\bm
+b)\,C^{-1}\bm b$. The CIB correlated with the cluster is thus removed, at the cost of a larger
+$\sigma_\theta$ and hence a lower $q$. In our finder, this change would affect only the weights of each
+bin in $\ell$. In a map-level simulator that paints the CIB, however, the bias that it causes would
+already be part of the forward model. The constrained filter would then serve mainly to make the
+inference less sensitive to how the CIB is modelled, at some cost in signal-to-noise. Which of the two
+filters gives the more precise and more robust posterior could be measured with the test used here;
+we have not simulated foregrounds. As with clustering, a catalogue model would have to describe foregrounds correlated with clusters separately,
+whereas a map-level simulator includes them once they are painted.
+
+\paragraph*{Idealised confirmation.} We confirm a peak if a halo above $5\times10^{13}\,\msun$ lies within
+$1.5\arcmin$ of it, and assign to it that halo's exact redshift. Real catalogues, in contrast, are
+confirmed by optical and infrared follow-up, with its own completeness, redshift errors and false matches.
+In our simulations, noise peaks are removed unless a massive halo lies within $1.5\arcmin$ by chance (Section~\ref{sec:finder_zoom}). In addition, the redshift comes from the halo with the largest $y_0$ near the peak,
+which need not be the halo that produced it. Since the catalogue model has neither effect, a real analysis
+needs a model of the confirmation in either forward model.
+
+\paragraph*{Flat periodic tiles.} We model the survey as a set of flat, periodic $10\degr\times10\degr$
+tiles without masks or survey edges. Since the filter sizes, up to $15\arcmin$, are small compared with the
+tile, the flat-sky approximation is adequate for the finder. Masks around point sources and survey edges,
+however, change the noise of the filter locally and would need to be simulated.
+
+\paragraph*{One pressure profile and a fixed mass bias.} Every halo has the pressure profile of
+\citet{Arnaud2010}, which has the same shape as the finder's template. We also fix the hydrostatic mass bias
+at $1-b_\mathrm{HSE}=0.8$, where $b_\mathrm{HSE}$ is the fraction by which the hydrostatic mass
+underestimates the true mass. Because the filter is matched to one shape, we expect real clusters, whose
+shapes differ from the template, to have lower and more scattered $q$. A catalogue model would have to
+calibrate this effect, whereas a map-level simulator includes it once a range of profiles is painted. In
+addition, a free mass bias is partly degenerate with $\asz$ in equation~(\ref{eq:y0}). Neither choice
+changes the comparison between the forward models, but both would matter for real data.
+
+\paragraph*{The 21-number summary.} We have kept the summary of \citet{Zubeldia2025}, four bins of $q$ by
+five bins of redshift together with the mean lensing signal-to-noise, so that the forward models are
+compared on the same data vector. On this summary, the map-level posterior is not more precise than the
+catalogue-level ones (Fig.~\ref{fig:corner}), although the maps hold more information, in finer bins of
+$q$, in the clusters below the threshold and in the tSZ field itself
+\citep{Hill2014,Bolliet2018,EmbilVillagra2026}. Since the map-level simulator produces the maps, a richer
+summary can be added without changing the forward model. We also expect a finer summary to make the
+departures of catalogue models from the finder more visible, because the largest differences in the
+counts are in the brightest bins (Fig.~\ref{fig:counts}).
+
+\subsection{A possible offset in \texorpdfstring{$\omc$}{omega\_c}}\label{sec:discussion:omegac}
+
+The map-level posterior is within 0.12 widths of the truth in every parameter at both survey sizes. Its most significant departure is in $\omc$, at $+0.10\pm0.07$ widths at 10 per cent of the sky and
+$+0.10\pm0.04$ widths at 40.7 per cent (Table~\ref{tab:bias}). The second value differs from zero by 2.2
+times its error, as computed from the unrounded values, but three points qualify this result. First, the two
+measurements are not independent, because the mocks of the larger survey contain the skies of the smaller
+one in their first 41 tiles. Second, all posteriors are applied to the same 100 mocks, so that a
+fluctuation of the mock set would shift them together. The calibrated models also give $+0.09$ to
+$+0.21$ widths in $\omc$. Third, at 10 per cent of the sky single networks range from $+0.02$ to $+0.16$
+widths in $\omc$, and one network trained on 5000 simulations gives $-0.01$, comparable to this
+seed-to-seed scatter (Appendix~\ref{app:robust}). At a tenth of a posterior width, the offset is small
+compared with the slope bias of 0.5--0.7 widths left by the calibrated models, and none of our conclusions
+depends on it. We have not determined whether it arises from the training or from the mocks, a question
+that more mocks and more training simulations would settle.
+
+\subsection{The road to real data}\label{sec:discussion:road}
+
+In our simulations at goal depth, map-level SBI of the cluster counts is affordable at the scale of SO and
+gives posteriors within 0.12 widths of the truth, with close to correct coverage. A catalogue model
+calibrated on map-level mocks comes close at the true parameters, but it leaves a slope bias of 0.5--0.7 widths. Its coverage across the prior also depends on how the calibration follows the parameters
+(Section~\ref{sec:discussion:calibrated}). The finder's response should therefore be forward-modelled in
+an SO cluster-count analysis, at map level or through a calibration that follows the parameters and is
+validated against map-level simulations. Before map-level SBI is applied to data, the simulator needs the
+additions of Section~\ref{sec:discussion:limits}, namely clustered haloes, noise that follows the data,
+foregrounds together with a spectrally constrained filter, and a model of the confirmation. It also needs
+masks, a range of pressure profiles and a free mass bias. These steps each make a simulation more expensive, but the present cost (Table~\ref{tab:cost}) leaves room for them. The test used
+here, in which catalogue-level and map-level posteriors are applied to the same map-level skies, can be
+repeated at each step. This test measures directly whether a catalogue model is still good enough, and it
+requires only map-level mocks and prior draws rather than a full training set.

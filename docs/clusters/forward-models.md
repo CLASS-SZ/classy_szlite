@@ -92,7 +92,8 @@ X_i(\boldsymbol\ell) = f_i\, B_i(\ell)\, y(\boldsymbol\ell) + B_i(\ell)\, T_\mat
 \qquad f_i = T_\mathrm{CMB}\left[x_i \coth\frac{x_i}{2} - 4\right],\quad x_i = \frac{h\nu_i}{k_B T_\mathrm{CMB}},
 $$
 
-with Gaussian beams $B_i$, a Gaussian lensed CMB (the package's CMB emulator at its Planck 2018 point),
+with Gaussian beams $B_i$, a Gaussian lensed CMB (a CAMB spectrum at Planck 2018 parameters in the runs on these pages; by default
+the package's CMB emulator, which agrees with it to 0.4% for $\ell \le 3000$; see `sim/setup.py`),
 and Gaussian noise $n_i$ with the 6 × 6 covariance of the 2019 SO forecast (Ade et al. 2019), goal depth:
 
 $$
@@ -126,7 +127,9 @@ $$
 p = \bar p\, e^{\sigma_\mathrm{lens} g'} + \mathcal N(0,1),
 $$
 
-with $S \simeq 0.663$ and $\sigma_\kappa$ SO's lensing-noise table at goal depth. The lensing signal is
+with $S \simeq 0.663$ and $\sigma_\kappa$ the matched-filter noise of this amplitude at goal depth, which we
+compute from SO's public lensing-noise curves (v3.1.1, tSZ deprojected; `sim/lens_tables.py`). At baseline
+depth it agrees with the table of Zubeldia et al. (2025) to 0.3%. The lensing signal is
 drawn per detected halo, the same way in both inferences.
 
 ### One tile, stage by stage
@@ -182,3 +185,23 @@ filter and noise. Its code name is `published` (`survey.catalogue_model("publish
 | Position and size of a detection | maximised over pixels and 15 sizes | known |
 | Neighbours | blend, steal matches | independent |
 | Cost per survey simulation (10% of the sky) | 0.42 s on a GPU | 0.01 s on a GPU |
+
+### How it differs from cosmocnc
+
+The catalogue model has the form of Zubeldia et al. (2025), whose posterior was trained on catalogues from
+cosmocnc (Zubeldia & Bolliet 2024): the same observed $q$, lensing signal, scaling relation, $\theta_{500}$
+formula and 21 numbers, with the fiducial $A_\mathrm{SZ}$ and $\alpha_\mathrm{SZ}$ of its SO-like survey. The
+code is our own and none of cosmocnc's is used. What differs:
+
+| | cosmocnc (Zubeldia et al. 2025) | Our catalogue model |
+|---|---|---|
+| Purpose | a fast likelihood code, with a catalogue generator for training | a JAX simulator for training, run on a GPU |
+| $\sigma_{y_0}$ | their table, from SZiFi on SO-like Websky maps | uncalibrated: computed for our filter and noise; calibrated: what the finder measures on map-level mocks |
+| $\sigma_\kappa$ | their table | our table from SO's public lensing-noise curves (0.3% from theirs at baseline depth) |
+| Cosmology, mass function | cosmocnc's back ends; Tinker et al. (2008) interpolated linearly in $\Delta$ | the classy_szlite emulators; Tinker et al. (2008) interpolated in $\log\Delta$ |
+| Sampling halos | cumulative sums and an inverse-CDF draw | Poisson counts per $(z, \ln M)$ cell, drawn exactly from the interpolated density in each cell |
+| Calibration | none | per redshift bin, fitted on map-level mocks ([Calibration](calibration.md)) |
+
+Their two noise tables ship with the package (`sim/data/`, MIT, see its NOTICE) for the `paper` model and for
+checks; the runs on these pages do not use them.
+

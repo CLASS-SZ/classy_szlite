@@ -1,0 +1,116 @@
+\section{Introduction}\label{sec:intro}
+
+The abundance of galaxy clusters as a function of mass and redshift traces the growth of structure, since
+it depends, through the halo mass function \citep[e.g.][]{Tinker2008}, on the amplitude of matter
+fluctuations, $\sigma_8$, and on the matter density, $\Omm$. Clusters can be detected through the thermal
+Sunyaev--Zel'dovich (tSZ) effect \citep{SZ1972}, in which the hot gas of a cluster scatters the photons of
+the cosmic microwave background (CMB), leaving a decrement at low frequencies and an excess at high
+frequencies. Because the tSZ surface brightness does not fall with redshift, a tSZ survey detects massive
+clusters out to high redshift \citep{Carlstrom2002}. The Simons Observatory \citep[SO;][]{SO2019} will map
+a large fraction of the sky in six frequency channels with arcminute resolution and low noise. It will therefore detect many more clusters than current surveys and measure their masses with CMB lensing
+\citep{MelinBartlett2015,Madhavacheril2017}.
+
+Planck \citep{Planck2016XXVII,Planck2016XXIV}, the South Pole Telescope \citep[SPT;][]{Bocquet2019,
+Bocquet2024} and the Atacama Cosmology Telescope \citep[ACT;][]{Hasselfield2013,Hilton2021} have built tSZ
+cluster catalogues and used them for cosmology. All of them find clusters mainly with multi-frequency
+matched filters \citep{Herranz2002,Melin2006} (Planck also with PowellSnakes). A matched filter combines
+the frequency maps with the known tSZ spectrum and a template of the cluster profile, and returns a
+signal-to-noise $q$ at each position and template size. The cosmological analyses of these catalogues work at the catalogue
+level, building the likelihood of the observed counts from the mass function, a relation between the tSZ
+signal and mass, and a model of how the finder measures each cluster. In this model, the mean
+signal-to-noise of a cluster is its tSZ signal divided by the noise of the filter, and its measured $q$
+scatters around that mean with unit Gaussian scatter. Analyses of data usually measure the filter noise
+on the observed maps, whereas forecasts take it from a noise table computed for the instrument and the
+CMB. In addition, SPT accounts for the rise in measured significance caused by the search over positions
+and sizes, with $\langle q\rangle=\sqrt{\bar q^2+3}$ for a cluster of unbiased significance $\bar q$
+\citep{Vanderlinde2010}. Likelihoods of this kind are implemented in the \textsc{cosmocnc} package
+\citep{ZubeldiaBolliet2024}.
+
+In simulation-based inference (SBI), the likelihood is replaced by simulations \citep{Cranmer2020}, and a
+neural network trained on pairs of parameters and simulated data returns the posterior directly
+\citep{Papamakarios2016,Alsing2019}. For cluster counts, SBI thus removes the need to write in closed form
+the likelihood of binned or unbinned counts, of their scatter and of their selection. \citet{Zubeldia2025}
+applied it to an SO-like survey with a CMB-lensing mass observable. Their simulator draws haloes from the
+mass function, assigns each halo a tSZ signal and a lensing signal-to-noise, and applies a catalogue-level
+model of the finder with a noise table for the instrument and the CMB. It then compresses each catalogue
+into 21 numbers, namely the counts in bins of $q$ and redshift and the mean lensing signal-to-noise of the
+detections. Similarly, \citet{Regamey2026} applied SBI to mock X-ray cluster surveys, with a forward model
+of the selection. In both cases, however, the simulations are of the catalogue, not of the maps. Since a
+neural posterior converges to the posterior of the model that generated its training simulations, it can
+be no more correct than that model. It can also be overconfident when the network is not well trained
+\citep{Hermans2022}, and coverage tests are therefore needed.
+
+A catalogue model therefore has to carry the finder's behaviour on the maps, and calibrating it on the
+maps is standard practice. Written with a noise table for the instrument and the CMB, as in forecasts,
+the model leaves out three effects of the finder: confusion noise, the search lift and neighbours; and it
+assumes Gaussian scatter, which the finder's errors break through an upward tail. Confusion noise arises
+because the maps also contain the tSZ signal of every other halo, most of them too faint to detect, and the
+finder measures its noise from those maps. The search lift arises because the model takes the position
+and size of each cluster as known, whereas the finder searches over positions and sizes and keeps the
+maximum of $q$, which raises the $q$ of faint clusters. \citet{Vanderlinde2010} describe this lift with
+a fixed correction. Neighbours, finally, are nearby clusters that add their signal to
+each other's peaks on the maps and can be merged into one detection. The selection of a tSZ survey is
+known to depend on the size of a cluster and not only on its flux \citep{Melin2005}. Current analyses include this dependence through the cluster size in the noise table. The effects above, however, also
+depend on the total tSZ signal on the sky, and hence on the cosmological and scaling-relation parameters
+that the analysis infers. A noise measured on the data maps includes the confusion noise of the observed
+sky, but not the search lift, the change of the scatter with the parameters or the upward tail. Moreover,
+in SBI every simulated sky has its own noise, so that the simulator has to produce it, or a calibration
+has to follow it through the parameters.
+
+A map-level simulator avoids these assumptions, since it paints the haloes into frequency maps, adds the
+CMB and the noise, and runs the finder on the maps as on the data. Its output can then be compressed into
+the same summary as the catalogue and used to train a neural posterior. Map-level SBI has been applied to
+weak-lensing maps \citep{Jeffrey2021} and, recently, to the tSZ field itself \citep{EmbilVillagra2026},
+which also carries information through its power spectrum \citep{Bolliet2018,Planck2016XXII} and its
+one-point distribution \citep{Hill2014}. Here we keep the cluster counts as the data and ask two
+questions: whether SBI can use a forward model that runs the finder on the maps at the scale of an SO
+survey, and how such an inference compares with catalogue models calibrated on the maps. Map-level
+simulations are expensive, however, and SBI needs many of them. To our knowledge, no inference of cluster
+counts has yet run the finder on simulated multi-frequency maps in every training simulation. To make this
+affordable, we have implemented the simulator and the finder in \classyszlite{}, a JAX
+\citep{Bradbury2018} package from the \textsc{class\_sz} project \citep{Bolliet2023}. On one GPU, a
+survey of 10 per cent of the sky is then simulated in 0.42\,s and a survey of 40.7 per cent in 1.6\,s.
+
+In this paper, we train neural posteriors on map-level simulations of an SO-like survey with the
+goal-depth forecast noise of \citet{SO2019}, the deepest of its noise levels. We then compare them, on the same simulated skies, with posteriors trained on
+catalogue models. We adopt the summary and the form of
+the catalogue model of \citet{Zubeldia2025}, as well as their prior with narrower flat ranges, under which
+the slope $\alsz$ of the tSZ--mass relation has a flat prior (Section~\ref{sec:sims:survey}). We express
+biases in units of the posterior standard deviation, which we call the posterior width. We find that the
+map-level posterior is within 0.11 widths of the truth at 40.7 per cent of the sky and within 0.12 widths
+at 10 per cent. It also has close to correct coverage across the prior, since its 90 per cent intervals
+contain the truth for 0.88--0.91 of 500 prior skies at 40.7 per cent of the sky. At 10 per cent the range
+is 0.86--0.90, and only its $\alsz$ intervals are slightly too narrow. At each
+survey size, the map-level posterior combines five networks trained with different seeds, and the results
+are robust to the seed (Appendix~\ref{app:robust}). At 40.7 per cent of the sky, a training set of
+10\,000 surveys takes 4.6\,h on one GPU, and the whole comparison about 6 GPU hours and 4 CPU hours.
+
+We then calibrate the catalogue model on map-level simulations, both at one point and across the prior,
+so that it carries the effects described above. Of these, the confusion noise, which is the tSZ signal of
+faint haloes, raises the finder's noise by 4--8 per cent, and the search lift changes with the parameters.
+Neighbours widen the scatter and can capture the detection of a cluster, so that the cluster is not
+matched. In addition, the calibration has to carry the upward tail. The one-point calibration uses the
+finder's noise measured on map-level mocks at the true parameters. At those parameters it is within 0.2
+widths of the truth in $\sigma_8$, the cold dark matter density $\omc$ and the log-amplitude $\asz$ of the relation, and it leaves $\alsz$ 0.5
+widths high. Across the prior, however, its intervals are too narrow or
+off-centre. The noise-level calibration, which follows the parameters through
+the finder's noise level, has close to correct coverage for $\sigma_8$, $\omc$ and $\asz$. However, it leaves $\alsz$ 0.6--0.7 widths high with intervals that are too narrow, which we attribute to the upward tail.
+
+Finally, as a reference, we run the uncalibrated catalogue model, that is, the form of
+\citet{Zubeldia2025} with a noise table for the instrument and the CMB only, as used in forecasts
+(Section~\ref{sec:sims:catalogue}). On our map-level skies, this model is biased by up to 8.3 widths at
+40.7 per cent of the sky and by 5.3 widths at 10 per cent, mostly in $\sigma_8$ and $\alsz$. This bias
+shows the size of the finder's effects at goal depth with a flat prior on $\alsz$. For the reasons given
+in Section~\ref{sec:discussion:scope}, we expect it to be smaller at higher noise, with a noise measured on
+the maps or with informative priors on the relation.
+
+The paper is organised as follows. In Section~\ref{sec:sims} we describe the two forward models, namely
+the map-level simulator with its finder and the catalogue-level model, and in
+Section~\ref{sec:inference} the neural posterior estimation and the checks of bias and coverage. We
+compare the finder with the catalogue model, halo by halo and in the counts, in Section~\ref{sec:finder}. In Section~\ref{sec:calibration} we build calibrated catalogue models from
+map-level simulations and describe the upward tail that they miss. We then compare the posteriors in
+Section~\ref{sec:results}, starting with the map-level posterior and followed by the calibrated models and
+the uncalibrated reference. In Section~\ref{sec:discussion} we discuss map-level inference at survey
+scale, where the calibrated models fall short, the scope of the uncalibrated reference and the limitations
+of the simulator, before concluding in Section~\ref{sec:conclusions}. Finally, we check the robustness of
+the neural posteriors in Appendix~\ref{app:robust}.

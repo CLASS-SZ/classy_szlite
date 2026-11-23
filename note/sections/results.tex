@@ -1,0 +1,241 @@
+\section{Results}\label{sec:results}
+
+We now apply the posteriors of Table~\ref{tab:models} to the same map-level skies, at the two survey sizes
+of Section~\ref{sec:sims:survey} and with the prior of Table~\ref{tab:prior}. We show only the four
+parameters that the counts constrain, namely $\sigma_8$, $\omc$, $\asz$ and $\alsz$. Since the linear
+calibration is trained at 10 per cent of the sky only, it appears only in the coverage test and in the
+$\sigma_8$ bias averaged over the prior. The size-split calibration appears only in
+Section~\ref{sec:calib-size}. In each subsection we present the map-level posterior first, then the
+catalogue models calibrated on maps, and finally the uncalibrated catalogue model, which serves as a
+reference for the size of the finder's effects.
+
+\subsection{Bias at the true parameters}\label{sec:results:bias}
+
+We first apply each posterior to 100 map-level mocks at the true parameters and measure its bias
+$\mathcal{B}$ (equation~\ref{eq:bias}), which Fig.~\ref{fig:bias} plots for each parameter and each
+posterior and Table~\ref{tab:bias} lists. With 100 mocks, the errors of the mean are
+0.04--0.11, so that biases of about 0.1--0.2 widths are resolved.
+
+\begin{table}
+\centering
+\caption{Bias $\mathcal{B}$ of each posterior at the true parameters, in posterior widths, defined as the
+mean over 100 map-level mocks of (posterior mean $-$ truth)/(posterior width) and given with its error of
+the mean. The networks combined (Section~\ref{sec:inference:ensembles}) are, at 10 per cent of the sky, five
+for the map-level posterior and one for each of the others, and at 40.7 per cent, four for the uncalibrated
+model (the fifth training run did not finish within its time limit) and five for each of the others. The
+same values are plotted in Fig.~\ref{fig:bias}.}
+\label{tab:bias}
+\small
+\medmuskip=2mu
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & $\sigma_8$ & $\omc$ & $\asz$ & $\alsz$ \\
+\midrule
+\multicolumn{5}{l}{\emph{10 per cent of the sky (41 tiles)}}\\
+uncalibrated     & $+1.86\pm0.10$ & $-0.77\pm0.06$ & $-1.42\pm0.08$ & $-5.28\pm0.11$ \\
+one-point        & $+0.13\pm0.09$ & $+0.09\pm0.06$ & $-0.06\pm0.08$ & $+0.50\pm0.08$ \\
+noise-level      & $-0.07\pm0.10$ & $+0.11\pm0.06$ & $+0.09\pm0.08$ & $+0.62\pm0.09$ \\
+map-level        & $-0.05\pm0.10$ & $+0.10\pm0.07$ & $-0.05\pm0.08$ & $+0.08\pm0.08$ \\
+\midrule
+\multicolumn{5}{l}{\emph{40.7 per cent of the sky (168 tiles)}}\\
+uncalibrated     & $+2.85\pm0.07$ & $-1.19\pm0.04$ & $-1.74\pm0.06$ & $-8.30\pm0.07$ \\
+one-point        & $+0.20\pm0.08$ & $+0.17\pm0.04$ & $-0.11\pm0.06$ & $+0.52\pm0.06$ \\
+noise-level      & $+0.05\pm0.07$ & $+0.21\pm0.04$ & $-0.03\pm0.06$ & $+0.67\pm0.07$ \\
+map-level        & $-0.11\pm0.08$ & $+0.10\pm0.04$ & $-0.05\pm0.06$ & $+0.03\pm0.06$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We find that the map-level posterior (blue) is within 0.12 widths of the truth in every parameter at both
+survey sizes. Its largest departure in magnitude is $-0.11\pm0.08$ in $\sigma_8$ at 40.7 per cent of the
+sky. Its most significant one, $+0.10\pm0.04$ widths in $\omc$ at the same size, amounts to 2.2 times its
+error (from the unrounded values), and we return to it in Section~\ref{sec:discussion:omegac}. The bias
+of a single network moves by about 0.1 widths from seed to seed (Appendix~\ref{app:robust}).
+
+The two calibrated catalogue models (green and violet) are also within 0.21 widths of the truth in
+$\sigma_8$, $\omc$ and $\asz$ at both survey sizes. However, they leave $\alsz$ high, by 0.50 and 0.52
+widths with the one-point calibration and by 0.62 and 0.67 widths with the noise-level calibration, at 10
+and 40.7 per cent of the sky, respectively. Because the one-point calibration uses the finder's noise
+measured on map-level mocks, we discuss in Section~\ref{sec:discussion:calibrated} what this result implies
+for a catalogue model with the noise measured on the maps.
+
+Finally, the uncalibrated catalogue model (orange) serves as the reference, showing how large the finder's
+effects are at goal depth when the catalogue model leaves them out. On our skies it is strongly biased, and
+at 10 per cent of the sky it places $\sigma_8$ 1.86 widths high and $\alsz$ 5.28 widths low, with $\omc$ and
+$\asz$ also low. Since the shifts in $\sigma_8$ and $\Omm$ partly cancel in
+$S_8 \equiv \sigma_8(\Omm/0.3)^{1/2}$, the bias in $S_8$ is only 0.30 widths, again low.
+
+From 10 to 40.7 per cent of the sky, the bias of the uncalibrated model in widths grows by a factor of about
+1.5, to $+2.85$ in $\sigma_8$ and $-8.30$ in $\alsz$, and by a factor of 1.2, to $-1.74$, in $\asz$. This
+growth does not come from the shift of the posterior mean, which hardly changes with area, going from
+$+0.0115$ to $+0.0103$ in $\sigma_8$ and from $-0.086$ to $-0.084$ in $\alsz$. The posteriors, in
+contrast, become 1.3--1.7 times narrower, by factors of 1.7 in $\sigma_8$, 1.6 in $\alsz$, 1.4 in $\asz$
+and 1.3 in $\omc$, which is less than the factor of 2 expected from four times the area if the counts alone
+set the widths. It is this narrowing that makes the bias in widths grow. Because the two survey sizes
+share their first 41 tiles (Section~\ref{sec:sims:survey}), these biases are not independent. All of them
+hold for our set-up, that is, for goal-depth forecast noise, a noise table for the instrument and the CMB
+only, and a flat prior on the slope $\alsz$ (Section~\ref{sec:discussion:scope}).
+
+\subsection{The posteriors of one mock}\label{sec:results:corner}
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/corner.png}
+\caption{Posteriors of the first map-level mock of the 41-tile survey (10 per cent of the sky) in
+$\sigma_8$, $\Omm$, $\asz$ and $\alsz$, from three posteriors of one network each: the map-level posterior
+(blue), the noise-level calibration (violet) and, as a reference, the uncalibrated catalogue model
+(orange). The off-diagonal panels show the 68 and 95 per cent contours of the two-dimensional marginals
+(thick and thin lines), and hence how the parameters trade off against each other, and the diagonal panels
+compare the one-dimensional marginals with the truth. Black dots and dotted lines mark the true values.
+$\Omm$ is derived from $\omc$, $\omb$ and $h$.}
+\label{fig:corner}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/corner_40.png}
+\caption{As Fig.~\ref{fig:corner}, for the first map-level mock of the 168-tile survey (40.7 per cent of
+the sky), with four posteriors: the map-level posterior (blue, five networks pooled), the noise-level
+calibration (violet, five networks pooled), the one-point calibration (green, one network) and, as a
+reference, the uncalibrated catalogue model (orange, one network). Contours are at 68 and 95 per cent, the
+diagonal panels show the one-dimensional marginals, and black marks the true values.}
+\label{fig:corner40}
+\end{figure}
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/coverage.png}
+\caption{Coverage on 500 map-level skies drawn from the prior, for $\sigma_8$, $\omc$, $\asz$ and $\alsz$
+(columns), at 10 per cent (top row) and 40.7 per cent of the sky (bottom row). The horizontal axis is the
+credible level $\gamma$ of the central interval, and the vertical axis is $\cov(\gamma)$, the fraction of
+skies whose true value lies in that interval, obtained from the rank of the truth among 4000 posterior
+samples. Green shows the one-point calibration, dashed grey the linear calibration (10 per cent only),
+violet the noise-level calibration and blue the map-level posterior. At 10 per cent of the sky each
+catalogue-level posterior is one network and the map-level posterior is five, while at 40.7 per cent the
+one-point calibration is one network and the noise-level calibration and map-level posterior are five
+each. The dotted diagonal $\cov(\gamma)=\gamma$ is that of a posterior with correct coverage, and a curve
+below it means intervals that are too narrow or off-centre in part of the prior. The uncalibrated model is
+not shown, because on map-level skies most of its samples fall outside the prior and are rejected, which
+makes sampling 500 skies impractical. Values at $\gamma = 0.5$ and 0.9 are in Table~\ref{tab:coverage}.}
+\label{fig:coverage}
+\end{figure*}
+
+Since the biases of Table~\ref{tab:bias} are averages over 100 mocks, we show in Figs~\ref{fig:corner}
+and~\ref{fig:corner40} what they mean for a single sky, using the posterior of the first mock in the four
+parameters that the counts constrain best. In place of $\omc$, these corner plots show the derived $\Omm$,
+the density that enters the mass function. At 10 per cent of the sky each of these posteriors, including
+the map-level one, comes from a single network and can therefore differ slightly from the ensembles of
+Table~\ref{tab:bias}.
+
+At 10 per cent of the sky (Fig.~\ref{fig:corner}), we find that the map-level posterior contains the truth, and the
+noise-level calibration almost coincides with it. In contrast, the posterior trained on the uncalibrated
+model misses the truth, placing $\sigma_8$ about two widths high, $\alsz$ several widths low, and $\Omm$
+and $\asz$ low. These are the directions that allow it to explain the deficit of bright clusters on the
+maps with a shallower mass slope. Despite these shifts, the three posteriors have similar widths, which
+shows that on this data vector map-level inference is not more precise than catalogue-level inference.
+
+At 40.7 per cent of the sky (Fig.~\ref{fig:corner40}), the posteriors are narrower. The map-level
+posterior gives $\sigma_8 = 0.812\pm0.003$ and $\alsz = 1.120\pm0.010$, against true values of 0.811 and
+1.123, and the two calibrated models agree with it and contain the truth. On a single mock at the true
+parameters, we therefore cannot tell the calibrated catalogue models from map-level inference. They differ
+from it, however, in two ways that one mock cannot reveal, namely the shift of $\alsz$ by 0.5--0.7 widths
+over 100 mocks (Table~\ref{tab:bias}) and their coverage away from the true parameters, which we test in
+Section~\ref{sec:results:coverage}. The bias of the uncalibrated model is larger at this area, and on this mock
+it gives $\sigma_8 = 0.8231\pm0.0036$, 3.4 widths from the truth, and $\alsz = 1.034\pm0.011$,
+8.3 widths from it.
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/bias_thirds.png}
+\caption{Bias of $\sigma_8$ (posterior mean $-$ truth, in posterior widths) on the 500 map-level skies
+drawn from the prior at 10 per cent of the sky, averaged in thirds (low, middle, high) of each sky's true
+$\omc$ (left), $\asz$ (centre) and $\alsz$ (right). In each panel the thirds run from the lowest to the
+highest true value of one parameter, so that a posterior unbiased everywhere would give a flat row of
+points at zero. Green shows the one-point calibration and violet the noise-level calibration (one network
+each). The dotted line marks zero bias.}
+\label{fig:thirds}
+\end{figure}
+
+\subsection{Coverage over the prior}\label{sec:results:coverage}
+
+\begin{table}
+\centering
+\caption{Coverage $\cov(\gamma)$ at $\gamma = 0.5$ and 0.9, given as $\cov(0.5)/\cov(0.9)$, that is, the
+fraction of 500 map-level skies drawn from the prior whose true value lies in the central 50 and 90 per
+cent credible intervals. A posterior with correct coverage has $0.5/0.9$, and with 500 skies the binomial
+error is 0.022 at $\gamma=0.5$ and 0.013 at $\gamma=0.9$. The number of networks combined is given in
+brackets, and the full curves are shown in Fig.~\ref{fig:coverage}.}
+\label{tab:coverage}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lcccc}
+\toprule
+ & $\sigma_8$ & $\omc$ & $\asz$ & $\alsz$ \\
+\midrule
+\multicolumn{5}{l}{\emph{10 per cent of the sky (41 tiles)}}\\
+one-point (1)    & 0.32/0.65 & 0.40/0.72 & 0.41/0.82 & 0.39/0.80 \\
+linear (1)       & 0.42/0.84 & 0.46/0.86 & 0.47/0.88 & 0.41/0.79 \\
+noise-level (1)  & 0.46/0.90 & 0.47/0.89 & 0.48/0.88 & 0.42/0.78 \\
+map-level (5)    & 0.46/0.90 & 0.47/0.87 & 0.49/0.89 & 0.44/0.86 \\
+\midrule
+\multicolumn{5}{l}{\emph{40.7 per cent of the sky (168 tiles)}}\\
+one-point (1)    & 0.30/0.59 & 0.35/0.68 & 0.40/0.79 & 0.37/0.77 \\
+noise-level (5)  & 0.50/0.86 & 0.51/0.90 & 0.52/0.90 & 0.35/0.74 \\
+map-level (5)    & 0.51/0.90 & 0.47/0.88 & 0.48/0.91 & 0.46/0.88 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A small bias at the true parameters can hide a posterior that fails elsewhere in the prior, and we
+therefore also test the coverage over the whole prior. We draw 500 skies from the prior, run the map-level
+simulator and the finder on each, and count how often the central credible interval of level $\gamma$
+contains the true value (equation~\ref{eq:coverage}). Fig.~\ref{fig:coverage} plots this fraction,
+$\cov(\gamma)$, against $\gamma$, and Table~\ref{tab:coverage} gives $\cov(0.5)$ and $\cov(0.9)$.
+
+The map-level posterior (blue) lies close to the diagonal for all four parameters at both survey sizes,
+with 90 per cent coverage between 0.86 and 0.91 and, at 40.7 per cent of the sky, 50 per cent coverage
+between 0.46 and 0.51. At 10 per cent of the sky we find its $\alsz$ intervals slightly too narrow, with
+a coverage of 0.86, about three binomial errors below 0.9, and its $\omc$ intervals likewise (0.87). At
+40.7 per cent, however, both have close to correct coverage (0.88). We show in
+Appendix~\ref{app:robust} that the value of 0.86 depends neither on the training seed nor on the number of
+simulations.
+
+In contrast, the one-point calibration (green) falls well below the diagonal for $\sigma_8$ and $\omc$. Its 90 per cent intervals contain the true $\sigma_8$ for only 0.65 of the skies at 10 per cent of the
+sky and for 0.59 at 40.7 per cent. The intervals are off-centre over much of the prior
+(Section~\ref{sec:results:thirds}), and this becomes more apparent as the survey grows and the posteriors
+narrow. A calibration that follows the parameters brings $\sigma_8$, $\omc$ and $\asz$ close to the
+diagonal. Their 90 per cent coverage is 0.84--0.88 for the linear calibration (dashed, 10 per cent of the
+sky only) and 0.86--0.90 for the noise-level calibration (violet) at both survey sizes. Neither calibration, however, corrects $\alsz$. Its 90 per cent coverage is 0.79 with the linear and 0.78 with
+the noise-level calibration at 10 per cent of the sky, and 0.74 with the noise-level calibration at 40.7
+per cent. We do not apply this test to the uncalibrated model, because on map-level skies most of its samples
+fall outside the prior and are rejected.
+
+\subsection{Where the calibrated models fail}\label{sec:results:thirds}
+
+To see where in the prior the calibrated models fail, we split the 500 prior skies at 10 per cent of the
+sky into thirds of each sky's true $\omc$, $\asz$ and $\alsz$, and average the bias of $\sigma_8$ in each
+third (Fig.~\ref{fig:thirds}). Because each third averages over the other parameters, no third coincides
+with the single point at which the one-point calibration is fitted.
+
+The bias of the one-point calibration (green) depends strongly on where the sky lies in the prior. It is
+close to zero only in the lowest thirds of $\omc$ ($+0.02$) and $\asz$ ($-0.09$), where the total tSZ
+signal on the sky is smallest. It increases with the tSZ signal, reaching $+0.50$ and $+2.64$ widths
+in the middle and highest thirds of $\omc$ and $+1.00$ and $+2.26$ widths in those of $\asz$. The reason is
+that, where the true $\omc$ or $\asz$ is high, the sky contains more tSZ signal from faint clusters than at the calibration point. The finder's noise is then higher, fewer bright clusters are detected, and the
+posterior interprets the deficit as a higher $\sigma_8$. Since a lower slope $\alsz$ also means more signal
+from faint clusters, the trend is reversed in $\alsz$, with $+1.70$ widths in its lowest third, $+0.85$ in
+the middle and $+0.63$ in the highest. Averaged over the whole prior, the $\sigma_8$ bias of the one-point
+calibration is $+1.06$ widths.
+
+With the noise-level calibration (violet), the model follows these changes and the trends largely
+disappear. Its bias lies between $+0.04$ and $+0.26$ widths in every third except the highest thirds of
+$\omc$ and $\asz$, which contain the skies with the most tSZ signal and where it reaches $+0.47$ and
+$+0.58$, respectively. Over the whole prior, the $\sigma_8$ bias is $+0.32$ widths for the linear
+calibration and $+0.23$ for the noise-level calibration. This residual is largest where the tSZ signal is
+highest and the finder's errors have the heaviest upward tail, which a catalogue model with Gaussian
+scatter does not include (Section~\ref{sec:finder_tail}). Since Fig.~\ref{fig:thirds} has neither a
+map-level reference nor error bars, however, it does not show how much of the residual is due to the
+calibration itself. Part of it may also come from the edges of the prior, because averaging in thirds of a
+parameter correlated with $\sigma_8$ can move the mean posterior offset away from zero even for a
+posterior with correct coverage.

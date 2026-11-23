@@ -32,6 +32,7 @@ nav = [
       "clusters/inference.md",
       "clusters/results.md",
       "clusters/pipeline.md",
+      "clusters/credits.md",
       { "Tutorials" = [
           "clusters/tutorials/one-tile.md",
           "clusters/tutorials/catalogues.md",
