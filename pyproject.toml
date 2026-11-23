@@ -24,23 +24,41 @@ dependencies = [
     "jax>=0.4",
     "numpy>=1.24",
     "mcfit>=0.0.21",
+    "scipy>=1.10",
 ]
 
 [project.optional-dependencies]
 dev    = ["pytest>=7", "pytest-xdist", "pytest-cov"]
+sbi    = ["sbi>=0.23", "torch"]
+docs   = ["zensical", "mkdocstrings[python]", "jupyter", "nbconvert", "matplotlib"]
 plots  = ["matplotlib>=3.6"]
 
 [project.scripts]
 classy-szlite-get-data = "classy_szlite.fetch_data:main"
+mapsim = "classy_szlite.sim.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/CLASS-SZ/classy_szlite"
 Source   = "https://github.com/CLASS-SZ/classy_szlite"
 
+[tool.setuptools.package-data]
+"classy_szlite.sim" = ["data/*.npy", "data/NOTICE"]
+
 [tool.setuptools.packages.find]
 where    = ["."]
 include  = ["classy_szlite*"]
 exclude  = ["tests*", "examples*"]
+
+[tool.pytest.ini_options]
+# gpu: needs a GPU (rusty GPU jobs); slow: minutes; refdata: needs the
+# sz-poisson-blending reference data ($MAPSIM_REFDATA). All three are
+# deselected by default and in CI: run them with e.g. -m "gpu or slow".
+markers = [
+    "gpu: needs a GPU",
+    "slow: takes minutes",
+    "refdata: needs the sz-poisson-blending reference data ($MAPSIM_REFDATA)",
+]
+addopts = "-m 'not gpu and not slow and not refdata'"
 
 [tool.coverage.run]
 source = ["classy_szlite"]

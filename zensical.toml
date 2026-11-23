@@ -1,0 +1,125 @@
+[project]
+site_name = "classy_szlite"
+site_description = "Fast, differentiable cosmology in pure JAX, and a map-level simulator of SZ cluster counts for simulation-based inference."
+site_author = "Boris Bolliet and the CLASS-SZ contributors"
+site_url = "https://class-sz.github.io/classy_szlite/"
+copyright = "Copyright &copy; 2026 Boris Bolliet and the CLASS-SZ contributors"
+repo_url = "https://github.com/CLASS-SZ/classy_szlite"
+repo_name = "CLASS-SZ/classy_szlite"
+docs_dir = "docs"
+site_dir = "site"
+# internal working notes and the old Sphinx set-up are not part of the site
+exclude_docs = """
+mapsim/
+conf.py
+requirements.txt
+_static/ede_nuts_report.md
+"""
+extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/mathjax.js", "https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Installation" = "installation.md" },
+  { "Quickstart" = "quickstart.md" },
+  { "Examples" = "examples.md" },
+  { "Performance" = ["throughput.md", "gradients.md", "convergence.md"] },
+  { "Cluster counts from maps" = [
+      "clusters/index.md",
+      "clusters/forward-models.md",
+      "clusters/finder.md",
+      "clusters/calibration.md",
+      "clusters/inference.md",
+      "clusters/results.md",
+      "clusters/pipeline.md",
+      { "Tutorials" = [
+          "clusters/tutorials/one-tile.md",
+          "clusters/tutorials/catalogues.md",
+          "clusters/tutorials/posterior.md",
+      ] },
+  ] },
+  { "API reference" = ["api.md", "api-sim.md"] },
+]
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["."]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+show_source = true
+show_root_heading = true
+members_order = "source"
+merge_init_into_class = true
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.annotate",
+  "content.code.copy",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "teal"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "teal"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/CLASS-SZ/classy_szlite"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/python"
+link = "https://pypi.org/project/classy_szlite/"
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.arithmatex.generic = true
+pymdownx.betterem = {}
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.keys = {}
+pymdownx.magiclink = {}
+pymdownx.mark = {}
+pymdownx.smartsymbols = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+pymdownx.tabbed.alternate_style = true
+pymdownx.tabbed.combine_header_slug = true

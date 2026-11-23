@@ -1,0 +1,1727 @@
+# mapsim results log
+
+Results after the first tile pipeline; earlier results are in `M0_LOG.md`.
+Runs on rusty's CPU development job (16 cores, JAX 0.12) unless stated.
+
+## 2026-11-18: cluster counts at goal and baseline depth
+
+Script `benchmarks/mapsim/counts_modes.py`: 32 tiles at the fiducial point,
+with the same tile keys at both depths, so halos, CMB and noise seeds are
+identical. Output: `/mnt/ceph/users/bbolliet/mapsim/counts/counts_modes.json`.
+
+Confirmed detections with 5 < q < 40 and 0.01 < z < 1.5, per tile and for
+40% of the sky (165 tiles):
+
+| model | goal | baseline | goal / baseline |
+|---|---|---|---|
+| map level (one finder pass, no masking) | 237.2 ± 3.1 → 39,100 | 171.2 ± 2.5 → 28,300 | 1.39 |
+| catalogue, analytic σ (CMB + noise), k = 0 | 341.7 → 56,400 | 221.8 → 36,600 | 1.54 |
+| catalogue, σ measured by the finder, k = 0 | 232.8 → 38,400 | 163.3 → 26,900 | 1.43 |
+| catalogue, σ measured by the finder, k = 1 | 245.5 → 40,500 | 172.6 → 28,500 | 1.42 |
+| catalogue, the paper's σ table, k = 0 | 92.9 → 15,300 | | |
+
+The catalogue model is Σ λ_cell ⟨P(5 < q_obs < 40)⟩, with:
+- q_obs ~ N(√(q_true² + k), 1) and q_true = y0/σ(θ500);
+- log-normal scatter in y0 and M ≥ 5e13;
+- σ interpolated in ln θ between the 15 filter scales.
+
+**The finder's own noise is high.** Its σ exceeds the analytic σ by 19–29%
+at goal and 14–21% at baseline, peaking at 3.5′–5.7′. The unmasked tSZ of all
+halos enters the covariance it estimates from the map. This accounts for
+most of the gap between the map-level and analytic catalogue counts. It is
+the bias that SZiFi's iterative masking addresses: the earlier project
+measured σ_finder/σ_Y = 1.02–1.07 after masking.
+
+**With the finder's own σ, the catalogue model reproduces the map-level
+counts:**
+- to 2% (goal) and 5% (baseline) with k = 0;
+- to 3% and 1% with k = 1.
+
+**The paper's noise table explains its lower count.** The table is
+`data/so_sim_sz_mf_noise.npy` in cosmocnc_jax, fitted with a cubic in
+log-log as there (fit error ≤ 1.8%; `benchmarks/mapsim/paper_sigma.py`):
+
+| θ | paper σ / our goal σ | paper σ / our baseline σ |
+|---|---|---|
+| 0.5′ | 4.1× | 3.1× |
+| 1′ | 2.5× | 1.9× |
+| 2.7′ | 1.9× | 1.5× |
+| 15′ | 1.1× | 0.98× |
+
+With the paper's table, our λ cells give 15,500 clusters at q > 5
+(0.01 < z < 3, M ≥ 5e13) in 40% of the sky, against the paper's ~16,000.
+The halo model therefore agrees with the paper's; its noise model is what
+differs. Our analytic σ gives 59,300 (goal) and 38,000 (baseline) with the
+same cuts.
+
+**How the paper's table was made.** The cosmocnc paper (arXiv:2403.09589)
+describes it:
+- SZiFi's standard matched filter, with no foreground deprojection;
+- run on 10 Websky tiles holding the CMB, tSZ, kSZ and cosmic infrared
+  background;
+- SO baseline white noise, the same levels as ours, and no atmospheric
+  noise.
+
+Our maps have atmospheric noise but no foregrounds yet (PLAN.md, "simple
+problem first"). The likely culprit is the infrared background, which is
+brightest at 225 and 278 GHz and on small scales. That fits a ratio that
+grows from 1× at 15′ to 3–4× at 0.5′, but the ratio has not been split into
+its parts. SO's own forecast, 16,000 clusters at baseline depth
+(arXiv:1808.07445), agrees with the paper's count.
+
+For comparison, the earlier project's analytic counts (legacy population,
+full sky, q > 5, no blending) give goal / baseline = 128,167 / 81,705 =
+1.57. Here the same kind of calculation gives 1.54.
+
+## 2026-11-18: optimisation bias of the finder
+
+Script `benchmarks/mapsim/optbias.py`. Each depth uses 128 tiles of
+CMB + noise with 100 isolated clusters each, 12,800 per depth:
+- synthesised exactly, on sites 60′ apart, jittered by ±3′, with random
+  sub-pixel offsets;
+- θ500 log-uniform in 0.5′–6′;
+- target q_true = y0/σ(θ500) uniform in 1–12, where σ(θ) is the analytic
+  filter noise for the exact template at θ500.
+
+Output: `/mnt/ceph/users/bbolliet/mapsim/optbias/`. Each quantity is
+measured twice: with the true (analytic) covariance and with the covariance
+estimated from the tile in one pass.
+
+| quantity | goal, true C | baseline, true C | goal, tile C | baseline, tile C |
+|---|---|---|---|---|
+| ⟨q − q_noiseless⟩ at the true pixel and nearest scale | −0.012 ± 0.009 | +0.014 ± 0.009 | −0.044 ± 0.009 | −0.021 ± 0.009 |
+| scatter of the same | 1.000 | 1.002 | 0.976 | 0.974 |
+| noiseless peak / q_true (q_true ≥ 4) | 0.981 | 0.983 | 0.958 | 0.957 |
+| k in q_max ≈ √(q_noiseless,max² + k) + N(0,1), q_true ≥ 4 | 2.78 | 3.09 | 2.21 | 2.47 |
+| k in q_max ≈ √(q_true² + k) + N(0,1), q_true ≥ 4 | 0.91 | 1.43 | −1.73 | −1.57 |
+| σ_tile / σ_true | | | 1.015–1.026 | 1.018–1.029 |
+
+Detection completeness P(q_det > 5) against q_true, true covariance, goal:
+
+| q_true | measured | Φ(√(q²+k) − 5), k = 0 / 2 / 3 |
+|---|---|---|
+| 4–5 | 0.365 | 0.316 / 0.393 / 0.432 |
+| 5–6 | 0.749 | 0.685 / 0.744 / 0.770 |
+| 6–7 | 0.945 | 0.925 / 0.944 / 0.952 |
+
+**The search over position and size has the expected effect.** Measured
+against the finder's own noiseless peak, the maximum over position and the
+15 sizes behaves as √(q² + k) with k = 2.8 (goal) and 3.1 (baseline). That
+is three fitted parameters: two for position and one for size.
+
+**The grid has a cost.** The 0.5′ pixels and 15 sizes lose 1.7–1.9% of q
+against the continuous template at the true position, which catalogue
+models use.
+
+**Net effect against the continuous q_true:**
+- k ≈ 1–1.4: about +0.2 in q at q ≈ 5, nothing at q ≈ 8, and −2% of q for
+  bright clusters;
+- completeness at q > 5 close to the k = 2 curve, as in the earlier project
+  ("between N(q, 1) and N(√(q² + 3), 1); the search adds about 0.2 to q").
+
+**Estimating the covariance from a tile that holds the clusters biases q
+low.** Here the 100 injected clusters raise σ by 2–3% and shift q by −0.02
+to −0.04. In full simulated tiles the unmasked tSZ raises σ by 14–29%
+(previous section). This is what the masking iteration has to remove.
+
+**False peaks on these tiles:** 43–48 kept peaks with q > 4 per 100 deg²
+(true covariance) and 29–34 (tile covariance) with no injection within
+1.5′. The earlier project found 0.80–0.85 per 100 deg² at q > 5.
+
+## 2026-11-18: halo mass function against cosmocnc_jax and colossus
+
+Script `benchmarks/mapsim/hmf_compare.py`; tables in
+`/mnt/ceph/users/bbolliet/mapsim/hmf/report.txt`. classy_szlite is the
+reference, with the production conventions: Tinker08 at 500c, linear in Δ,
+and no neutrinos in ρ_m or Ω_m(z). Each code uses its own P(k):
+- cosmocnc_jax: CAMB backend, one 0.06 eV neutrino, P_tot normalised to σ8;
+- colossus 1.4: EH98, no massive neutrinos.
+
+Halos per 10° × 10° tile, M ≥ 5e13, 0.01 < z < 3:
+
+| point (σ8, ω_c, h) | classy_szlite | cosmocnc_jax | colossus | classy_szlite defaults |
+|---|---|---|---|---|
+| fiducial (0.811, 0.121, 0.674) | 4,398 | 1.0002 | 0.981 | 1.007 |
+| low corner (0.7, 0.0804, 0.704) | 695 | 1.0005 | 0.995 | 1.011 |
+| high corner (0.9, 0.204, 0.644) | 16,652 | 1.0002 | 0.973 | 1.000 |
+
+The paper's five redshift bins agree as well: cosmocnc_jax to within 0.1%,
+colossus 0.966–1.003.
+
+**dn/dlnM, fiducial point:**
+- cosmocnc_jax agrees to within 0.2% for M ≤ 1e14. Above that it differs by
+  0.3–1.5% at 1e15 and 1–4.5% at 3e15, where there are under one halo per
+  tile.
+- Those differences multiply out of:
+  - the emulator's P(k) against CLASS (within 0.2% for 0.01 < k < 2 /Mpc);
+  - the neutrino set-up;
+  - CAMB against CLASS.
+- Conventions and numerics add about 0.1%.
+- colossus differs by −2% to +9% at z ≤ 1 (the +9% at 3e15) and up to
+  −10% at 1e14 and z = 3. All of it is its EH98 σ(M).
+
+**Other checks:**
+- **Tinker f(σ)** at identical σ, z and integer Δ: the three codes agree to
+  7e-16.
+- **σ(M) and its slope from a shared P(k)**, against direct quadrature:
+  - classy_szlite is within 2.7e-4. The residual is a ripple from
+    finite-differencing a piecewise-linear σ(M); using the FFTLog dσ²/dR
+    would remove it.
+  - cosmocnc_jax is within 7e-4 to 1.1e-3.
+  - Neither meets the 1e-4 code-test tolerance in the plan. The physics
+    agreement is at the percent level, as expected.
+- **ω_c = 0.204,** outside the emulators' box (0.0801–0.2000): the emulator
+  stays as close to CLASS there as at the fiducial point (≤ 0.1% in
+  dn/dlnM up to 3e14, ≤ 1% at 1e15). The extrapolation is harmless.
+- **classy_szlite's defaults against production:**
+  - interpolating in log10 Δ gives −0.3% to −2.3% at 1e13;
+  - including neutrinos in ρ_m and Ω_m(z) gives +0.6% to +1.9%;
+  - net, up to +1.8% in counts.
+
+## 2026-11-18: priors: halo load at the edges of narrower boxes
+
+Script `benchmarks/mapsim/prior_corners.py`; output
+`/mnt/ceph/users/bbolliet/mapsim/priors/prior_corners.json`. These numbers use
+the mass function interpolated in log10 Δ, the production setting from today
+(next section).
+
+The proposed boxes put each edge a fixed number of the paper's posterior
+widths from the fiducial value. The widths are the likelihood standard
+deviations in Table 1 of arXiv:2504.10230: 0.0051 in σ8, 0.0060 in ω_c and
+0.028 in A_SZ.
+- **wide: 8 widths, adopted for all map-level runs.** Posteriors at 10% of
+  the sky are about 1.3× the paper's, with a quarter of our clusters.
+- **narrow: 6 widths, an option for the 40%-sky runs.** That is 3 for where
+  the posterior can land from mock to mock, 2 for the 95% half-width, and 1
+  of margin.
+- **Edges and other parameters.** ω_c is clipped at the paper's lower edge.
+  α_SZ and the Gaussian priors are unchanged.
+
+h is at ±3σ of N(0.674, 0.01). Halos are per 10° tile.
+
+| box | σ8 | ω_c | A_SZ | halos ≥ 1e13, relative to the fiducial 73,030 | average over the prior | halos ≥ 5e13 | ln(10¹⁰A_s) |
+|---|---|---|---|---|---|---|---|
+| paper | 0.700–0.900 | 0.0804–0.204 | −4.41 to −4.21 | 0.26–2.68 | 1.17 | 683–16,477 | 2.12–3.81 |
+| wide | 0.770–0.852 | 0.0804–0.169 | −4.53 to −4.08 | 0.42–1.94 | 1.05 | 1,386–10,516 | 2.51–3.70 |
+| narrow | 0.780–0.842 | 0.085–0.157 | −4.48 to −4.13 | 0.48–1.73 | 1.01 | 1,649–9,069 | 2.62–3.60 |
+
+The averages come from 256 random draws from each prior, with the Gaussian
+priors truncated at ±4σ.
+
+Four goal-depth tiles were run at each box's heaviest corner (high σ8, high
+ω_c, low h), with the most peaks: A_SZ at the top of the box, α_SZ = 1 and
+σ_lnq = 0.323 (+3σ).
+
+| box | peaks with q > 4 (buffer 2,048) | detections in the data vector (fiducial 237) | buffer overflows | CPU s per tile |
+|---|---|---|---|---|
+| paper | 1,625–1,701 | 807–878 | confirmation buffer (16,384 halos ≥ 5e13) | 7.5 |
+| wide | 1,454–1,542 | 797–833 | none | 5.9 |
+| narrow | 1,210–1,335 | 634–736 | none | 5.2 |
+
+- **ω_c stays inside the emulators' training range** (0.0801–0.2000) in
+  both new boxes, so the extrapolation question disappears.
+- **ln(10¹⁰A_s) still leaves the emulators' range** (2.5–3.5) at the top.
+  The linear rescaling handles that exactly, as before.
+- **The heaviest load falls** from 2.7× the fiducial to 1.9× (wide). The
+  average falls from 1.17× to 1.05×.
+
+## 2026-11-18: decisions
+
+- **Priors:** the wide box above for all map-level runs, recorded in PLAN.md.
+  - Narrowing to the 6-width box for the 40%-sky runs waits for the first
+    map-level posteriors.
+  - Catalogue-level analyses of map-level mocks keep the paper's priors, with
+    A_SZ widened to −4.53 to −4.08.
+- **Mass function:** Tinker08 is now interpolated in log10 Δ
+  (`sim/halos.corner_density`).
+  - Against linear in Δ, it lowers the fiducial halo count by 0.53%
+    (M ≥ 1e13) and 0.63% (M ≥ 5e13).
+  - cosmocnc_jax's linear default now gives more halos above 5e13: 0.65% at
+    the fiducial point, 1.25% at the paper's low corner and 0.73% at its high
+    corner (`hmf_compare.py` data). In dn/dlnM the difference reaches 2.3% at
+    1e13. That difference is accepted.
+  - Numbers earlier in this log used linear in Δ.
+  - The simulator tests pass (37 passed).
+- **Stacked lensing:** at SO goal depth, to match the tSZ maps. σ_κ(θ500)
+  will come from the goal lensing noise curve with our own filter, checked
+  against cosmocnc_jax's baseline table.
+
+## 2026-11-18: the masking pass in the finder
+
+What it does (`sim/mmf.py`: `cluster_mask`, `masked_cov`; `sim/simulator.find_clusters`):
+
+- After the first pass, every peak with q > 4 is masked with a disc of radius
+  3θ_j, where θ_j is the filter size at which the peak was found. The discs
+  are built as FFTs of per-size peak maps times integer-disc kernels, which
+  reproduces "distance ≤ r" exactly. Peaks are masked before merging and
+  confirmation.
+- The covariance is re-estimated outside the discs with the earlier project's
+  whitened estimator. Each mode is whitened with the first-pass covariance of
+  its bin. The whitened maps are masked, and their binned spectra are divided
+  by the kept fraction and un-whitened.
+- The filter then runs again on the unmasked maps. There is one iteration by
+  default (`TileConfig.n_iter = 1`, as in SZiFi). Merging and confirmation use
+  the final pass.
+- The tile output now also carries the first-pass σ_j (`sigma0`), the masked
+  fraction and the number of discs. The peak-overflow flag covers all passes.
+
+Checks (`tests/test_sim_mask.py`; 54 tests pass over all simulator test files):
+
+- **Discs:** the FFT discs equal a direct construction, for 300 random peaks
+  of all sizes, some at the tile edges.
+- **Nothing masked:** the estimator returns the input covariance to 9e-7 (in
+  units of that covariance; float32 FFTs).
+- **No clusters:** on CMB + noise tiles with ~60 random discs (18–19% masked),
+  σ_j from the masked estimate is 0.992–0.995 (goal) and 0.993–0.996
+  (baseline) of the analytic σ_j. The unmasked estimate gives 0.995–0.996.
+  The earlier project measured 0.990–0.995.
+- **Against the earlier project's own code** (szsim, float64): on one of our
+  fiducial goal tiles with 487 first-pass peaks, the mask is the same pixel
+  for pixel (28.0% masked). The masked covariance agrees to 1.3e-6 in
+  whitened units, and σ_j to 3e-8. The reference is
+  `$MAPSIM_REF/szsim_mask.npz`, from `benchmarks/mapsim/refgen_szsim_mask.py`.
+
+16 fiducial tiles per depth (`benchmarks/mapsim/mask_check.py tiles`). The
+noise columns give σ_finder/σ_analytic over the 15 sizes, 0.5′ to 15′:
+
+| | first pass | after one iteration | after two | masked fraction, one iteration | data vector per tile: first pass, one, two |
+|---|---|---|---|---|---|
+| goal | 1.184–1.276 | 1.037–1.076 | 1.028–1.064 | 24.1% (19.5–30.0%) | 240.6, 323.2, 329.4 |
+| baseline | 1.137–1.201 | 1.026–1.056 | 1.018–1.047 | 21.2% (18.0–26.5%) | 173.2, 222.5, 227.2 |
+| earlier project, goal (324 tiles) | 1.160–1.242 | 1.035–1.069 | | 23.9% (15.3–34.7%) | |
+| earlier project, baseline | 1.118–1.176 | 1.024–1.051 | | 21.2% (13.4–31.4%) | |
+
+- After one iteration our noise is within 0.01 of the earlier project's at
+  every size. That holds even though our first pass is 0.02–0.03 higher (more
+  tSZ from our halo model). The masked fractions match.
+- **Masking raises the data vector** by 34% at goal and 28% at baseline over
+  the first pass. Goal over baseline is now 1.45.
+- **One iteration is not converged.**
+  - A second iteration lowers σ_j by a further 0.8–1.5% and raises the data
+    vector by 1.9% (goal) and 2.1% (baseline).
+  - It masks 37% (goal) and 33% (baseline) of the tile, because more peaks
+    pass q > 4.
+  - We keep one iteration, as SZiFi and the paper's pipeline do. The
+    simulator applies the same finder that will be applied to the data, so
+    the stopping point is part of the forward model, not a bias.
+- **CPU time of the finder on one tile:** 0.15 s for one pass and 0.38 s
+  with the masking iteration (×2.5). `spike.py` now times a "finder" stage
+  for the GPU measurement.
+
+Counts and the scatter of q, with masking:
+
+- **Counts against the catalogue model** (`counts_modes.py`, 32 tiles,
+  masking on by default):
+  - 326.1 ± 3.4 per tile at goal and 221.7 ± 2.8 at baseline, or 53,800 and
+    36,600 clusters in 40% of the sky. Goal over baseline is 1.47.
+  - Against the catalogue model with the finder's own σ, simulation over
+    model is 1.029 (goal) and 1.050 (baseline) for k = 1, and 0.974 and 0.989
+    for k = 2. Before masking, the k = 1 values were 0.966 and 0.992.
+- **Scatter of q away from clusters** (`mask_check.py scatter`, 8 tiles,
+  1.4826 × MAD over the pixels outside the mask):
+  - First pass: 0.84–0.90 (goal) and 0.88–0.92 (baseline). The first pass's
+    noise estimate holds the bright clusters' power, so q is
+    under-normalised.
+  - After masking: 0.989–0.997 and 0.994–1.000, the unit scatter that the
+    catalogue model assumes.
+  - The shift in simulation over model goes the way this predicts. The
+    remaining +3–5% at k = 1 is not yet explained. Candidates are blending,
+    fragments of large clusters and chance alignments with massive halos.
+- **Progress page:** updated with a masking figure, the masked discs on the
+  patch and the new checks (artifact version 2; data from
+  `diagnostics_data.py`).
+
+The peak buffer with masking:
+
+- **Masking raises the final-pass peak count.** At the adopted box's heaviest
+  corner, the first pass gives 1,454–1,542 peaks with q > 4. After masking
+  the final pass gives 2,745–2,859, which overflowed the 2,048 buffer in all
+  three boxes (`prior_corners.py`).
+- **Fix 1: the final pass keeps only q > 5** (`TileConfig.q_final`, the data
+  vector's lower edge). This is exact.
+  - A peak is kept unless a neighbour within 1.5′ has a higher q, so peaks
+    with q ≤ 5 never remove a q > 5 peak. Confirmation works peak by peak,
+    and the histogram counts q > 5 only.
+  - Checked by a unit test on a dense synthetic catalogue, and on 4 fiducial
+    tiles, where the data vectors are bit-identical. The final-pass peaks drop
+    from ~640 to ~360 per tile.
+  - Passes that build a mask still keep every q > 4 peak.
+  - `n_peaks` in the tile output now counts the final pass's q > 5 peaks.
+- **Fix 2: the buffer is raised to 3,072.** Heaviest corners with masking:
+  - adopted box: 1,819–1,890 final-pass peaks, no overflow, the same data
+    vectors as with 2,048;
+  - 6-width box: 1,463–1,545;
+  - the paper's box: 2,039–2,142, with its confirmation buffer (16,384 halos
+    ≥ 5e13) still overflowing, as before.
+- `priors/prior_corners.json` now holds the masked runs. The first-pass-only
+  version is kept as `prior_corners_first_pass_only.json`.
+- 55 tests pass.
+
+## 2026-11-18: NaMaster, GMaster and szifi_jax
+
+- **NaMaster is not used** anywhere in mapsim or in the earlier finder. It is
+  pinned only in the separate environment that runs SZiFi itself.
+- **Coupling corrections are not needed for the periodic-tile finder.** A
+  Monte Carlo of our whitened masked estimator ran on 80 CMB-plus-noise tiles
+  × 4 random-disc masks (16–20% masked, SO goal), with our own scratch code
+  from the standard flat-sky formulas.
+  - The mask lowers σ_j by 0.09% (0.5′) to 0.21% (15′), relative to the
+    unmasked estimate of the same tiles.
+  - Dividing the whitened pseudo-spectra by each bin's in-band coupling row
+    sum instead of the kept fraction (3 more FFTs per tile) removes only ~0.02
+    points of that. That part is the leakage at the band edges: 2–9% in the
+    first and last bins, ~0.1% elsewhere.
+  - A full per-tile coupling inversion has the same mean as the row sums, but
+    it adds scatter and makes the σ deficit larger. It can also break the
+    per-bin Cholesky, because the inverse coupling has negative off-diagonal
+    terms. And it would make the finder ~7–12× slower.
+  - The rest is finite-sample scatter from whitening with a noisy per-bin
+    estimate. This is the same effect that puts the unmasked estimate 0.4–0.5%
+    below the analytic one. A zero-cost fix to test: scale each bin's inverse
+    covariance by (n − p − 1)/n, with n modes per bin and p = 6.
+  - All of these are at least 20× smaller than the 3.7–7.6% σ excess that
+    unmasked cluster signal leaves after one masking iteration. They also act
+    identically on data and simulations.
+- **GMaster** (a GPU re-implementation of NaMaster in JAX + CUDA; no licence):
+  - Its strength is fast float32 HEALPix transforms and curved-sky coupling,
+    12–22× faster than NaMaster on 96 cores.
+  - Its flat-sky path is an interface port that cannot run at 1200² as
+    written.
+  - Nothing to take now. For the full-sky stage we would write our own:
+    - fixed-window coupling per tile geometry, still with a per-tile
+      normalisation for the cluster discs, which multiply the fixed window;
+    - curved-sky quadrature, to validate simulated spectra.
+- **szifi_jax** (a near-literal JAX port of SZiFi; no licence):
+  - It inherits SZiFi's known problems: the masking iteration never runs a
+    second pass, positions are shifted by half a pixel, the inpaint-and-blend
+    noise estimate is biased, and out-of-band round-off is amplified. Some
+    merge modes are broken, and it still needs NaMaster.
+  - Our finder already has its speed-ups and is roughly 20–75× faster per
+    tile.
+  - Ideas to write ourselves:
+    - the CIB-deprojected filter, for the foreground stage (two more per-bin
+      dot products in the weights; quantify its signal-to-noise cost first);
+    - greedy highest-q-first merging, as a candidate fix for merge chains
+      (time it on the GPU first);
+    - a minimum disc radius that follows the beams (SZiFi's
+      min_radius_mask_arcmin).
+- **Progress page:** the masked discs are now drawn as shaded vector shapes
+  with a toggle; markers sit on pixel centres (artifact version 5).
+
+## 2026-11-18: GPU tile 0 — halos now keyed by cell
+
+- **Symptom:** in the 400-tile GPU masking run, tiles 1–15 matched the CPU
+  run exactly, but tile 0 had 7 more first-pass peaks and 368 detections
+  against 348.
+- **Cause, found by a stage-by-stage comparison** (`diag_tile.py`; GPU with
+  default and deterministic ops):
+  - The GPU drew one more halo (73,830 against 73,829).
+  - In cell (z ≈ 0.6, M ≈ 1.3e13), with λ = 22.5, the CPU drew 17 and the GPU
+    18. For λ ≥ 10, JAX's Poisson sampler uses rejection with log-gamma
+    functions, whose last bits differ between CPU and GPU, so an accept
+    decision occasionally flips.
+  - Halo attributes were drawn per buffer slot. So that one extra count moved
+    every later slot to a different cell, and the rest of the tile became a
+    different realisation.
+  - Statistically harmless, but not reproducible across hardware, and it
+    stopped seeds being reused smoothly across θ.
+- **Fix** (`sim/halos.sample_halos`): each halo's random numbers (position,
+  offsets, z, ln M, scatter) come from a key folded with its cell and its
+  index within the cell. A changed count now adds or removes halos in that
+  cell only.
+  - New test `test_halos_keyed_by_cell`: doubling one cell's λ (39 → 72
+    halos) leaves all 72,399 other halos identical.
+  - The Poisson and bilinear-sampler tests pass, and so do all 56 tests.
+  - 32 goal tiles: 324.9 ± 3.3 detections per tile (326.1 ± 3.4 before) and
+    73,056 halos (λ = 73,030).
+  - Realisations differ from earlier runs, which stay statistically valid.
+- **Confirmed on the GPU** (job 7496298, snapshot 6073cc5, default and
+  deterministic ops):
+  - Tile 0 still draws one more halo on the GPU: M = 1.2e13, z = 0.62, the
+    same cell as before. Nothing else differs.
+  - The maps differ in 4 pixels around it, σ_j by ≤ 2e-6, the first-pass
+    peaks are equal (503) and the data vector is equal (361).
+  - Tile 1 agrees to round-off.
+
+## 2026-11-18: stacked CMB lensing (the 21st number)
+
+- **Model** (`sim/lensing.py`; the paper's catalogue-level model):
+  - For each data-vector detection, from its matched halo:
+    p̄ = κ(r_s; 0.92 M500, z)/σ_κ(θ500(0.92 M500)), with log-normal
+    scatter 0.22, then unit Gaussian noise.
+  - The tile returns Σ p and the count, and the summary is the mean.
+  - `summaries.confirm` now returns the matched halo's slot.
+  - `Theta` gains `beta_lens` = 0.92 and `sigma_lnp` = 0.22.
+  - κ(r_s) = 4π(G/c²) Σ(r_s) D_l (1 − χ_l/χ*), for an NFW halo with
+    c500 = 3 truncated in 3D at 5 R500 (Zubeldia & Challinor 2019, Eqs.
+    18–20). Σ(r_s) = 0.66259 ρ0 r_s, and χ* = 13,836 Mpc at the fiducial
+    point.
+- **σ_κ(θ500)** (`benchmarks/mapsim/lens_table.py` → `sim/lens_tables.py`):
+  - Our own matched filter: that template normalised at the scale radius,
+    the SO v3.1.1 minimum-variance curve, reconstruction noise only,
+    2 ≤ ℓ ≤ 3000.
+  - On the baseline curve it reproduces the shape of cosmocnc_jax's table to
+    1.2% over 0.74′–5.87′.
+  - But the table is larger by a constant factor 1.450 that no variant
+    explains. Tried: truncation in projection, other estimator columns,
+    adding the lensing power spectrum to the noise (much worse), other
+    multipole ranges.
+  - Both tables carry that constant, to stay consistent with the paper's
+    mocks. At goal depth σ_κ is 13–14% lower than at baseline.
+  - The constant is still to be explained, by asking the paper's authors.
+- **Checks:**
+  - `tests/test_sim_lensing.py`: the NFW constants against quadrature;
+    κ(r_s) against an independent route via Σ_crit, to 2e-5; the table
+    against the reference to 1.5%; the moments of p; the stacked selection
+    equal to the histogram count. 62 tests pass.
+  - 32 fiducial tiles (`benchmarks/mapsim/lens_check.py`): stacked p = 0.236
+    ± 0.011 at goal and 0.235 ± 0.014 at baseline. The catalogue model with
+    the finder's own noise gives 0.241 and 0.236.
+  - Over 40% of the sky the error on the mean would be ±0.004–0.005 (2%).
+- **Correction, same day:** the 1.450 factor is explained. The reference
+  table was made with the tSZ-deprojected lensing noise curve (deproj1,
+  v3.1.1), over the file's full range 2 ≤ ℓ ≤ 5000.
+  - With that curve, our filter with the documented normalisation (κ at the
+    scale radius) reproduces cosmocnc_jax's baseline table to 0.3% in level
+    and 0.3% in shape, with no free factor.
+  - The paper's text cites the deproj0 file name. deproj1 is the sensible
+    choice for clusters, because their own tSZ biases a standard
+    reconstruction. It is 2.1–2.5× noisier in power at ℓ = 500–2000.
+  - Production now uses deproj1, SENS1 for baseline and SENS2 for goal; the
+    fudge factor is gone. At goal, σ_κ is 18% below baseline.
+  - 32 tiles: stacked p = 0.250 ± 0.011 at goal (catalogue model 0.256) and
+    0.236 ± 0.014 at baseline (0.237).
+  - The lensing tests pass, with the table matching the reference to 1%.
+  - Ruled out along the way: deproj2 (CIB deprojected), v3.1.0, the TT and
+    polarisation-only columns, and the lensing power spectrum in the noise.
+
+## 2026-11-18: progress page, version 6
+
+- Added: the data vector marked complete; the measured GPU time (9.4 ms per
+  tile with masking); a "Since the last update" section; five new checks
+  (GPU against CPU, 400-tile masking, lensing table, stacked lensing, MSS2
+  depth); a lensing-filter figure; an MSS2 depth figure.
+- Next steps updated: the MSS2-calibrated noise generator, the real
+  footprint and mask, SZiFi on identical maps, inference.
+- Data: `diagnostics_data.py` now also reads `lensing/lens_check.json`, the
+  lensing tables and the MSS2 check (`mss2/mss2_noise_check.json`).
+
+## 2026-11-19: MSS2 noise through the finder
+
+- **Data at Flatiron.** The MSS2 noise maps (4 splits × 6 bands), the six coadd
+  inverse-variance maps, 60 mnms simulations (sims 0–4 of each split and tube)
+  and Kaper's 70% Galactic mask: 91 files, 142.6 GB, in
+  `/mnt/ceph/users/bbolliet/mapsim/mss2/raw`. Copied from NERSC through the
+  data-transfer node at 2–3 MB/s; every file's size matches its FITS header,
+  and rsync checked every file.
+- **Tiles** (`benchmarks/mapsim/mss2_tiles.py`, 12 minutes on 16 cores):
+  - 32 tiles of 10° at dec −40° to +10°, fully observed in all bands and ≥ 90%
+    inside the mask, stored with a 2° margin, for the finder test; 64 tiles
+    for the statistics of the maps.
+  - The 2′ cut-outs now come from the 0.5′ rows with integer arithmetic.
+    Rounding the tile's mean declination, which sits on a 2′ pixel edge, had
+    put them one 2′ row south in four of the five declination bands.
+- **The maps' non-Gaussianity** (90 and 150 GHz, each map against a Gaussian
+  copy of itself, after removing scales above ~30′; mean over 64 tiles):
+  - mnms matches the MSS2 band power to 0.3–0.8% at ℓ = 300–5000.
+  - With the depth changes included, MSS2's excess kurtosis at 150 GHz and
+    ℓ = 1000–3000 is +0.54 ± 0.07; mnms reproduces +0.27 ± 0.03. At 90 GHz:
+    +0.16 against +0.11.
+  - After dividing by the local noise level: +0.055 ± 0.006 at 150 GHz and
+    ℓ = 1000–3000, with twice the Gaussian rate of 4σ excursions; mnms has
+    none (−0.005 ± 0.001). Smaller at 90 GHz (+0.013 ± 0.003), none at
+    ℓ = 3000–5000. No skewness anywhere.
+  - The splits differ: at 150 GHz split 3 has 0.26–0.72× the band power of
+    split 0, and mnms copies this.
+- **Streaks.** The maps with the most false peaks have one narrow streak of
+  2–3.7× the median noise, in one split only, at the same place at 90 and
+  150 GHz (one tube), along the scan direction, and absent from the coadd
+  depth map: a single noisy observation that the map-maker did not
+  down-weight. In the three worst maps, 83–97% of the false peaks above
+  q = 5 sit where the noise is above 1.3× its median.
+- **Finder test** (`benchmarks/mapsim/mss2_finder_test.py`; 32 tiles, about
+  25 minutes per run on 16 cores):
+  - Five kinds of noise, at one-split depth and at four-split depth (the plain
+    mean of the splits: a proxy for the coadd, about 20% noisier than the MSS2
+    coadd at 150 GHz because the splits differ):
+    - MSS2 itself;
+    - mnms, upsampled from 2′ after apodising its margin. Above ℓ = 4000–4800
+      on the sky it crosses over to a Gaussian copy of the matching MSS2 map's
+      own noise, because mnms stops at ℓ = 5400 and the finder uses 90–280 GHz
+      up to ℓ ≈ 8000. Those multipoles are therefore an oracle, not a model;
+    - Gaussian noise with MSS2's 2D spectra (phases randomised on the cut-out
+      with its margin, then cropped);
+    - the same with MSS2's depth pattern (coadd inverse variance, 8′
+      smoothing);
+    - isotropic Gaussian noise with MSS2's azimuthally averaged spectra and
+      band correlations: the simulator's kind of noise.
+  - Every map gets its tile's lensed-CMB realisation and the finder's 30′
+    taper. The finder runs as in production (masking pass, merging within
+    1.5′). 64 clusters per tile (θ500 = 0.5′–6′, q = 2–10) are injected at
+    four-split depth.
+  - Noise peaks per 64 deg² above q = 4 / 4.5 / 5, on the simulator's q scale
+    (next item), with the masking at the equivalent threshold:
+    - one split: MSS2 37.2 / 7.7 / 1.27. As fractions of MSS2: mnms 0.93 /
+      0.82 / 0.66; Gaussian with the depth pattern 0.84 / 0.68 / 0.48;
+      Gaussian with the 2D spectra 0.75 / 0.57 / 0.34; isotropic Gaussian 0.74
+      / 0.56 / 0.35 (errors 0.02–0.08).
+    - four splits: MSS2 41.5 / 8.1 / 1.59. Fractions: mnms 0.88 / 0.72 /
+      0.53; depth pattern 0.84 / 0.66 / 0.48; 2D spectra 0.72 / 0.54 / 0.34;
+      isotropic 0.72 / 0.53 / 0.27 (errors 0.04–0.2).
+    - The excess is largest at dec +5°, where the depth changes fast across
+      the tile, and at −15°. By cluster size, mnms matches MSS2's false peaks
+      for θ500 ≥ 1′ (0.96–1.02 at one-split depth) and gives 0.8 below, where
+      its high multipoles are the stitched copy.
+  - The finder's noise level σ_j:
+    - Before the masking pass, every model is within 0.2% of MSS2.
+    - After it, MSS2's σ_j is 0.2–0.7% lower than the Gaussian models' (0.4–0.9%
+      when the pass masks twice as much), because the pass removes its noisiest
+      patches. mnms is within 0.1–0.6%.
+    - The same injected clusters get q 0.2% higher in MSS2 noise (0.4% with
+      the heavier masking).
+  - Completeness of the injected clusters (detected with q > 5, in bins of
+    noiseless q) agrees between all kinds to within 0.03. The noise part of q
+    at the clusters has an rms of 1.08–1.11 for every kind.
+- **The q scale of tapered cut-outs** (the same isotropic Gaussian noise as a
+  tapered cut-out and as a periodic tile, same CMB, 32 tiles):
+  - σ_j is 7.6% lower on the cut-out for θ500 ≤ 2′, 7.3% at 5.7′ and
+    5.2–5.5% at 15′. The finder estimates the noise from the tapered map, whose
+    mean square is 0.879 of the interior's.
+  - Interior q has an rms of 1.08 on the cut-out, against 1.00–1.01 on the
+    periodic tile.
+  - Noise peaks above q = 4 / 4.5 / 5 are 2.6 / 3.5–3.7 / 5.2–5.7× more
+    frequent, and the masked fraction rises from 0.09–0.10 to 0.16.
+  - The same injected clusters get q 7.0–7.2% higher.
+  - All the noise-model comparisons share the cut-out geometry. Their counts
+    are converted with the σ_j ratio per scale and a threshold calibrated on
+    the isotropic noise.
+  - For the real data, the finder's noise estimate must be corrected for the
+    taper, or the simulator must make the same tapered cut-outs.
+- **Review.** Five independent reviews, each checked by a sceptic, covered
+  the tile geometry, the statistics, how the noise kinds are built, how the
+  finder is used, and the test's design. They changed the test:
+  - The Gaussian copies were first made from the untapered tile, which spread
+    the edge jumps' power over the whole tile (σ 1.4–2× too high). They are
+    now made from the cut-out with its margin, tapered there, then cropped.
+  - Their random phases come from a real white field, so the rfft symmetry
+    holds.
+  - The mnms stitch is now in true ℓ: on CAR pixels mnms's limit along RA is
+    5400 cos(dec), 4420 at dec −35°, which had left a hole. It now goes to
+    the split's own high-ℓ noise: at 150 GHz MSS2 is not white at
+    ℓ = 5000–8000, and white noise at the ℓ = 8000–14000 level overshot by
+    1.3–1.7×. It is applied before cropping, which removed 10% extra power at
+    the join.
+  - Other changes: peaks merged as in production, CMB in every map, the
+    four-split kinds, errors paired by tile, the isotropic kind and the
+    geometry run.
+  - The maps' statistics now use a local high-pass and a Gaussian copy of
+    each map.
+- **What it means for the noise generator.**
+  - For the clusters, Gaussian noise with MSS2's spectra is nearly enough:
+    the finder's noise level comes out within 0.2–0.9% and the completeness
+    exactly.
+  - The residual is the masking pass's response to MSS2's streaks: cluster q
+    0.2–0.4% higher. That is probably 0.5–1% in counts above a threshold,
+    near the Poisson error over 40% of the sky. It needs either streaks in
+    the generator or a calibrated correction.
+  - False peaks are 3× the Gaussian rate but few: about 1.3–1.6 per 64 deg²
+    above q = 5. They enter the data vector only by chance alignment with a
+    massive halo.
+  - mnms reproduces half to two thirds of the excess false peaks and roughly
+    halves the σ_j offset, because it is fitted to MSS2 itself. It stops at
+    ℓ = 5400.
+- **Next:**
+  - Build our own GPU generator: Gaussian noise with MSS2's 2D spectra per
+    declination band, the band correlations and the depth pattern. Validate
+    it with this test.
+  - Measure what the residual does to the data vector: the same simulated
+    sky with MSS2 noise and with the generator's noise.
+  - Decide on streaks from that number: a scattering-transform model, or a
+    streak injector calibrated on MSS2.
+  - Add the taper correction for real data.
+- **Progress page, version 7:** the MSS2 test (false peaks per noise model,
+  the streak picture), five new checks, an updated "Since the last update",
+  and the generator and taper correction in "Next".
+
+## 2026-11-20: MSS2 noise and the data vector
+
+- **Test** (`benchmarks/mapsim/mss2_datavector_test.py`; 32 MSS2 tiles × 16
+  sky realisations; about 3.5 hours on 16 cores):
+  - The simulator's fiducial sky (halos above 10¹³ M☉, tSZ painted by the
+    production painter, lensed CMB) goes into every noise map of a tile.
+  - The production pipeline gives the data vector: the finder with masking,
+    merging, confirmation, the 4 × 5 counts and the stacked-lensing sample.
+    The lensing part is the noiseless mean p̄, so it measures selection only.
+  - The same sky goes into every noise map of a tile, so the comparison is
+    paired.
+  - Noise kinds:
+    - MSS2;
+    - mnms;
+    - Gaussian with each tile's own 2D spectra and depth pattern;
+    - isotropic Gaussian with each tile's own spectra;
+    - a practical generator (next item);
+    - a periodic control (two items down).
+  - The first four kinds copy each tile's own spectra and level, so they
+    test non-Gaussianity with perfect two-point statistics.
+  - The generator is isotropic Gaussian noise with the depth-normalised
+    spectra averaged over the other tiles of the same declination band,
+    times the tile's own absolute depth map. It runs at four-split depth
+    only, because the tiles store only the coadd inverse variance.
+  - The periodic control is isotropic noise on a periodic tile with no
+    taper, run with production's masking threshold and no rescaling.
+  - Depths: one split, about 1.35× the simulator's baseline noise in the
+    finder (somewhat deeper than a year-1 rescaling of MSS2); the plain mean
+    of the four splits, about goal depth (MSS2's own coadd is deeper).
+  - On the cut-outs, masking runs at q = 4.3 and each peak's q is divided by
+    the geometry run's ratio.
+- **Results**, detections relative to MSS2 (bootstrap errors over tiles):
+  - One split (MSS2: 77.0 detections per 64 deg²): mnms −0.8% ± 0.2%;
+    Gaussian with the 2D spectra and depth pattern −1.0% ± 0.2%; isotropic
+    Gaussian −1.2% ± 0.3%.
+    - Most of the deficit is in the lowest q bin (5 to 8.4: isotropic −1.5%,
+      1.8 times the 40%-sky Poisson error).
+    - It is largest at dec +5° (isotropic −3.1%) and −5° (−1.6%), and absent
+      at −35° and −25°.
+    - 20-bin Δχ² over 40% of the sky, after removing its noise part: about
+      3 (isotropic), 2 (depth pattern), 1 (mnms).
+  - Four splits (MSS2: 188.4 per 64 deg²): mnms −0.3% ± 0.2%, depth pattern
+    −0.3% ± 0.2%, isotropic −0.1% ± 0.2%. Δχ² is consistent with noise.
+  - The generator at four splits: −0.9% ± 0.65%. Its error is dominated by
+    tile-to-tile differences (0.64% of its 0.67%): it gets each tile's noise
+    level only approximately. More tiles would sharpen it (107 candidate
+    tiles exist; 32 are stored).
+  - Stacked lensing: the selected sample's mean p̄ moves by at most 0.5%,
+    against a 2% measurement error.
+  - Mechanism at one split: MSS2's noise gets more of its patches masked
+    (0.153 of the tile against 0.146 for isotropic noise), so its σ_j after
+    masking is 0.27% lower. That gives q 0.27% higher and about 1% more
+    detections. At four splits the masked fractions agree (0.178).
+- **The q scale of the cut-outs with a cluster sky:** the periodic control
+  gives 0.8% (one split) and 0.55% (four splits) more detections than the
+  same isotropic noise on the rescaled cut-out. The conversion from tapered
+  cut-outs, calibrated on noise alone, is therefore 0.5–0.8% low in counts
+  with clusters in the map. This is common to all kinds, so the ratios hold,
+  but the taper correction for real data must be calibrated with a cluster
+  sky.
+- **Review.** Three independent reviews, each checked by a sceptic,
+  checked the test before the results were read. Their points:
+  - Precision is about ±0.2% per depth. The three kinds' ratios to MSS2 at
+    four splits are 75–85% correlated (one MSS2 map per tile), so their
+    agreement counts as one measurement.
+  - The per-tile Gaussian kinds are oracles, hence the generator kind.
+  - The cut-out q conversion needed a check with a cluster sky, hence the
+    periodic control.
+  - The depth labels were corrected (one split is not quite year 1; four
+    splits are about goal).
+  - The explanation of the 4.3 masking threshold was wrong for noise alone,
+    and is corrected in the scripts.
+- **What it means:**
+  - At goal-like depth, Gaussian noise with MSS2's spectra and depth pattern
+    reproduces MSS2's data vector to 0.1–0.3%, inside the 40%-sky Poisson
+    error (0.45%).
+  - At about year-1 depth, MSS2's streaks add about 1% to the detections,
+    mostly near threshold. That is about 1.5 Poisson errors over 40% of the
+    sky. The shift is nearly uniform in q, so most of it would be absorbed
+    by the mass calibration, but it biases that calibration.
+  - mnms closes only a fifth of this gap.
+  - For a year-1 analysis the generator needs either streaks or a calibrated
+    shift of about 0.3% in q. The shift can be measured this way, with its
+    error.
+- **Next:**
+  - Ask how the colleagues' year-1 maps were made (in progress).
+  - Run the generator on more tiles to pin it below 0.3%.
+  - Calibrate the year-1 shift, or model the streaks.
+  - Add the taper correction for real data, calibrated with a cluster sky.
+- **Progress page, version 8:** a figure of detections per q bin relative to
+  MSS2 for each noise model, at both depths, against the 40%-sky Poisson
+  error; four new checks (goal depth, year-1 depth, the generator, the taper
+  conversion with clusters); an updated "Since the last update" and "Next";
+  the masking-threshold caption corrected. `diagnostics_data.py` reads
+  `datavector_test/summary.json`.
+
+## 2026-11-20: per-tile noise spectra in true sky multipoles
+
+- **Measurement** (`benchmarks/mapsim/mss2_spectra.py`, 7 minutes on 16
+  cores): binned 6 × 6 auto and cross spectra for all 107 candidate tiles,
+  for the four-split mean and for each split. They are what the simulator's
+  noise generator will draw from: `mss2/spectra/spectra.npz` (47 MB), with
+  white levels and positions in `spectra.json`.
+  - **Multipoles:** true sky multipoles, hypot(k_dec, k_RA / cos δ). The
+    maps' RA pixels are cos δ narrower than their dec pixels; earlier tests
+    treated them as square.
+  - **Units:** per-mode power on the simulator's square 0.5′ pixels, which
+    is the measured power times cos δ. Each row is weighted by
+    sqrt(cos δ_row / cos δ_centre).
+  - **Shape and level:** the shape comes from the cut-out with its 120′
+    margin. Each channel's level comes from the tile itself under the
+    finder's 30′ taper, over ℓ = 6000–20000 (3000–4500 at 27/39 GHz).
+  - **27 and 39 GHz:** shifted 1.5 fine rows, because a 2′ row k is centred
+    on 0.5′ row 4k + 1.5. Above ℓ = 4500 their autos are floored at their
+    3000–4500 level and their crosses set to 0.
+- **Check** (`--check`): synthetic fields built from the maps' physical
+  pixel sizes at dec −35°, −15° and +5°, through the functions that write the
+  spectra.
+  - All 36 auto and cross entries come back within 0.01–0.05%, and the RA-
+    and dec-dominated sectors within 0.05%.
+  - White noise on rows whose pixel area follows their own cos δ: the white
+    level comes back to 0.9997–1.0002 with the row weights, against
+    1.0012–1.0032 without them.
+  - A square-pixel control misses by 21% at dec −35°, as it must.
+  - A planted square-pixel multipole mapping is caught (autos 0.988, RA
+    sector 0.980).
+- **Findings:**
+  - **White levels** of the four-split mean (ℓ = 8000–12000, true sky units,
+    median over tiles): f030 57.1, f040 37.7, f090 6.9, f150 7.9, f230 20.2,
+    f290 53.5 μK-arcmin. At 90 and 150 GHz that is between SO's goal (5.8,
+    6.3) and baseline (8.0, 10), and MSS2's own weighted coadd is deeper
+    still.
+  - The Perlmutter check's "coadd at baseline" reading (f150 10.6) took its
+    level over ℓ = 12000–16000, which sits on a bump. The finder-based
+    reading (four splits ≈ goal) stands.
+  - **Bumps in MSS2's spectra:** at ℓ ≈ 15000, 1.8× the surrounding power at
+    150 GHz, 1.5–1.6× at 230/280 GHz and 1.1× at 90 GHz. At 150 GHz there is
+    also 1.2× at ℓ ≈ 8000 and a dip to 0.88–0.90 at ℓ = 5000–6000. They are
+    probably from the scanning or the map-making, and the generator
+    reproduces them.
+  - **Tile against cut-out level:** 1.1–1.7% rms over tiles, in power
+    (four-split mean).
+  - **27/39 GHz offset in the earlier tests:** their maps sat 0.75′ off the
+    90–280 GHz maps. That changes only their cross spectra (by up to ~2% at
+    ℓ ≈ 1000), which does not touch the earlier conclusions.
+- **Review.** Two independent reviews, each checked by a sceptic, ran
+  before the measurement was kept. They found:
+  - the margin mixed into each tile's level;
+  - one centre cos δ biasing the power 0.1–0.35% high, cancelling the margin
+    error on average, so both are fixed together;
+  - a check that never ran the production binning, nor tested the multipole
+    mapping;
+  - the 27/39 GHz row offset;
+  - output issues: a mislabelled depth field, and partial runs overwriting
+    the full file.
+
+  All are fixed. The first run is kept as `spectra_v1_unfixed.*` for
+  reference.
+- **Next:** port the draw to the GPU with per-tile inputs from
+  `spectra.npz` (M6b).
+
+## 2026-11-20: the noise generator (M6b, step 2)
+
+- **Module:** `classy_szlite/sim/noise.py`.
+  - Each tile's noise is stationary, isotropic and Gaussian, drawn from that
+    tile's binned 6 × 6 spectra: X_c(k) = depth Σ_d F[s, b(k), c, d] W_d(k).
+    W is the rfft of unit white fields, F F^T = C per multipole bin (an
+    eigendecomposition with negative eigenvalues clipped), s is the tile's
+    spectrum index, and depth is one amplitude per tile.
+  - The draw uses one gather per entry, so there is no 6 × 6 matrix per mode.
+    It works on any grid size whose bin map is built from that grid; the
+    per-mode power assumes 0.5′ pixels.
+  - `load_mss2` reads `mss2_spectra.py`'s spectra (a chosen set: the
+    four-split mean or a split). `noise_input` and `spectrum_rows` check
+    spectrum indices on the host, because under jit an out-of-range index
+    would silently take the last spectrum.
+- **Simulator:** `channel_maps`, `tile_maps` and `simulate_tile` take an
+  optional `NoiseInput` (tables, spectrum index, depth), vmapped per tile.
+  - The default is unchanged: the 2019 forecast noise.
+  - The CMB and halos use the same keys either way.
+  - With the MSS2 noise, `tile_static`'s mode still sets the lensing table
+    (σ_κ), which the per-tile depth does not reach.
+- **Tests:** `tests/test_sim_noise.py`, 12 tests passing on rusty (CPU), plus
+  the 29 earlier simulator tests.
+  - **Draw:** equals a float64 numpy reference from the same random
+    numbers, to 1e-5 of the local rms in every multipole bin.
+  - **Spectra:** drawn auto and cross spectra match the input with analytic
+    errors: under 1.5% of bin entries beyond 3σ, and ratios per range of
+    multipole and the mean ratio within 5σ.
+    - The same test runs on the 2019 forecast noise of `channel_maps`, never
+      tested this way before. Its bin-averaged truth needed the full-plane
+      mode weights, because the atmospheric noise is steep within a bin.
+  - **Other grids:** a 256² grid with the clamp beyond the last bin.
+  - **Batching:** batched draws match single ones to round-off. XLA's CPU FFT
+    is not bit-for-bit batch-invariant (differences of order 1e-5 relative on
+    a few modes), so bitwise invariance is left to the GPU and the integer
+    data vector.
+  - **Depth scale:** exact.
+  - **Host checks and loader:** both tested.
+  - **Sky unchanged:** the tSZ and CMB terms are the same with either noise
+    model, also with the CMB off.
+  - **Full tiles (slow):** `tile_maps` gives the same halos with either noise
+    model, and its maps differ only by the noise draw. `simulate_tile` under
+    vmap with a different spectrum and depth per tile gives the same integer
+    outputs as single-tile runs.
+- **Review.** Two independent reviews, each checked by a sceptic, found no
+  bug in the module (units, factors, bins, Hermitian symmetry checked
+  independently). They found weak tests, all fixed:
+  - bias bounds 26σ wide;
+  - a sky test that could not see the tSZ;
+  - a tolerance set by the largest low-ℓ modes;
+  - no full-tile test;
+  - a draw tied to the 1200² grid;
+  - unchecked indices;
+  - a GPU check in the plan that would have compared differently defined
+    spectra.
+- **Next:** the GPU step (M6b). It needs a per-tile noise option in
+  `spike.py`, then one short RTX job.
+
+## 2026-11-20: the noise generator on the GPU (M6b)
+
+Job 7510857: one RTX PRO 6000 Blackwell, snapshot 09ec5fb
+(`benchmarks/mapsim/noise_gpu.sh`), 19 minutes.
+
+- **Noise tests on the GPU:** 12 of 12 pass, including the two full-tile tests
+  (deterministic ops).
+- **GPU against CPU**, 4 tiles, each with its own MSS2 spectrum and depths 1.0,
+  1.3, 0.8 and 1.0:
+  - data vectors, peaks, kept and confirmed clusters identical on 4 of 4 tiles;
+  - halos identical on 3 of 4. Tile 0 has 73,830 against 73,829: the known
+    last-bit difference of the Poisson sampler for λ ≥ 10, which changes only
+    that cell's halos (`halos.sample_halos`);
+  - σ within 8×10⁻⁷.
+- **Batch invariance** with deterministic ops, batch sizes 1, 4 and 16 over 16
+  tiles, each with its own spectrum and depth: every integer output identical;
+  σ within 9×10⁻⁹.
+- **Speed and memory** at batch 16 (whole tile):
+
+  | | per tile | noise stage | peak memory |
+  |---|---|---|---|
+  | 2019 forecast noise | 9.34 ms | 0.62 ms | 9.18 GiB |
+  | MSS2 noise | 9.17 ms | 0.50 ms | 9.20 GiB |
+
+  - The MSS2 noise costs no extra time or memory. Compiling its noise stage
+    takes 7 s instead of 0.8 s, once per process.
+  - The whole tile takes 9.2–9.3 ms, against 6.8 ms in the M0 spike, because
+    the finder now includes the masking pass (4.5 ms).
+- **Peak buffer** at the deepest MSS2 tile (lowest 150 GHz white level), depth 1:
+  - at most 494 peaks at the fiducial point, and 1,976 at the adopted box's
+    heaviest corner, of a buffer of 3,072 (64%); no overflow;
+  - a depth below 1 (deeper than the four-split mean) at that corner would
+    need a new check.
+
+## 2026-11-20: our finder against SZiFi on MSS2 cut-outs
+
+Job 7512667 (genx, 16 cores, 1 h 10 min), snapshot 191b466. Code:
+`benchmarks/mapsim/mss2_szifi_{maps,survey,run,compare}.py` and
+`szifi_compare.sh`; outputs in `mss2/szifi_compare/` (`summary.txt`,
+`summary.json`).
+
+- **Maps:** the data-vector test's maps for 8 tiles (two each at dec −35, −25
+  and −15, one each at −5 and +5), sky 0, at two depths: MSS2 split 0 (near
+  year 1) and the plain mean of the four splits (about goal).
+- **Self-checks, all 16 maps:** the maps give the data-vector test's stored
+  counts, and the numpy merging and confirmation reproduce the simulator's
+  data vectors.
+- **SZiFi 73626fb, three set-ups,** imported and called:
+  - **as our finder, six channels:** the map our finder filters, our 15
+    scales, ℓ 100–20000 with the out-of-band fix, masking at q > 4.3, diffusive
+    inpainting with ℓ_sep 12000;
+  - **the same with the four high-frequency channels;**
+  - **the colleagues' settings:** four high-frequency channels, 100 scales to
+    80′, anisotropic covariance, every detection masked with discs capped at
+    10′, orphics inpainting, and the band cut before the taper, as SZiFi does
+    with an apodised mask.
+
+Kept interior detections with q > 5. Ratios are SZiFi over ours, paired by
+tile, with errors from the tile scatter.
+
+| | one split | mean of four splits |
+|---|---|---|
+| four channels, before masking: matched both ways | 100% / 100% | 100% / 100% |
+| median q ratio (q > 6); Δq | 0.9997; −0.01 ± 0.20 | 0.9975; −0.02 ± 0.24 |
+| four channels, after masking: median q ratio | 0.990 | 0.960 |
+| data vector ratio | 0.991 ± 0.017 | 0.936 ± 0.014 |
+| colleagues, after masking: median q ratio | 1.013 | 0.990 |
+| data vector against our cut-out q | 1.020 ± 0.015 | 0.966 ± 0.010 |
+| median q against production q | 1.086 | 1.062 |
+| data vector against production q | 1.218 ± 0.025 | 1.126 ± 0.013 |
+
+- **The matched filter agrees with SZiFi's.** With the four high-frequency
+  channels and before masking:
+  - every detection above q = 5 is found by both codes;
+  - q agrees to 0.03–0.25% (median), with a scatter of 0.20–0.24, while our
+    finder uses six channels.
+- **The masking step differs at goal depth.** After masking, at the mean depth:
+  - SZiFi's noise falls by 8–13%, ours by 12–18%, so SZiFi's noise is 2–11%
+    above ours from 0.5′ to 15′;
+  - its q are 4% lower and it counts 6% fewer clusters.
+
+  At one split the two agree within 1% (noise −0.5% to +5%).
+  - **Methods:** SZiFi inpaints the masked discs and corrects the power only
+    above ℓ_sep; ours whitens the maps and masks them.
+  - **Masked fractions:** 26% for SZiFi against 19% for ours at the mean
+    depth. Much of the excess comes from 45′ discs around a few detections at
+    the largest scale (9 on tile 2, none for ours).
+  - **Not yet separated:** the effect of the channels (four against six).
+- **The colleagues' set-up finds the same clusters** (99.7–100% both ways),
+  with q within 1% of our cut-out q.
+  - Neither corrects the noise estimate for the taper. Against the
+    periodic-tile q scale that the simulator uses (production q), their q is
+    6–9% higher and their data vector 13–22% higher on these maps.
+  - Whether their own runs carry this inflation depends on how their survey
+    file apodises the tiles, which we do not have.
+- **Their filter is quieter at large scales.** Before masking, σ at 2.7′–15′ is
+  2–4% below ours, and 4–5% below SZiFi with the same channels in our order.
+  - The cause is the band cut before the taper, the anisotropic covariance, or
+    both.
+  - This is a possible gain for our finder on real data.
+- **SZiFi with all six channels breaks on MSS2 maps.**
+  - **At the smallest scale:** 41,868 candidates above q = 4.3 at θ = 0.5′ on
+    tile 2 (mean depth), against 59 for ours.
+  - **Masking:** it masks 37–48% of the tiles.
+  - **Final data vector:** 19% low at the mean depth.
+  - **Cause:** only the two low-frequency channels trigger it. MSS2 provides
+    them on a 2′ grid; after upsampling to 0.5′ their power above ℓ ≈ 10000 is
+    10⁻⁹–10⁻⁸ of their power at ℓ 2000–3000. SZiFi most likely amplifies
+    rounding noise in those empty modes, as it does outside its multipole
+    range (SZIFI_REVIEW.md, E4).
+  - **Not affected:** our finder on the same six channels (every one of its
+    detections is in the four-channel SZiFi catalogue), and the colleagues,
+    who use the four high-frequency channels.
+- **Positions:** SZiFi's are on average 0.33–0.42 pixel after ours (the
+  half-pixel convention found earlier).
+- **Run time per tile, one core, at most 1.9 GB:**
+  - four channels, 15 scales: 2–6 min;
+  - colleagues' settings: 9–29 min;
+  - six channels: 9–41 min, slowed by the masks.
+- **Next:**
+  - our finder on the four high-frequency channels, to separate the channels
+    from the masking step;
+  - both finders on the same maps without the cluster sky, to tell which noise
+    estimate after masking is right;
+  - ask the colleagues how their survey file treats the apodisation in the
+    noise estimate.
+
+## 2026-11-20: SZiFi follow-up: four channels, and the noise without clusters
+
+Job 7513596 (genx, rome node worker5047 as job 7512667), snapshot fff0358
+(`szifi_compare2.sh`), 34 min. Same 8 tiles, two depths, sky 0.
+
+- **Our filter on channel subsets.** `mmf.filter_static(channels=...)`.
+  - The 13 new tests pass (`tests/test_sim_channels.py`).
+  - Six-channel outputs after the change equal the earlier snapshot's
+    (191b466, run in the same job) bit for bit on 16 of 16 maps, and the first
+    job's too.
+- **Four channels against six, our finder.** The data vectors agree to ±2 per
+  tile, and every noise ratio below to 0.001: the 27 and 39 GHz channels
+  hardly matter for the counts.
+- **Our finder with four channels against SZiFi set like ours** (same
+  channels; ratios SZiFi over ours, by tile pairs):
+
+  | | one split | mean of four splits |
+  |---|---|---|
+  | before masking: matched both ways | 100% / 100% | 100% / 100% |
+  | median q ratio (q > 6); Δq | 0.9987; −0.01 ± 0.18 | 0.9990; −0.02 ± 0.23 |
+  | after masking: median q ratio | 0.990 | 0.962 |
+  | data vector ratio | 0.982 ± 0.018 | 0.937 ± 0.014 |
+
+  - The gap after masking is the same as with our six channels, so it comes
+    from the masking step, not from the channels.
+  - SZiFi's positions are +0.50 pixel from ours in both axes (510 and 1,245
+    pairs).
+- **Noise after masking against the noise without clusters**
+  (`mss2_szifi_noise.py`; nosky maps are the same MSS2 noise and CMB without
+  the tSZ). Ranges are over 0.5′–15′; q is too low by r_after.
+
+  | mean of four splits | r_before | r_after | r_same | residual |
+  |---|---|---|---|---|
+  | our finder (6 or 4 channels) | 1.20–1.30 | 1.04–1.07 | 0.982–0.984 | 1.05–1.09 |
+  | SZiFi set like ours | 1.21–1.30 | 1.08–1.15 | 0.98–1.06 | 1.09–1.12 |
+  | SZiFi, colleagues' settings | 1.22–1.33 | 1.09–1.14 | 1.01–1.06 | 1.08–1.09 |
+
+  | one split | r_before | r_after | r_same | residual |
+  |---|---|---|---|---|
+  | our finder | 1.08–1.12 | 1.01–1.03 | 0.985–0.986 | 1.03–1.04 |
+  | SZiFi set like ours | 1.08–1.12 | 1.02–1.06 | 0.98–1.02 | 1.04–1.05 |
+  | SZiFi, colleagues' settings | 1.09–1.13 | 1.03–1.05 | 1.00–1.02 | 1.03–1.04 |
+
+  The ratios:
+  - **r_before:** first pass, maps with clusters, over maps without.
+  - **r_after:** final noise over the noise without clusters.
+  - **r_same:** the masked estimator on the maps without clusters, with the
+    mask it used on the maps with clusters: its own response to that mask.
+  - **residual:** r_after / r_same, the cluster signal left in the noise
+    estimate after masking.
+
+  Findings:
+  - **Our masking step comes closer to the noise without clusters** at every
+    scale and depth.
+    - At goal depth, SZiFi set like ours leaves about 1.5× as much cluster
+      signal (residual 1.09–1.12 against 1.05–1.09), although it masks more
+      (26% against 19%).
+    - Its estimator also adds up to +6% at the largest scales by itself
+      (r_same 1.06 at 15′).
+    - This is why it counts 6% fewer clusters.
+    - A likely cause: after inpainting, SZiFi blends the original map back into
+      each disc with a cosine weight, so part of each masked cluster stays in
+      the spectra.
+  - **Our estimator's own response is flat,** 0.983–0.986 in σ.
+    - Most of it (0.988 at the mean depth, 0.992 at one split) is the taper
+      factor sqrt(k), k = mean(M T²)/(mean(M) mean(T²)): the discs sit where
+      the taper is 1, but the estimate divides by the plain kept fraction.
+    - The rest (about 0.995) is the whitened estimator's known small bias
+      (0.992–0.996 on periodic tiles).
+    - k ranges over 0.96–0.98 by tile at the mean depth. The real-data taper
+      correction must be calibrated with clusters for this reason too.
+  - **One masking iteration leaves 5–9% of σ from unmasked clusters at goal
+    depth** in our finder (3–4% at one split), as the earlier project found on
+    periodic tiles. This is part of the forward model: the same finder runs on
+    data and simulations.
+  - **The colleagues' q.** Their masking step leaves slightly more cluster
+    signal than ours at goal depth (residual 1.08–1.09 against 1.05–1.09), about
+    the same at one split. Their q differs from our production q mainly by the taper,
+    which they do not correct: +6.5–8.8% (median, q > 6), and +13–24% in the
+    counts above q = 5 on these maps.
+- **Next:** the colleagues' q scale (ask how their survey file treats the
+  apodisation), then back to inference.
+
+## 2026-11-21: catalogue-level simulator: what the paper did, and our version
+
+**What the paper did** (a mapping of cosmocnc_jax, the numpy cosmocnc and the
+paper's text, checked by a reviewer):
+- **Catalogues.** cosmocnc's generator: Poisson halos over 40% of the sky from
+  a (z, ln M) grid with M_min = 5e13.
+  - **Per halo:** ln q̄ = ln(ȳ0/σ_y0(θ500)) and ln p̄ = ln(κ/σ_κ(θ500,lens)),
+    with log-normal scatter and r = 0. Then q_obs = √(q_true² + dof) + N(0,1)
+    with dof = 0, and p_obs = p_true + N(0,1).
+  - **Selection:** q_obs > 5.
+  - **Data vector:** the 4 × 5 counts and the mean p over every selected
+    cluster.
+  - **Noise tables:** the paper's σ_y0 (0.34′–7.4′) and σ_κ (0.74′–5.9′)
+    tables, as cubic fits in ln–ln, extrapolated outside them.
+- **The numpy cosmocnc was used, not cosmocnc_jax.** Its sampler (cumulative
+  sums, a linear-u grid) draws z about half a cell low. cosmocnc_jax's sampler
+  is unbiased and keyed, so it is the code reference.
+- **Inference.** sbi NPE_C with a MAF, one round, 10⁴ simulations, 50-epoch
+  patience, learning rate 5×10⁻⁴; validated on 100 test catalogues at the
+  truth, with no coverage tests.
+  - Not stated: the sbi version, MAF size, batch size, M_max, z range and
+    grids. These are asked of the authors.
+  - tszsbi is another project (tSZ power spectrum).
+- **Decisions (user, 2026-11-21):**
+  - sbi, as the paper;
+  - stacked p averaged over every q > 5 cluster at both levels;
+  - coverage tests added.
+
+**Our version:** `classy_szlite/sim/catalogue.py`, with tests in
+`tests/test_sim_catalogue.py` and `benchmarks/mapsim/catalogue_vs_cosmocnc.py`
+(job 7515722, 4 min).
+- **Code test against cosmocnc_jax's pure functions,** identical inputs (our
+  E(z), D_A, χ, χ*, ρ_c and G/c²; the same fits): per-halo ln q̄ and ln p̄
+  agree to 4×10⁻¹⁵ at the fiducial point and two prior corners.
+- **Our fits of the paper's tables** reproduce cosmocnc's coefficients exactly.
+- **7 tests pass:**
+  - the scatter widths, the correlation (r = 0.5) and the noise layers
+    (dof = 2) per halo;
+  - the halo number and redshift distribution against the cell rates;
+  - the selected p against each drawn halo's exact conditional expectation
+    (z −0.27);
+  - the mean of 120 catalogues against an independent quadrature: all 20
+    counts within 2.3σ, 15,471 selected against 15,466, mean p 0.30723
+    against 0.30712 (z +0.14). An earlier run with 30 catalogues gave z +2.6
+    for the mean p, which was chance;
+  - batched and single draws are identical.
+- **Expected data vector at the fiducial point** (paper tables, 40% of the
+  sky): 15,466 selected, 15,263 in the grid, mean p 0.3071.
+  - The paper quotes about 16,000. Our mass function gives 0.65% fewer halos
+    than cosmocnc's linear-in-Δ default.
+  - SO_sim_0 (other settings, masses down to 1.2e13) has 15,798 selected.
+- **Speed:** one catalogue takes 1.1 s on one CPU node (16 cores): 720,000
+  halos, 15,500 selected.
+- **For the training set:**
+  - the heaviest prior corner has about 2.7 million halos, so the generator
+    uses capacity classes;
+  - the ω_c prior is clipped at 0.200, the emulators' training edge (the
+    paper's prior reaches 0.204).
+
+## 2026-11-21: catalogue-level NPE, as in the paper, with coverage tests
+
+- **Simulations** (`catalogue_trainset.py`, RTX job 7515732, 7.5 min):
+  - 10⁴ training draws (2 min 15 s on one GPU, 74 per second), 500 held-out
+    prior draws, and 100 catalogues at the fiducial point;
+  - the paper's prior, with ω_c clipped at 0.200 and the two scatter widths
+    truncated at 0;
+  - capacity classes from 2²⁰ to 2²² halos, with retries; no overflow left;
+  - 850 to 170,000 clusters selected across the prior (median 19,000).
+- **Environment:** `/mnt/home/bbolliet/venvs/sbi`, with sbi 0.27.0 and PyTorch
+  2.15 (CPU), 1.3 GB, built by `venvs/build_sbi.sh`.
+- **Training** (`catalogue_npe.py`, CPU job 7515804): NPE with a MAF of sbi's
+  default size, learning rate 5×10⁻⁴, 50-epoch patience; 370 epochs in 5.6 min.
+- **The paper's check,** 100 catalogues at the fiducial point. Bias of the
+  posterior means in posterior σ (ours; paper Table 1):
+
+  | | σ8 | ω_c | A_SZ | α_SZ | h | ω_b | n_s | σ_lnq | β_lens | σ_lnp |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | ours | +0.01 ± 0.10 | +0.12 ± 0.05 | −0.14 ± 0.08 | −0.02 ± 0.08 | +0.07 | +0.06 | +0.02 | +0.06 | −0.08 | −0.05 |
+  | paper | −0.11 ± 0.09 | +0.03 ± 0.06 | +0.05 ± 0.08 | +0.10 ± 0.10 | +0.02 | −0.10 | −0.04 | −0.06 | −0.01 | −0.04 |
+
+  - Both are within 0.14σ everywhere.
+  - Median posterior σ is 0.92–1.07 times the paper's likelihood widths.
+- **Coverage,** 500 held-out prior draws:
+  - **Ranks:** the true values' ranks are uniform for all ten parameters (KS
+    p 0.24–0.98).
+  - **TARP:** area to the diagonal −0.013, KS p 1.00.
+  - **Central intervals:** within 0.04 of nominal for eight parameters.
+    - σ8's intervals are narrow at every level: 0.27, 0.45, 0.64 and 0.86 for
+      30%, 50%, 70% and 90%. That is 4–6% below nominal from 50% up, outside
+      the ±2σ band of 500 draws from 50% to 80%.
+    - A_SZ's are 3–5% low.
+    - The KS rank tests and TARP are less sensitive to widths and pass.
+    - The posterior slightly underestimates the σ8 uncertainty; an ensemble
+      or more simulations should fix it before σ8 widths are quoted.
+    - (Corrected the same day: first reported as a tail effect only.)
+- **Cost of a full validation:** 17.5 min, mostly TARP's 1,000 samples for 500
+  draws (rejection sampling at the prior edges is slow).
+
+## 2026-11-21: the bias test at 10% of the sky (MSS2 noise)
+
+**Survey.** 41 periodic tiles (f_sky 0.099), each with its own MSS2 noise: the
+four-split mean of one of 41 tiles drawn from the 107 measured. Map-level prior
+box, goal σ_κ table.
+- **Simulation jobs:** 7515849 (100 mocks and 500 held-out draws) and 7515882
+  (catalogue model, 10⁴ map-level training draws in 69 min at 2.4 per second);
+  no overflow.
+- **Map-level simulator:** halos, painted tSZ, CMB, the tile's MSS2 noise, our
+  finder with its masking pass, confirmation.
+  - The stacked p now averages over every confirmed detection with q > 5.
+- **Catalogue model of the same survey,** variant (i)
+  (`catalogue_trainset.py --variant survey41`):
+  - each tile's analytic σ_y0 from its MSS2 spectra plus the CMB, which agrees
+    with the finder's on noise maps to 0.1–0.8% (test);
+  - equal-area patches;
+  - goal σ_κ;
+  - q_obs = q_true + N(0,1).
+- **At the fiducial point:** the catalogue model selects about 13,900
+  clusters; the map-level mocks have about 13,300 confirmed detections with
+  q > 5.
+
+**Training** (`inference_npe.sh`, CPU job 7516107, 20 min): both posteriors
+trained the paper's way on 10⁴ simulations from the same prior. Bias of the
+posterior means, in posterior σ, over 100 mocks:
+
+| | σ8 | ω_c | A_SZ | α_SZ | h | Ω_m | S8 |
+|---|---|---|---|---|---|---|---|
+| catalogue posterior, map mocks | **+2.04 ± 0.10** | **−0.97 ± 0.06** | **−1.37 ± 0.08** | **−5.45 ± 0.13** | +0.30 | **−1.58 ± 0.09** | **−0.41 ± 0.08** |
+| catalogue posterior, catalogue mocks | −0.02 ± 0.10 | +0.01 ± 0.07 | −0.04 ± 0.09 | −0.06 ± 0.10 | +0.03 | | |
+| map posterior, map mocks | −0.05 ± 0.10 | +0.04 ± 0.07 | +0.02 ± 0.08 | +0.15 ± 0.09 | +0.01 | | |
+
+- **Both posteriors are calibrated on their own held-out simulations:** TARP
+  area −0.005 (catalogue) and −0.002 (map level), and the central intervals
+  are within 0.03–0.06 of nominal.
+  - The catalogue posterior's A_SZ ranks have KS p 0.001: its intervals are
+    6–9% narrow.
+- **So the bias comes from applying the catalogue model to map-level data,**
+  not from either network.
+- **Size:**
+  - Every parameter of the map-level posterior is within 0.17σ (β_lens
+    −0.17σ; its six prior-dominated parameters carry small but precise
+    offsets).
+  - The paper's catalogue-level inference is off by up to 5.5σ (α_SZ) and
+    2σ (σ8).
+  - The σ8 and Ω_m shifts partly cancel in S8 (−0.4σ).
+  - At 40% of the sky the posteriors narrow by about 2, so the shifts double
+    in σ.
+- **Next:**
+  - split the bias into search selection (the control simulator), confusion
+    noise (variant (ii)) and blending;
+  - for paper 1, rerun with the public forecast noise
+    (`NOISE=forecast inference_sims.sh`, then `inference_npe.sh`).
+
+## 2026-11-21: why the catalogue model is biased on maps: the finder's q, halo by halo
+
+**Script and data.** `benchmarks/mapsim/qcal.py` (job 7516271, 9 min). It
+reruns 20 of the map-level mocks: the same skies, 820 tiles and 3.6 million
+halos above 5e13. For every halo it records three q's:
+- q_model = y0/σ_model(θ500), the catalogue model's q_true, with σ_model the
+  analytic noise of the tile's MSS2 spectra plus the CMB;
+- q_fsig = y0/σ_finder(θ500), the same with the finder's own final-pass
+  noise;
+- q_obs, the finder's best kept, confirmed peak on that halo.
+
+The q > 5 counts equal the mocks' data vectors in 20 of 20 mocks.
+Output: `/mnt/ceph/users/bbolliet/mapsim/qcal/`.
+
+**Findings:**
+
+- **The finder's noise is 4–8% above the analytic noise, even after masking**
+  (1.065, 1.073, 1.079, 1.076, 1.065, 1.042 at 0.5′, 1′, 2′, 4′, 8′, 15′;
+  1.20–1.29 before masking).
+  - The cause is the tSZ of the clusters below the masking threshold:
+    confusion noise.
+  - The catalogue model leaves it out, so every cluster's q is about 7% too
+    high in the model.
+- **Fits.** The model is: lost with probability f, otherwise
+  q_obs ~ N(√((s q)² + k), w), censored below 4, on halos with q > 2. The
+  catalogue model is s = 1, k = 0, w = 1, f = 0.
+
+  | | s | k | w | f |
+  |---|---|---|---|---|
+  | against q_model, all halos | 0.919 | 1.30 | 1.11 | 0.010 |
+  | against q_fsig, all halos | 0.991 | 1.31 | 1.10 | 0.010 |
+  | against q_fsig, isolated halos (no q > 1 within 3′) | 0.983 | 1.99 | 0.95 | 0.001 |
+
+  - The scale is almost all noise: against the finder's own σ, s = 0.99.
+  - The search over positions and sizes lifts q as √(q² + k):
+    - k = 2.0 for isolated halos, as in the injection tests;
+    - k = 1.3 for all halos.
+  - Neighbours widen the scatter to w = 1.1.
+  - w grows with redshift (1.04 at z < 0.3, 1.21 at z > 1.2) and for compact
+    clusters (1.28 for θ500 < 1′).
+  - 1% of halos are lost whatever their q, 3% at z < 0.3: their peak goes to
+    a heavier neighbour, or merges into a brighter peak.
+  - 1.3% of detections (3,176 of 253,000) sit on halos with q_model < 2:
+    noise peaks or blends near a massive halo.
+  - Duplicate peaks on one halo: 9 in 20 mocks.
+- **Counts predicted from each halo's q_model, against the mocks** (sum of 20
+  mocks; binomial z-scores on the same halos):
+
+  | | mocks / predicted, by bin | χ² (20 bins) |
+  |---|---|---|
+  | catalogue model | 0.78–1.07 | 10,243 |
+  | fitted relation, one for all halos | 0.95–1.06 | 427 |
+  | fitted per redshift bin | 0.97–1.04 | 114 |
+
+- **Conclusion.** The catalogue model's form is close to right. It fails
+  through its noise: it lacks the confusion from faint clusters (−8% in q),
+  the search lift (k ≈ 1.3) and the extra scatter from neighbours.
+  - Calibrated per redshift bin on map-level simulations, it reproduces the
+    mocks to 1–4% per bin. Residuals of up to 4.5σ remain.
+  - The open question for the bias test: the confusion noise depends on
+    cosmology (more clusters at higher σ8). Does a calibration at one point
+    of parameter space carry across the prior?
+  - Next: a catalogue model calibrated this way (variant (ii)), retrained and
+    applied to the same mocks.
+
+## 2026-11-21: the bias test with the calibrated catalogue model
+
+**The model (variant (ii)).** `catalogue_trainset.py --variant calib41`
+(`CatalogueConfig.qcal`; job 7516323, 19 min). It is the paper's catalogue
+model of the 41-tile survey, with the finder's behaviour measured on the
+map-level mocks (qcal.py):
+- each tile's noise is the finder's final-pass noise, averaged over 20 mocks;
+- per redshift bin, q_obs = √((s q)² + k) + w N(0,1) with loss f, using
+  s 0.990–0.993, k 1.0–1.4, w 1.03–1.20 and f 0.001–0.030 (z > 1.5: s 1.007,
+  k −0.14, w 1.35);
+- all of this is fixed at the fiducial point and held over the prior.
+
+**Tests.** Twelve tests pass. The calibrated simulations match their
+expectation: z-scores within 1.3, mean p 0.2909 against 0.2900. With no
+calibration the simulator is bit-identical to before.
+
+**Results.**
+- **Validation on its own simulations:**
+  - unbiased at the fiducial point (within 0.09σ);
+  - TARP area −0.009;
+  - intervals slightly narrow for A_SZ (KS p < 0.001; 41% at 50%) and σ8
+    (KS p 0.04; 45% at 50%).
+- **Bias on the 100 map-level mocks** (posterior σ):
+
+  | | σ8 | ω_c | A_SZ | α_SZ | Ω_m | S8 |
+  |---|---|---|---|---|---|---|
+  | plain catalogue model | +2.04 | −0.97 | −1.37 | −5.45 | −1.58 | −0.41 |
+  | calibrated catalogue model | +0.04 ± 0.10 | +0.09 ± 0.06 | +0.01 ± 0.08 | **+0.65 ± 0.09** | +0.12 ± 0.08 | +0.11 ± 0.08 |
+  | map-level posterior | −0.05 | +0.04 | +0.02 | +0.15 | | |
+
+**Reading.**
+- The calibration removes almost all of the bias. A residual of +0.65σ
+  remains in α_SZ; the map-level posterior has +0.15σ there.
+- This is the favourable case: the calibration was made at the mocks' own
+  parameters.
+- The open test is whether it holds across the prior, where the confusion
+  noise changes with σ8. Next: apply both catalogue posteriors and the
+  map-level one to the 500 map-level held-out prior draws
+  (`calib_prior.sh`): coverage, and bias in thirds of σ8.
+
+## 2026-11-21: the calibrated catalogue model across the prior
+
+**The run** (`calib_prior.sh`, CPU job 7516409).
+- The calibrated catalogue posterior (calib41, calibrated at the fiducial
+  point) was applied to the 500 map-level held-out prior draws, and to the
+  100 mocks again (same result as before: α_SZ +0.59σ, the rest ≤ 0.13σ).
+- **The job hit its 1-hour limit after this part.** Sampling 500 × 4,000 took
+  44 min. The reruns of the plain catalogue posterior and of the map-level
+  posterior did not run.
+- The map-level comparison on the same 500 draws exists already, from the
+  validation of 2026-11-21.
+- Per-draw output:
+  `catalogue_npe/calib41/npe_prior_calib41_applied_mapheld.npz`.
+
+**Coverage of the central 50% and 90% intervals, on the 500 map-level prior
+draws:**
+
+| | σ8 | ω_c | A_SZ | α_SZ |
+|---|---|---|---|---|
+| calibrated catalogue posterior | 0.31 / 0.65 | 0.37 / 0.72 | 0.40 / 0.82 | 0.40 / 0.77 |
+| map-level posterior | 0.47 / 0.89 | 0.48 / 0.87 | 0.46 / 0.87 | 0.46 / 0.87 |
+
+**Mean bias over the prior:** σ8 +0.88 ± 0.09σ, ω_c −0.34σ, A_SZ −0.23σ,
+α_SZ +0.62σ, Ω_m −0.54σ, S8 −0.19σ.
+
+**The bias grows away from the calibration point.**
+- By distance from it in the four uniform parameters (in prior widths), σ8's
+  bias is:
+  - +0.42σ in the nearest third (rms 1.5);
+  - +0.86σ in the middle third (rms 2.3);
+  - +1.36σ in the farthest third (rms 2.6).
+- It is driven by the parameters that set the amount of tSZ, and so the
+  confusion noise:
+  - **ω_c thirds:** σ8 bias −0.11, +0.43, +2.31σ;
+  - **A_SZ thirds:** −0.19, +0.85, +1.98σ;
+  - **α_SZ thirds:** +1.49, +0.71, +0.44σ (a lower slope means more faint-cluster tSZ).
+- σ8 itself matters little (+0.90, +0.97, +0.78σ).
+- Linear fit of σ8's bias in prior widths: +3.7 per unit ω_c and +3.6 per
+  unit A_SZ.
+
+**Reading.** A catalogue model calibrated at one point is unbiased there
+(the mocks) but not across the prior. The finder's noise, and its search
+lift and scatter, depend on how much tSZ the sky holds, which the parameters
+change. The map-level posterior carries this in its simulations and is
+calibrated over the whole prior. This is paper 1's central result in
+miniature.
+- **Still to check:** whether recalibrating at the posterior's own point
+  (iterating) recovers the catalogue model, as a real analysis might do.
+
+## 2026-11-21: the bias test with the public 2019 forecast noise (paper 1)
+
+**The runs.** The same 41-tile survey and skies (same keys) as the MSS2 test,
+with the simulator's default noise: the 2019 SO forecast, goal depth, white
+plus atmospheric.
+- **Simulations** (job 7517632, 85 min): 100 mocks, 500 held-out draws and
+  10⁴ training simulations; no overflow.
+  - The forecast noise is slightly lower than MSS2 depth 1: 14,027 median
+    detections per mock against 13,313.
+  - The published-style catalogue model of this survey (forecast41) uses one
+    analytic σ_y0 for all tiles.
+- **Training** (job 7517634, 20 min).
+
+**Bias on the 100 map-level mocks** (posterior σ):
+
+| | σ8 | ω_c | A_SZ | α_SZ | Ω_m | S8 |
+|---|---|---|---|---|---|---|
+| published-style catalogue posterior | **+1.86 ± 0.10** | **−0.77 ± 0.06** | **−1.42 ± 0.08** | **−5.28 ± 0.11** | **−1.26 ± 0.09** | **−0.30 ± 0.09** |
+| the same on its own catalogue mocks | −0.02 | +0.07 | −0.12 | −0.02 | | |
+| map-level posterior | −0.02 ± 0.10 | +0.08 ± 0.06 | −0.06 ± 0.09 | +0.15 ± 0.09 | | |
+
+**Coverage on 500 prior draws.**
+- **Map-level:** TARP −0.009; 50% intervals 0.44–0.51 and 90% 0.85–0.90.
+  α_SZ is slightly narrow (0.44 and 0.85); β_lens ranks KS p 0.003.
+- **Catalogue:** TARP +0.004; A_SZ narrow (KS p 0.001), as with MSS2.
+
+**Reading.** The same as with MSS2: the published catalogue model is biased
+by up to 5.3σ on map-level data, and map-level inference is not. Paper 1's
+main result holds on public inputs.
+
+The calibrated catalogue model for this survey is job 7517636.
+
+## 2026-11-21: the calibrated catalogue model with the forecast noise
+
+**The run** (job 7517636, 24 min). `calib_bias.sh` with NOISE=forecast:
+- the per-halo table on 20 forecast-noise mocks;
+- the calibration (s 0.988–0.991, k 1.07–1.51, w 1.04–1.18, f 0.002–0.029
+  per z bin up to 1.5);
+- catalogue variant calibf41, trained and applied to the 100 mocks and to the
+  500 map-level prior draws.
+
+**The sbi warnings.** Rejection sampling was slow for some prior draws (low
+acceptance): there, the posterior put most of its mass outside the prior box.
+
+**Results:**
+- **At the fiducial point:** σ8 +0.13 ± 0.09σ, ω_c +0.09σ, A_SZ −0.06σ,
+  α_SZ +0.50 ± 0.08σ, S8 +0.14σ.
+- **Across the prior:**
+  - σ8 bias +1.06 ± 0.10σ;
+  - coverage at 50% / 90%: σ8 0.32 / 0.65, ω_c 0.40 / 0.72, A_SZ 0.41 / 0.82,
+    α_SZ 0.39 / 0.80;
+  - map-level, for comparison: 0.45 / 0.89, 0.48 / 0.86, 0.46 / 0.87,
+    0.44 / 0.85.
+- **σ8 bias in thirds of the true values:**
+  - ω_c: +0.02, +0.50, +2.64σ;
+  - A_SZ: −0.09, +1.00, +2.26σ;
+  - α_SZ: +1.70, +0.85, +0.63σ;
+  - σ8: +1.07, +1.11, +1.00σ.
+
+**Reading.** The MSS2 result is reproduced on public inputs. Paper 1's three
+steps hold:
+1. the published catalogue model is biased by up to 5.3σ;
+2. calibrated, it is right at the calibration point (α_SZ +0.5σ left) but
+   miscalibrated across the prior;
+3. map-level inference is unbiased and calibrated.
+
+The report page (https://claude.ai/artifact/K8wpHKW8Wy9bictKwkKfCY) has a
+public-noise section.
+
+## 2026-11-21: a catalogue calibration that follows the parameters (variant (iii), forecast noise)
+
+**The run** (job 7518553, 17 min; `calib_theta.sh`).
+- **Checks:** 14 catalogue tests pass. The reworked per-halo table
+  reproduces the mocks' data vectors (difference ≤ 1 per bin: one duplicate
+  peak).
+- **Calibration at 25 points:** the fiducial point plus a Latin hypercube of
+  24 in the map-level box, 5 forecast-noise mocks each. Linear fits in
+  x = (θ − θ_fid)/width over (σ8, ω_c, A_SZ, α_SZ).
+- **Catalogue sets calibtf41,** NPE trained, applied to the 100 mocks and the
+  500 prior draws.
+
+**What the 25 points show:**
+- **The finder's noise at 2′** ranges from 0.95 to 1.13 of its fiducial
+  value, rising with ω_c and A_SZ: +0.13 and +0.13 per prior width
+  (σ8 +0.06, α_SZ −0.05). The linear fit leaves 1.0–1.6% rms.
+- **The search lift k falls as the noise rises,** from 2.4 to −0.5 across
+  the prior.
+  - It is a tight function of the noise level.
+  - The linear fit in the parameters leaves an rms error of 0.11–0.27
+    (leave-one-out 0.14–0.34).
+- **The scatter w rises with the noise:** 1.00 to 1.10 at 0.3 < z < 0.6.
+- **s is constant** (0.986–0.995).
+- **f follows the noise** at low z.
+
+**Results:**
+
+| | at the truth (100 mocks): σ8, ω_c, A_SZ, α_SZ | across the prior: σ8 bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| calibrated at one point | +0.13, +0.09, −0.06, +0.50 | +1.06 | 0.32/0.65, 0.40/0.72, 0.41/0.82, 0.39/0.80 |
+| calibrated across the prior | −0.13, +0.25, +0.15, +0.64 | +0.32 | 0.42/0.84, 0.46/0.86, 0.47/0.88, 0.41/0.79 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+- **The σ8 bias in thirds of ω_c / A_SZ** drops from +0.02, +0.50, +2.64 /
+  −0.09, +1.00, +2.26 (fixed) to +0.27, +0.11, +0.57 / −0.09, +0.17, +0.87.
+- **What remains:**
+  - a σ8 trend with σ8 itself (+0.65, +0.34, −0.04);
+  - α_SZ +0.55σ on average (+1.0σ at high A_SZ).
+
+**Reading.**
+- A calibration that follows the parameters removes most of the
+  miscalibration but not all of it.
+- Candidates for the rest:
+  - the linear model for k;
+  - the per-tile noise shift taken as common to all tiles;
+  - correlations the four-number model leaves out.
+- Next: write the calibration as a function of the finder's noise level (one
+  number that k, w and f track tightly) instead of the four parameters.
+- On cost: the 25-point calibration took 7 min of GPU here, against 70 min
+  for the 10⁴ map-level training simulations. A better calibration may need
+  many more points.
+
+## 2026-11-21: the catalogue calibration through the finder's noise level (variant (iv), forecast noise)
+
+**The run** (job 7518794, 8 min; `calib_conf.sh`). 16 catalogue tests pass.
+The model is fitted on the 25 calibration points of variant (iii):
+- the noise level u = ln(σ_finder at 2′ / fiducial), quadratic in the scaled
+  parameters (leave-one-out 0.5%, against 2.0% linear);
+- ln σ at each size linear in u (leave-one-out ≤ 0.2%);
+- s, k, w, f per z bin quadratic in u. k's leave-one-out error drops from
+  0.14–0.34 to 0.09–0.26; w's is about the same or better.
+
+**Results** (catalogue variant calibcf41):
+
+| | at the truth (100 mocks): σ8, ω_c, A_SZ, α_SZ | across the prior: σ8, α_SZ bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| calibrated at one point | +0.13, +0.09, −0.06, +0.50 | +1.06, +0.58 | 0.32/0.65, 0.40/0.72, 0.41/0.82, 0.39/0.80 |
+| linear in the parameters | −0.13, +0.25, +0.15, +0.64 | +0.32, +0.55 | 0.42/0.84, 0.46/0.86, 0.47/0.88, 0.41/0.79 |
+| through the noise level | −0.07, +0.11, +0.09, +0.62 | +0.23, +0.52 | 0.46/0.90, 0.47/0.89, 0.48/0.88, 0.42/0.78 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+**σ8 bias in thirds, through the noise level:**
+- ω_c: +0.17, +0.05, +0.47;
+- A_SZ: +0.04, +0.06, +0.58;
+- σ8: +0.46, +0.25, −0.04.
+
+**α_SZ bias in thirds:**
+- A_SZ: +0.07, +0.52, +0.98;
+- α_SZ: +0.79, +0.71, +0.06.
+
+**Reading.**
+- Written through the noise level, the calibrated catalogue model matches
+  map-level coverage for σ8, ω_c and A_SZ.
+- α_SZ is biased by about +0.5σ and overconfident in every catalogue version.
+- The calibration is per redshift bin only. Earlier fits by θ500
+  (2026-11-21, MSS2) show the search lift and scatter depend strongly on
+  cluster size: k −0.02 and w 1.28 for θ500 < 1′, against k 1.3 and w 1.05
+  at 2–4′. That bears directly on the slope.
+- Next: calibrate per redshift and size.
+
+## 2026-11-22: the catalogue calibration per redshift and cluster size
+
+**The run** (job 7521746, 20 min; `calib_size.sh`).
+- **Points:** the 25 calibration points re-measured with the same keys,
+  with fits per (z, θ500) cell. The size edges are 1′, 2′ and 4′, with
+  N_MIN = 400 halos with q > 2 per cell.
+  - A short cell takes that point's z-bin value.
+  - 10 of the 24 cells are fitted at all 25 points.
+- **Per-cluster tables** saved:
+  `qcal_grid_forecast/points/point_XX.npz` (halos with q_fsig > 1.5).
+- **Model:** through the noise level (calib_conf_zs.npz), catalogue variant
+  calibcsf41.
+
+**The cell fits.**
+- **The size dependence is real:** at 1.2 < z < 1.5, θ500 < 1′, k = 0.29 and
+  w = 1.24; at 2–4′, k = 0.61 and w = 1.23.
+- **Several cells are noisy across the points:** the k leave-one-out error
+  reaches 1.7–2.6 where a cell switches between its own fit and the z-bin
+  fallback.
+
+**Results:**
+
+| | at the truth: σ8, ω_c, A_SZ, α_SZ | across the prior: σ8, α_SZ bias | coverage 50% / 90%: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|
+| through the noise level, per z | −0.07, +0.11, +0.09, +0.62 | +0.23, +0.52 | 0.46/0.90, 0.47/0.89, 0.48/0.88, 0.42/0.78 |
+| through the noise level, per (z, size) | −0.23, +0.15, +0.09, +0.67 | +0.07, +0.63 | 0.48/0.91, 0.48/0.88, 0.49/0.89, 0.40/0.76 |
+| map-level | −0.02, +0.08, −0.06, +0.15 | | 0.45/0.89, 0.48/0.86, 0.46/0.87, 0.44/0.85 |
+
+- **σ8 bias in thirds of σ8:** +0.41, +0.07, −0.28.
+- **α_SZ bias in thirds of σ8:** +0.42, +0.54, +0.94.
+
+**Reading.**
+- Binning the calibration by cluster size does not remove the α_SZ bias
+  (+0.6σ, 76% at 90%). So it does not come from a size-dependent lift or
+  scatter that a per-halo, independent observation model can carry.
+- Remaining candidates are correlations a per-halo model cannot represent:
+  - the tSZ of halos below 5e13 projected onto detected clusters, a
+    mass-dependent boost that would act on the slope;
+  - blending with neighbours;
+  - confirmation crediting the heaviest halo within 1.5′.
+- The saved per-cluster tables allow these to be diagnosed without the GPU.
+- **For paper 1:** even the best catalogue calibration (25 map-level points,
+  through the noise level, per z and size) leaves the slope biased by
+  +0.6σ at 10% of the sky (about +1.2σ at 40%). Map-level inference has
+  +0.15σ.
+
+## 2026-11-22: why the calibrated catalogue model still biases the slope
+
+**Data and scripts.** The per-cluster tables of the 25 points
+(`qcal_grid_forecast/points/`, 234 MB, analysed locally), with
+`benchmarks/mapsim/qcal_diag_counts.py` and `qcal_diag_tail.py`. Forecast
+noise.
+
+1. **At the true parameters, maps against the calibrated catalogue model**
+   (calibcf41 truth set, 100 each). The maps have 1–4% more clusters above
+   q = 8.4 (z-scores up to 4.9), and +7% and +4% in the brightest bin at
+   z < 0.6. The mean p agrees (0.2486 against 0.2476). More bright clusters
+   than the model allows pushes the inferred slope up: α_SZ +0.6σ.
+2. **At each of the 25 points, with each halo's own q and that point's own
+   calibration** (no interpolation):
+   - the counts above q = 8.4 are under-predicted by about 1%
+     (1.010 ± 0.005);
+   - the residuals (q_obs − μ)/w of detected halos have a mean of −0.03 to
+     −0.09 at q_fsig > 12, and a positive skewness of +1.1 (from −0.1 to
+     +2.9) that grows with ω_c (+1.2 per prior width) and A_SZ (+1.4);
+   - χ²/20 of the counts is 0.6–1.0 at the low-tSZ points and 4–6 at the
+     high-tSZ ones.
+3. **The upward tail.** For bright detected halos (q_fsig > 10), the
+   fraction with r > 2.5 is 1.2–1.7%, against 0.62% for a Gaussian.
+   - It is 1.5–1.7% at the high-tSZ points (9, 22) and about 0.8% at the
+     low-tSZ points (12, 14).
+   - It depends little on θ500.
+   - Downward fluctuations of small clusters are fewer than Gaussian.
+4. **An exponential upward tail** (an exponentially modified Gaussian,
+   censored fits at 6 points):
+   - it fits single halos far better (Δln L up to 2,000 per z bin), with a
+     tail mean of 0.05–0.9 that grows with redshift and with the tSZ;
+   - but it predicts the counts worse (χ²/20 of 6–25 against 2–7). It
+     under-predicts the top q bin by 4–7% and over-predicts the lowest by
+     2–3%. So the tail's shape changes with q, and one exponential cannot
+     carry it.
+
+**Reading.**
+- The finder's q has an upward tail, 2–3× the Gaussian rate of +2.5σ
+  fluctuations, and it grows with the amount of tSZ on the sky: the chance
+  projection of other halos' signal onto a cluster.
+- A per-cluster Gaussian cannot carry it. A catalogue model would need the
+  full, q- and tSZ-dependent distribution of the finder's errors, which
+  means emulating the finder.
+
+**A caveat this raises for the simulator itself.** Halos are placed with
+uniform positions, so there is no spatial clustering. Real clusters sit in
+overdense regions, so projection and confusion are correlated with mass (the
+two-halo term), and this tail is likely larger in real data. Paper 1's tests
+are self-consistent, but the map-level simulator's realism needs halo
+clustering. This is now on the list.
+
+## 2026-11-22: robustness of the map-level posterior (forecast noise)
+
+**The run** (`npe_robust.sh`, CPU job 7522787, 19 min). Six networks
+trained in parallel:
+- five with seeds 11–15 on the 10⁴ map-level training simulations;
+- one on 5,000 of them.
+
+Each was applied to the 100 mocks and the 500 prior draws. The ensemble is
+an equal mixture (`npe_ensemble.py`).
+
+**Bias on the 100 mocks** (σ8, ω_c, A_SZ, α_SZ, in posterior σ):
+- **The five networks:**
+  - σ8 from −0.17 to +0.02;
+  - ω_c from +0.02 to +0.16;
+  - A_SZ from −0.13 to +0.06;
+  - α_SZ from +0.01 to +0.20.
+- **Mixture:** −0.05 ± 0.10, +0.10 ± 0.07, −0.05 ± 0.09, +0.08 ± 0.08.
+- **5,000 simulations:** −0.05, −0.01, +0.02, +0.16.
+- **Seed scatter:** the networks' posterior means differ by 0.08–0.11
+  posterior σ on the mocks, and 0.12–0.15 on the prior draws.
+
+**Coverage at 50% / 90%:**
+- mixture: σ8 0.46/0.90, ω_c 0.47/0.87, A_SZ 0.49/0.89, α_SZ 0.44/0.86;
+- each network within 0.04 of that;
+- 5,000 simulations: the same;
+- TARP −0.009 to −0.029.
+
+**Reading.**
+- The +0.15σ in α_SZ of the first map-level run was the network's own
+  scatter. Across seeds it ranges from +0.01 to +0.20, and the ensemble has
+  +0.08 ± 0.08.
+- No bias is detected in the map-level posterior at the 0.1σ level.
+- One slight imprecision remains, the same in every network and with half
+  the simulations: α_SZ intervals are a little narrow (86% at 90%, about 3
+  binomial σ low).
+  - It is not cured by ensembling or by doubling the simulations.
+  - It is more likely the flow's flexibility, or the 21-number summary.
+- At 40% of the sky the seed scatter of about 0.1σ stays, in units of a
+  posterior twice as narrow. An ensemble of 5 is a cheap default.
+
+## 2026-11-23: the bias test at 40% of the sky (168 tiles, forecast noise)
+
+**Simulations** (`sims40.sh`, GPU jobs 7523814 and 7523819, resumed). The
+first 41 tiles are the 41-tile survey's skies.
+- **Catalogue models,** 10,600 catalogues each:
+  - published style (forecast41_t168);
+  - calibrated at one point (calibf41_t168);
+  - calibrated through the noise level (calibcf41_t168).
+  The calibrations are those measured on the 41-tile survey, with the
+  per-tile noise tables averaged into one, since forecast noise is the same
+  in every tile.
+- **Map-level:** 100 mocks (median 57,497 detections), 500 prior draws and
+  10⁴ training simulations at 0.61 per second; no overflow.
+
+**Training** (`npe40.sh`, CPU job 7530018, 4-hour limit). Five networks per
+posterior.
+- **Map-level and noise-level calibrated:** done in 45 min.
+- **The two other catalogue posteriors:** their application to the 500
+  map-level prior draws is very slow, because rejection sampling discards
+  most proposals outside the prior box when the posterior is far from the
+  truth. At the time limit:
+  - calibrated at one point: 1 network had finished the prior draws, all 5
+    the mocks;
+  - published: 4 networks the mocks only.
+  - For later runs: sample without rejection, or with MCMC.
+
+**Bias on the 100 mocks** (posterior σ, ensemble ± error of the mean):
+
+| | σ8 | ω_c | A_SZ | α_SZ | coverage 50% / 90% over the prior: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|---|---|
+| published style (4 networks) | +2.85 ± 0.07 | −1.19 ± 0.04 | −1.74 ± 0.06 | −8.30 ± 0.07 | (not reached) |
+| calibrated at one point (5; coverage 1) | +0.20 ± 0.08 | +0.17 ± 0.04 | −0.11 ± 0.06 | +0.52 ± 0.06 | 0.30/0.59, 0.35/0.68, 0.40/0.79, 0.37/0.77 |
+| through the noise level (5) | +0.05 ± 0.07 | +0.21 ± 0.04 | −0.03 ± 0.06 | +0.67 ± 0.07 | 0.50/0.86, 0.51/0.90, 0.52/0.90, 0.35/0.74 |
+| map-level (5) | −0.12 ± 0.08 | +0.10 ± 0.04 | −0.05 ± 0.06 | +0.03 ± 0.06 | 0.51/0.90, 0.47/0.88, 0.48/0.91, 0.46/0.88 |
+
+**Prior-wide σ8 bias** (one network each): +1.15 calibrated at one point,
++0.37 through the noise level. **α_SZ bias:** +0.68 and +0.85.
+
+**Against 10% of the sky:**
+- The published model's bias grows by a factor of about 1.5: σ8
+  +1.86 → +2.85, α_SZ −5.28 → −8.30.
+- Calibrated at one point, its coverage worsens: 90% intervals for σ8 65% →
+  59%.
+- Through the noise level, α_SZ worsens: +0.52 → +0.67σ, and 90% coverage
+  78% → 74%.
+- Map-level inference stays calibrated, and its α_SZ intervals improve
+  (86% → 88% at 90%).
+
+**To watch:** map-level ω_c is +0.10σ at both sizes (+0.10 ± 0.07 and
++0.10 ± 0.04, overlapping skies), which may be a small real offset of a tenth
+of a posterior width.

@@ -11,3 +11,6 @@ dist/
 .env
 _emu_data_test/
 /.coverage
+site/
+!docs/clusters/figures/*.png
+!docs/clusters/tutorials/*_files/*.png

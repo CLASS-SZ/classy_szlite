@@ -259,7 +259,7 @@ baseline cosmology (Planck-18-like, σ₈ ≈ 0.81) by:
 1. **Generating synthetic bandpowers** at a fiducial Arnaud-10 profile
    via a Cholesky decomposition of the analytic tSZ bandpower
    covariance (Gaussian variance + 1-halo connected trispectrum) —
-   one call to [`classy_szlite.cl_yy_covariance`](api.md). For tSZ
+   one call to [`classy_szlite.cl_yy_covariance`](api.md#classy_szlite.api.cl_yy_covariance). For tSZ
    the trispectrum dominates the Gaussian variance by ~300–1000× on
    the diagonal, so leaving it out would massively under-state the
    error bars.
@@ -432,7 +432,7 @@ $$
 F_{ij}(\boldsymbol{\theta}) = (\partial_i \mu)^\top\, \Sigma^{-1}\, (\partial_j \mu),
 $$
 
-with $\mu(\boldsymbol{\theta}) = $ forward$(P_0, \beta)$. The Jacobian
+with $\mu(\boldsymbol{\theta}) =$ forward$(P_0, \beta)$. The Jacobian
 $J = \partial \mu / \partial \boldsymbol{\theta}$ is exactly what
 `jax.jacfwd` returns in a single forward-mode autodiff sweep — no
 finite-difference loop, no $\varepsilon$ tuning.
@@ -585,40 +585,36 @@ g_beta = jax.grad(lambda P0, b: jnp.sum(D_ell(P0, b)), argnums=1)(8.13, 5.48)
 ## EDE NUTS demo — recovering an MCMC posterior in 3 hours
 
 This walks through the most ambitious validation we have run with
-``classy_szlite`` so far: reproducing the ACT-DR6 + Planck **early dark energy
+`classy_szlite` so far: reproducing the ACT-DR6 + Planck **early dark energy
 (EDE)** posterior with HMC (No-U-Turn Sampler), and comparing the result
 against the published RW-MH chain that originally fit the data.
 
 The full reference for everything below — chain configuration, scripts, log
 files, posterior triangles, timing breakdowns — is the report at
-[``docs/_static/ede_nuts_report.md``](_static/ede_nuts_report.md).
+[`docs/_static/ede_nuts_report.md`](https://github.com/CLASS-SZ/classy_szlite/blob/main/docs/_static/ede_nuts_report.md).
 
 ### Pipeline at a glance
 
-1. **Theory.** Cosmological observables come from ``classy_szlite``'s ede-v2
+1. **Theory.** Cosmological observables come from `classy_szlite`'s ede-v2
    CosmoPower emulator (CMB TT/TE/EE through ℓ_max = 9 500, used via the new
-   :func:`~classy_szlite.cl_TTTEEE_jax` function with the
-   ``classy_szfast`` ℓ-convention).
+   `cl_TTTEEE_jax` function with the `classy_szfast` ℓ-convention).
 2. **Likelihoods.** The same four cobaya likelihoods used by the reference
    chain, but re-implemented in JAX inside the new
-   :mod:`classy_szlite.likelihoods` sub-package — see
-   :func:`~classy_szlite.likelihoods.chi2_lowTT`,
-   :func:`~classy_szlite.likelihoods.chi2_sroll2`,
-   :func:`~classy_szlite.likelihoods.chi2_plac` and
-   :func:`~classy_szlite.likelihoods.chi2_mflike_v2`.
+   `classy_szlite.likelihoods` sub-package — see
+   `chi2_lowTT`, `chi2_sroll2`, `chi2_plac` and `chi2_mflike_v2`.
 3. **Foreground marginalisation.** The 11 amplitudes that enter linearly
-   (``a_kSZ, a_p, a_s, a_tSZ, a_c, a_gtt, a_gee, a_psee, a_pste, a_gte, xi``)
+   (`a_kSZ, a_p, a_s, a_tSZ, a_c, a_gtt, a_gee, a_psee, a_pste, a_gte, xi`)
    are sampled; SED tilts and bandpass shifts are held at the chain
-   best-fit. See :func:`~classy_szlite.likelihoods.fg_totals_jax`.
-4. **Sampler.** NumPyro NUTS, 4 parallel chains, ``dense_mass=True``,
-   ``target_accept_prob=0.9``, ``max_tree_depth=11``, 800 warmup + 3 000
+   best-fit. See `fg_totals_jax`.
+4. **Sampler.** NumPyro NUTS, 4 parallel chains, `dense_mass=True`,
+   `target_accept_prob=0.9`, `max_tree_depth=11`, 800 warmup + 3 000
    samples per chain.
 
 ### Setting up the data tables
 
 The JAX likelihoods need a small number of pre-computed tables (bandpowers,
 covariances, window functions, fixed foreground at best-fit). Extract them
-once on a machine where ``cobaya`` plus the relevant data packages are
+once on a machine where `cobaya` plus the relevant data packages are
 installed:
 
 ```bash
@@ -627,10 +623,10 @@ python -m classy_szlite.likelihoods.extract_data \
     --packages-path ~/cobaya_packages
 ```
 
-That writes ``~/.classy_szlite/likelihood_data.npz`` (~150 MB) and
-``~/.classy_szlite/mflike_fg_components.npz`` (~25 MB). Subsequent calls
+That writes `~/.classy_szlite/likelihood_data.npz` (~150 MB) and
+`~/.classy_szlite/mflike_fg_components.npz` (~25 MB). Subsequent calls
 load them automatically; alternatively set
-``CLASSY_SZLITE_LIKELIHOOD_DATA`` to point elsewhere.
+`CLASSY_SZLITE_LIKELIHOOD_DATA` to point elsewhere.
 
 ### Running NUTS
 
@@ -679,17 +675,17 @@ divergence rate of 1.7 %.
 
 * Recovered cosmology marginals match the reference MH-RW chain to
   well within 1 σ on every parameter — including the non-Gaussian, near-
-  prior-boundary ``fEDE`` distribution.
+  prior-boundary `fEDE` distribution.
 * τ-shift in early NUTS runs (v2 NUTS gave τ = 0.0649 vs reference 0.0599)
-  vanishes once the ``classy_szfast`` ℓ-convention is used in
-  :func:`classy_szlite.cl_TTTEEE_jax` (now the default).
-* Wall-clock: **~3 h** for ``classy_szlite`` NUTS, **~18 days** for the
+  vanishes once the `classy_szfast` ℓ-convention is used in
+  `classy_szlite.cl_TTTEEE_jax` (now the default).
+* Wall-clock: **~3 h** for `classy_szlite` NUTS, **~18 days** for the
   RW-MH reference chain on the same hardware class — a ~140× speedup at
   the same statistical precision.
 
 The full report has the corner plots, R-hat / ESS tables, per-component
 timing breakdowns and a discussion of where the speed-up came from (the
-``mflike.BandpowerForeground`` Python overhead, mostly).
+`mflike.BandpowerForeground` Python overhead, mostly).
 
 ## The tSZ "y-kernel": where the Compton-y power spectrum comes from
 
@@ -698,17 +694,17 @@ A classic class_sz diagnostic
 is the **tSZ kernel** — the integrand of the 1-halo Compton-y power spectrum
 in the (redshift, halo-mass) plane at a fixed multipole. The 1-halo term is
 
-```math
+$$
 C_\ell^{yy,\,1h} = \int dz\, \frac{dV}{dz\,d\Omega}
     \int d\ln M\, \frac{dn}{d\ln M}\, |y_\ell(M,z)|^2 ,
-```
+$$
 
 so the quantity under the double integral,
 
-```math
+$$
 \frac{d^2 C_\ell^{yy}}{dz\, d\ln M}
     = \frac{dV}{dz\,d\Omega}\,\frac{dn}{d\ln M}\,|y_\ell(M,z)|^2 ,
-```
+$$
 
 tells you which haloes source the signal at a given scale.
 

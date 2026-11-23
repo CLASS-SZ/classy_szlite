@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import NamedTuple
 
 import numpy as np
 import jax
@@ -87,43 +87,78 @@ def _unflatten_plain(saved: np.lib.npyio.NpzFile) -> dict:
     return out
 
 
+class EmulatorWeights(NamedTuple):
+    """Network weights and standardisation arrays of one emulator.
+
+    A NamedTuple, hence a JAX pytree: it can be passed as an argument to
+    ``jax.jit``/``jax.vmap`` functions instead of being baked in as constants.
+    ``pca_*`` are ``None`` for plain (non-PCA) emulators.
+    """
+    weights:      tuple            # ((W, b), ...) per layer
+    alphas:       tuple            # α per hidden layer
+    betas:        tuple            # β per hidden layer
+    param_mean:   jax.Array
+    param_std:    jax.Array
+    feature_mean: jax.Array
+    feature_std:  jax.Array
+    pca_matrix:   jax.Array | None = None
+    pca_mean:     jax.Array | None = None
+    pca_std:      jax.Array | None = None
+
+
+def nn_forward(w: EmulatorWeights, p: jax.Array) -> jax.Array:
+    """Forward pass. ``p`` has shape ``(B, n_params)``; returns ``(B, n_out)``.
+
+    Explicit shapes: no squeeze, so B = 1 and n_out = 1 keep their axes.
+    """
+    h = (p - w.param_mean) / w.param_std
+    # CosmoPower stores W as (in_dim, out_dim): the matmul is h @ W.
+    for (W, b), a, beta in zip(w.weights[:-1], w.alphas, w.betas):
+        z = h @ W + b
+        h = (beta + _sigmoid(a * z) * (1.0 - beta)) * z
+    W, b = w.weights[-1]
+    preds = h @ W + b                                        # (B, n_out_nn)
+    if w.pca_matrix is not None:
+        preds = preds * w.pca_std + w.pca_mean               # (B, n_pca)
+        preds = preds @ w.pca_matrix                         # (B, n_modes)
+    return preds * w.feature_std + w.feature_mean
+
+
+class _Static:
+    """Holder compared and hashed by identity, for pytree metadata such as
+    the ``modes`` array (numpy arrays cannot be compared as aux data)."""
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+
 @dataclass(frozen=True)
 class Emulator:
     """JAX-traceable CosmoPower emulator.
 
-    Hold the static weights as jnp arrays; ``predict(params_dict)`` runs
-    the forward pass and returns the output (already de-standardised, and
-    PCA-decompressed if applicable).
+    A JAX pytree: the weights (``w``) are its leaves, and the parameter
+    names and output modes are static metadata. An ``Emulator`` can
+    therefore be passed straight into ``jax.jit``/``jax.vmap`` functions.
 
     Attributes
     ----------
-    parameters : list[str]
+    w : EmulatorWeights
+        Network weights and standardisation arrays.
+    parameters : tuple[str, ...]
         Input parameter names, in training order.
     modes : np.ndarray
-        Output mode labels (ell, k-index, etc. — interpretation is
-        emulator-specific). Length = output dimension AFTER PCA decompression.
-    is_log : bool
-        If True, the emulator output is log10 of the physical quantity.
-        Caller can apply ``10**`` if needed; we leave that to the caller
-        because the convention varies (e.g. TE doesn't apply log10 since it
-        can go negative).
+        Output mode labels (ell, k-index, etc.; emulator-specific), of
+        length n_out after PCA decompression.
     """
 
-    # JAX-side state
-    weights:        tuple = field(repr=False)             # tuple of (W, b) per layer
-    alphas:         tuple = field(repr=False)             # α per hidden layer
-    betas:          tuple = field(repr=False)             # β per hidden layer
-    param_mean:     jnp.ndarray = field(repr=False)
-    param_std:      jnp.ndarray = field(repr=False)
-    feature_mean:   jnp.ndarray = field(repr=False)
-    feature_std:    jnp.ndarray = field(repr=False)
-    pca_matrix:     jnp.ndarray | None = field(repr=False, default=None)
-    pca_mean:       jnp.ndarray | None = field(repr=False, default=None)
-    pca_std:        jnp.ndarray | None = field(repr=False, default=None)
+    w:          EmulatorWeights = field(repr=False)
+    parameters: tuple[str, ...] = ()
+    _modes:     _Static = field(default=None, repr=False)
 
-    # Metadata
-    parameters:     tuple[str, ...] = ()
-    modes:          np.ndarray = field(default=None, repr=False)
+    @property
+    def modes(self) -> np.ndarray:
+        return None if self._modes is None else self._modes.value
 
     @classmethod
     def from_npz(cls, path: str) -> "Emulator":
@@ -132,79 +167,59 @@ class Emulator:
         The plain format is produced by ``np.savez(**flat_dict)`` with the
         list-valued fields (``weights_``, ``biases_``, ``alphas_``, ``betas_``)
         flattened to keys like ``weights_.0, weights_.1, ..., weights_.n``.
-        Loads with ``allow_pickle=False`` — no tensorflow / cosmopower import
-        required.
+        Loads with ``allow_pickle=False``: no tensorflow / cosmopower import.
+
+        The arrays are created under ``jax.ensure_compile_time_eval()``, so
+        they are concrete even if the first load happens inside a ``jit``
+        trace (a cached emulator must never hold tracers).
         """
         d = _load_emulator_dict(path)
+        f64 = jnp.float64
+        with jax.ensure_compile_time_eval():
+            # weights_ and biases_ are separate lists, one entry per layer.
+            weights = tuple((jnp.asarray(W, dtype=f64), jnp.asarray(b, dtype=f64))
+                            for W, b in zip(d["weights_"], d["biases_"]))
+            # alphas_/betas_: one per hidden layer (the last layer is linear).
+            alphas = tuple(jnp.asarray(a, dtype=f64) for a in d["alphas_"])
+            betas = tuple(jnp.asarray(b, dtype=f64) for b in d["betas_"])
+            has_pca = "pca_transform_matrix" in d
+            w = EmulatorWeights(
+                weights=weights, alphas=alphas, betas=betas,
+                param_mean=jnp.asarray(d["param_train_mean"], dtype=f64),
+                param_std=jnp.asarray(d["param_train_std"], dtype=f64),
+                feature_mean=jnp.asarray(d["feature_train_mean"], dtype=f64),
+                feature_std=jnp.asarray(d["feature_train_std"], dtype=f64),
+                pca_matrix=jnp.asarray(d["pca_transform_matrix"], dtype=f64) if has_pca else None,
+                pca_mean=jnp.asarray(d["pca_mean"], dtype=f64) if has_pca else None,
+                pca_std=jnp.asarray(d["pca_std"], dtype=f64) if has_pca else None,
+            )
+        return cls(w=w, parameters=tuple(str(p) for p in d["parameters"]),
+                   _modes=_Static(np.asarray(d["modes"])))
 
-        # weights_ and biases_ are SEPARATE lists (one entry per layer);
-        # pair them up so the forward pass can iterate over (W, b) tuples.
-        weights = tuple(
-            (jnp.asarray(W, dtype=jnp.float64),
-             jnp.asarray(b, dtype=jnp.float64))
-            for W, b in zip(d["weights_"], d["biases_"])
-        )
-        # alphas_ / betas_: per hidden layer (one entry per hidden layer,
-        # i.e. len = n_layers - 1; final linear layer has no α-β activation)
-        alphas = tuple(jnp.asarray(a, dtype=jnp.float64) for a in d["alphas_"])
-        betas  = tuple(jnp.asarray(b, dtype=jnp.float64) for b in d["betas_"])
+    def stack_inputs(self, params_dict: dict) -> jax.Array:
+        """Stack ``params_dict`` into the ``(B, n_params)`` input matrix.
 
-        param_mean   = jnp.asarray(d["param_train_mean"],   dtype=jnp.float64)
-        param_std    = jnp.asarray(d["param_train_std"],    dtype=jnp.float64)
-        feature_mean = jnp.asarray(d["feature_train_mean"], dtype=jnp.float64)
-        feature_std  = jnp.asarray(d["feature_train_std"],  dtype=jnp.float64)
-
-        # PCA fields are present only for PCA emulators (e.g. TE)
-        has_pca = "pca_transform_matrix" in d
-        pca_matrix = jnp.asarray(d["pca_transform_matrix"], dtype=jnp.float64) if has_pca else None
-        pca_mean   = jnp.asarray(d["pca_mean"],   dtype=jnp.float64) if has_pca else None
-        pca_std    = jnp.asarray(d["pca_std"],    dtype=jnp.float64) if has_pca else None
-
-        parameters = tuple(str(p) for p in d["parameters"])
-        modes      = np.asarray(d["modes"])
-
-        return cls(
-            weights=weights, alphas=alphas, betas=betas,
-            param_mean=param_mean, param_std=param_std,
-            feature_mean=feature_mean, feature_std=feature_std,
-            pca_matrix=pca_matrix, pca_mean=pca_mean, pca_std=pca_std,
-            parameters=parameters, modes=modes,
-        )
-
-    def predict(self, params_dict: dict) -> jnp.ndarray:
-        """Forward pass on a single or batched input.
-
-        ``params_dict``: maps each ``self.parameters`` name to a 1-D array-like
-        of length B (batch size); the output has shape ``(B, n_modes)`` (or
-        ``(n_modes,)`` if B=1).
+        Each value is a scalar or a 1-D array of length B; scalars are
+        broadcast to B.
         """
-        # Stack inputs in the canonical order
-        p = jnp.stack([jnp.asarray(params_dict[name], dtype=jnp.float64)
-                       for name in self.parameters], axis=-1)   # (B, n_params)
-        # Standardise
-        h = (p - self.param_mean) / self.param_std
+        cols = [jnp.atleast_1d(jnp.asarray(params_dict[name], dtype=jnp.float64))
+                for name in self.parameters]
+        return jnp.stack(jnp.broadcast_arrays(*cols), axis=-1)
 
-        # Hidden layers with α-β sigmoid activation.
-        # CosmoPower .npz weights are stored as (in_dim, out_dim) so the
-        # matmul is `h @ W` (no transpose).
-        for (W, b), a, beta in zip(self.weights[:-1], self.alphas, self.betas):
-            z = h @ W + b
-            h = (beta + _sigmoid(a * z) * (1.0 - beta)) * z
+    def predict(self, params_dict: dict) -> jax.Array:
+        """Forward pass. Returns shape ``(B, n_out)`` (always 2-D).
 
-        # Final linear layer (no activation)
-        W, b = self.weights[-1]
-        preds = h @ W + b                                            # (B, n_out)
+        ``params_dict`` maps each name in ``self.parameters`` to a scalar or
+        a 1-D array of length B.
+        """
+        return nn_forward(self.w, self.stack_inputs(params_dict))
 
-        # PCA decompression (if applicable)
-        if self.pca_matrix is not None:
-            # PCA-encoded: undo PCA standardisation, project back, then
-            # undo feature standardisation
-            preds = preds * self.pca_std + self.pca_mean             # (B, n_pca)
-            preds = preds @ self.pca_matrix                          # (B, n_modes)
 
-        # Undo feature standardisation
-        preds = preds * self.feature_std + self.feature_mean
-        return preds.squeeze()
+jax.tree_util.register_pytree_node(
+    Emulator,
+    lambda e: ((e.w,), (e.parameters, e._modes)),
+    lambda aux, children: Emulator(w=children[0], parameters=aux[0], _modes=aux[1]),
+)
 
 
 # ---------------------------------------------------------------------------

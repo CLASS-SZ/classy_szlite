@@ -53,7 +53,9 @@ import jax.numpy as jnp
 from ._fftlog import SphericalBessel
 
 from .cosmology import CosmoGrids
-from .hmf import HaloGrids, _G_SI, _Msun_kg, _Mpc_m, _c_SI
+from .hmf import HaloGrids
+from .constants import G_SI as _G_SI, MSUN_KG as _Msun_kg, MPC_M as _Mpc_m, C_SI as _c_SI
+from .cosmology import Omega_m0
 
 jax.config.update("jax_enable_x64", True)
 
@@ -235,10 +237,8 @@ def _y_ell_grid(ell: jax.Array,
     :func:`cl_yy_1h_trispectrum`.
     """
     h = params['H0'] / 100.0
-    Omega_b   = params['omega_b'] / h ** 2
-    Omega_cdm = params['omega_cdm'] / h ** 2
-    Omega_ncdm = params.get('m_ncdm', 0.06) / (93.14 * h ** 2)
-    Omega_m = Omega_b + Omega_cdm + Omega_ncdm
+    Omega_b = params['omega_b'] / h ** 2
+    Omega_m = Omega_m0(params, include_nu=True)        # Σmν = 3 m_ncdm
     f_b = Omega_b / Omega_m
 
     n_ell = ell.shape[0]

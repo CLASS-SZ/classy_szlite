@@ -50,15 +50,14 @@ it so `classy_szlite` finds it:
 export CLASSY_SZLITE_DATA_DIR=/custom/path
 ```
 
-```{admonition} Common error
-:class: warning
-`ValueError: Cannot load file containing pickled data when
-allow_pickle=False` (or `Object arrays cannot be loaded …`) means a
-**pickled** `_v3.npz` file is sitting where a pickle-free
-`_v3_plain.npz` should be — usually from hand-copying the wrong file out
-of the GitHub web UI. Just run `classy-szlite-get-data`; it replaces the
-bad files automatically.
-```
+!!! warning "Common error"
+
+    `ValueError: Cannot load file containing pickled data when
+    allow_pickle=False` (or `Object arrays cannot be loaded …`) means a
+    **pickled** `_v3.npz` file is sitting where a pickle-free
+    `_v3_plain.npz` should be — usually from hand-copying the wrong file out
+    of the GitHub web UI. Just run `classy-szlite-get-data`; it replaces the
+    bad files automatically.
 
 ### Manual layout
 
@@ -72,7 +71,7 @@ Expected layout — `classy_szlite` reads the pickle-free
 `*_v3_plain.npz` files (loaded with `allow_pickle=False`, no
 TensorFlow / cosmopower needed):
 
-```
+```text
 $CLASSY_SZLITE_DATA_DIR/
 └── ede/
     ├── PK/
@@ -141,10 +140,10 @@ suitable for `jax.grad`-based inference (Fisher, HMC/NUTS, MAP).
 
 The emulators are trained on an EDE parameter range that
 includes the LCDM-equivalent point. `classy_szlite` exploits this:
-``CosmoParams()`` defaults to ``fEDE = 0.001`` so the very first call
+`CosmoParams()` defaults to `fEDE = 0.001` so the very first call
 gives standard $\Lambda$CDM to emulator precision — you don't have to
-think about EDE at all. If you do want to explore EDE, set ``fEDE``,
-``log10z_c`` and ``thetai_scf`` to non-default values and the same
+think about EDE at all. If you do want to explore EDE, set `fEDE`,
+`log10z_c` and `thetai_scf` to non-default values and the same
 pipeline handles it.
 
 ## Verification

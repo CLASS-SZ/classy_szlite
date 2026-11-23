@@ -22,29 +22,26 @@ Runtime dependencies: just `jax`, `numpy`, and `mcfit`. See
 [Installation](installation.md) for the emulator-coverage details
 (LCDM, $m_\nu$-LCDM, $w$CDM, $N_{\rm eff}$-LCDM, EDE).
 
-```{toctree}
-:maxdepth: 2
-:caption: Contents
+## Contents
 
-installation
-quickstart
-api
-throughput
-gradients
-convergence
-examples
-```
+- [Installation](installation.md): install the package and fetch the emulator data.
+- [Quickstart](quickstart.md): the cosmology container and the five calculations.
+- [Tutorials & examples](examples.md): runnable snippets with the figures they produce.
+- [Throughput](throughput.md), [JAX gradients](gradients.md) and
+  [Cl^yy convergence](convergence.md): timing, autodiff checks and grid settings.
+- [Cluster counts from maps](clusters/index.md): a map-level simulator of
+  SZ cluster counts and its simulation-based inference.
+- [API reference](api.md): every public function and container.
 
-```{note}
-**Inference recipes shipped as runnable scripts**:
-[`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py)
-(NumPyro NUTS + cobaya RW-MH overlay),
-[`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py)
-(GNFW profile posterior bands),
-[`examples/fisher_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/fisher_clyy_profile.py)
-(Fisher matrix via `jax.jacfwd`).
-See [Tutorials & examples](examples.md) for full walkthroughs.
-```
+!!! note "Inference recipes shipped as runnable scripts"
+
+    [`examples/nuts_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/nuts_clyy_profile.py)
+    (NumPyro NUTS + cobaya RW-MH overlay),
+    [`examples/profile_bands.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/profile_bands.py)
+    (GNFW profile posterior bands),
+    [`examples/fisher_clyy_profile.py`](https://github.com/CLASS-SZ/classy_szlite/blob/main/examples/fisher_clyy_profile.py)
+    (Fisher matrix via `jax.jacfwd`).
+    See [Tutorials & examples](examples.md) for full walkthroughs.
 
 ## Quick example
 
