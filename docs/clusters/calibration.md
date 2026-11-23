@@ -112,8 +112,8 @@ cluster size (`--size`).
   one point (green) and through the noise level (violet). 10% of the sky.</figcaption>
 </figure>
 
-Calibrated at one point, the model is right near that point (the middle third) and increasingly wrong away
-from it: where the true $\omega_c$ or $A_\mathrm{SZ}$ is high, the sky holds more faint-cluster tSZ than the
+Calibrated at one point, the model is close only where the sky holds little tSZ (the lowest thirds of
+$\omega_c$ and $A_\mathrm{SZ}$), and its bias grows with the tSZ: where the true $\omega_c$ or $A_\mathrm{SZ}$ is high, the sky holds more faint-cluster tSZ than the
 calibration assumed, the real noise is higher, and the posterior reads the missing bright clusters as a
 higher $\sigma_8$, by up to +2.6 widths. A lower slope $\alpha_\mathrm{SZ}$ also means more faint-cluster
 signal, hence the opposite trend. Through the noise level the calibration follows these changes and the
@@ -122,11 +122,10 @@ trends mostly disappear; what remains is below 0.6 widths.
 ## What a per-cluster model cannot carry
 
 The remaining slope bias comes from the shape of the finder's errors. For bright clusters ($q > 10$), the
-residual $r = (q_\mathrm{obs} - \mu)/w$ exceeds +2.5 for 1.2–1.7% of them, against 0.62% for a Gaussian, and
+residual $\hat\epsilon = (q_\mathrm{obs} - \mu)/w$ exceeds +2.5 for 1.2–1.7% of them, against 0.62% for a Gaussian, and
 more so where the sky holds more tSZ: other halos' signal falls by chance onto a cluster and only ever adds.
 The residuals' skewness, +1.1 on average, grows with $\omega_c$ and $A_\mathrm{SZ}$. A Gaussian scatter
-cannot carry this upward tail; a single exponential tail fits individual clusters better but predicts the
-counts worse, because the tail's shape changes with $q$. Carrying it in a catalogue model means emulating
+cannot carry this upward tail. Carrying it in a catalogue model means emulating
 the finder's full error distribution as a function of $q$ and of the amount of tSZ, which is what the
 map-level simulations do directly.
 

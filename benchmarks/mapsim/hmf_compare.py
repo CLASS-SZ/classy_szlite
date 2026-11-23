@@ -24,8 +24,9 @@ cosmocnc_jax
     - Tinker08 linear in Delta;
     - rho_m of cb, and Delta_mean = 500 / Omega_m,nonu(z).
     It is imported from a separate reference copy, without running its package
-    ``__init__`` (which needs cobaya). Reference use only: no cosmocnc_jax code is
-    copied here.
+    ``__init__`` (which needs cobaya). Reference use only, with one exception:
+    sigma_R_quad below follows cosmocnc_jax's ``_camb_tophat_sigma`` (cosmo.py, by
+    I. Zubeldia) line by line, with Simpson weights in place of the trapezoid rule.
 colossus 1.4
     - Eisenstein & Hu (1998) P(k), normalised to sigma8;
     - no massive neutrinos (Om0 = Omega_cb);
@@ -118,7 +119,8 @@ def at_masses(lnM, dndlnm, M):
 
 
 def sigma_R_quad(k, pk, R, n=20001):
-    """Top-hat sigma(R) by Simpson quadrature in ln k (log-log interpolated P)."""
+    """Top-hat sigma(R) by Simpson quadrature in ln k (log-log interpolated P); adapted from
+    cosmocnc_jax's _camb_tophat_sigma (see the module docstring)."""
     lk = np.linspace(np.log(k[0]), np.log(k[-1]), n)
     kk = np.exp(lk)
     P = np.exp(np.interp(lk, np.log(k), np.log(pk)))

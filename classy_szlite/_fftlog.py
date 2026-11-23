@@ -1,3 +1,14 @@
+# This file is adapted from mcfit (https://github.com/eelregit/mcfit), by Yin Li: the FFTLog set-up
+# (FFTLog.__init__) follows mcfit/mcfit.py, and the two Mellin kernels are taken from mcfit/kernels.py.
+# mcfit is licensed under the GNU General Public License, version 3. As a work derived from it, this file
+# is distributed under the terms of the GNU GPL v3 (https://www.gnu.org/licenses/gpl-3.0.html), not under
+# the MIT License of the rest of classy_szlite. See LICENSE for the scope of each licence.
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version. This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License for more details.
 """Pure-JAX FFTLog (Hamilton 2000) for the two transforms classy_szlite needs.
 
 Drop-in replacement for mcfit.TophatVar(dim=3) and mcfit.SphericalBessel(nu=0)

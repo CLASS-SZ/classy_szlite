@@ -132,8 +132,8 @@ w.r.t. the whole `CosmoParams` pytree — see
 
 ## Documentation
 
-Full docs at **https://class-sz.github.io/classy_szlite/**, including [Cluster counts from maps](https://class-sz.github.io/classy_szlite/clusters/): a map-level simulator of SZ cluster counts, its cluster finder, catalogue-level models and their calibration, and simulation-based inference (`classy_szlite.sim`, the `mapsim` command).
+Full docs at **https://class-sz.github.io/classy_szlite/**, including [Cluster counts from maps](https://class-sz.github.io/classy_szlite/clusters/): simulation-based inference of SZ cluster counts with a map-level simulator and its cluster finder, compared with catalogue-level models calibrated on the maps (`classy_szlite.sim`, the `mapsim` command).
 
 ## License
 
-MIT.
+MIT, except `classy_szlite/_fftlog.py`, which is adapted from [mcfit](https://github.com/eelregit/mcfit) and distributed under the GNU GPL v3 (see [LICENSE](LICENSE)). Two noise tables in `classy_szlite/sim/data/` come from cosmocnc under the MIT License (see their NOTICE).
