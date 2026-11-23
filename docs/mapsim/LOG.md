@@ -1673,3 +1673,55 @@ an equal mixture (`npe_ensemble.py`).
   - It is more likely the flow's flexibility, or the 21-number summary.
 - At 40% of the sky the seed scatter of about 0.1σ stays, in units of a
   posterior twice as narrow. An ensemble of 5 is a cheap default.
+
+## 2026-11-23: the bias test at 40% of the sky (168 tiles, forecast noise)
+
+**Simulations** (`sims40.sh`, GPU jobs 7523814 and 7523819, resumed). The
+first 41 tiles are the 41-tile survey's skies.
+- **Catalogue models,** 10,600 catalogues each:
+  - published style (forecast41_t168);
+  - calibrated at one point (calibf41_t168);
+  - calibrated through the noise level (calibcf41_t168).
+  The calibrations are those measured on the 41-tile survey, with the
+  per-tile noise tables averaged into one, since forecast noise is the same
+  in every tile.
+- **Map-level:** 100 mocks (median 57,497 detections), 500 prior draws and
+  10⁴ training simulations at 0.61 per second; no overflow.
+
+**Training** (`npe40.sh`, CPU job 7530018, 4-hour limit). Five networks per
+posterior.
+- **Map-level and noise-level calibrated:** done in 45 min.
+- **The two other catalogue posteriors:** their application to the 500
+  map-level prior draws is very slow, because rejection sampling discards
+  most proposals outside the prior box when the posterior is far from the
+  truth. At the time limit:
+  - calibrated at one point: 1 network had finished the prior draws, all 5
+    the mocks;
+  - published: 4 networks the mocks only.
+  - For later runs: sample without rejection, or with MCMC.
+
+**Bias on the 100 mocks** (posterior σ, ensemble ± error of the mean):
+
+| | σ8 | ω_c | A_SZ | α_SZ | coverage 50% / 90% over the prior: σ8, ω_c, A_SZ, α_SZ |
+|---|---|---|---|---|---|
+| published style (4 networks) | +2.85 ± 0.07 | −1.19 ± 0.04 | −1.74 ± 0.06 | −8.30 ± 0.07 | (not reached) |
+| calibrated at one point (5; coverage 1) | +0.20 ± 0.08 | +0.17 ± 0.04 | −0.11 ± 0.06 | +0.52 ± 0.06 | 0.30/0.59, 0.35/0.68, 0.40/0.79, 0.37/0.77 |
+| through the noise level (5) | +0.05 ± 0.07 | +0.21 ± 0.04 | −0.03 ± 0.06 | +0.67 ± 0.07 | 0.50/0.86, 0.51/0.90, 0.52/0.90, 0.35/0.74 |
+| map-level (5) | −0.12 ± 0.08 | +0.10 ± 0.04 | −0.05 ± 0.06 | +0.03 ± 0.06 | 0.51/0.90, 0.47/0.88, 0.48/0.91, 0.46/0.88 |
+
+**Prior-wide σ8 bias** (one network each): +1.15 calibrated at one point,
++0.37 through the noise level. **α_SZ bias:** +0.68 and +0.85.
+
+**Against 10% of the sky:**
+- The published model's bias grows by a factor of about 1.5: σ8
+  +1.86 → +2.85, α_SZ −5.28 → −8.30.
+- Calibrated at one point, its coverage worsens: 90% intervals for σ8 65% →
+  59%.
+- Through the noise level, α_SZ worsens: +0.52 → +0.67σ, and 90% coverage
+  78% → 74%.
+- Map-level inference stays calibrated, and its α_SZ intervals improve
+  (86% → 88% at 90%).
+
+**To watch:** map-level ω_c is +0.10σ at both sizes (+0.10 ± 0.07 and
++0.10 ± 0.04, overlapping skies), which may be a small real offset of a tenth
+of a posterior width.
