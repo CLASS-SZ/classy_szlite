@@ -23,7 +23,7 @@ Noise tables:
   "paper"  the paper's sigma_y0 (SZiFi on SO-like Websky maps) and sigma_kappa tables, as
            cosmocnc's SO-like survey uses them: cubic fits of ln sigma in ln theta[arcmin],
            extrapolated outside the tables (or held at the table ends with clamp=True). The
-           tables are read from cosmocnc_jax's data folder (COSMOCNC_DATA); the fit is
+           tables ship in classy_szlite/sim/data (from cosmocnc; COSMOCNC_DATA overrides); the fit is
            numpy.polyfit.
   sigma_y0 arrays (theta, sigma) from our own filter (variant (i)) are passed the same way.
 
@@ -45,7 +45,9 @@ from ..sz_scaling import y0_median, theta500_arcmin
 from . import halos as hl, lensing, simulator as simu, summaries as sm
 
 SR_FULL = 4.0 * np.pi
-COSMOCNC_DATA = os.environ.get("COSMOCNC_DATA", os.path.expanduser("~/GitHub/cosmocnc_jax/cosmocnc_jax/data"))
+# The paper's noise tables ship with the package (data/, copied from cosmocnc under its MIT License, see
+# data/NOTICE); COSMOCNC_DATA points elsewhere if set.
+COSMOCNC_DATA = os.environ.get("COSMOCNC_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
 Z_BIN_WIDTH = float(sm.Z_EDGES[1] - sm.Z_EDGES[0])        # 0.298
 
 
