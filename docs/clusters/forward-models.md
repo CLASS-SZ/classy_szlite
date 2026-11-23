@@ -19,7 +19,7 @@ flowchart LR
 ```
 
 The upper path is the map-level simulator (`classy_szlite.sim.simulator`); the lower one is the
-catalogue model of the paper (`classy_szlite.sim.catalogue`).
+catalogue model (`classy_szlite.sim.catalogue`), in the form of the observation model of Zubeldia et al. (2025).
 
 ## The survey and the prior
 
@@ -40,7 +40,7 @@ Aperture Telescope (27, 39, 93, 145, 225 and 280 GHz, beams of 7.4′ to 0.9′)
 | $\beta_\mathrm{lens}$ | N(0.92, 0.01) | 0.92 | lensing-mass bias |
 | $\sigma_\mathrm{lens}$ | N(0.22, 0.05), > 0 | 0.22 | log-normal scatter of the lensing signal |
 
-The flat box (`priors.MAP`) is narrower than the paper's Table 1 (`priors.PAPER`), so that the heaviest
+The flat box (`priors.MAP`) is narrower than Table 1 of Zubeldia et al. (2025) (`priors.PAPER`), so that the heaviest
 corner stays affordable: about 130,000 halos per tile there, against 73,000 at the true values. The
 hydrostatic mass bias is fixed, $1-b = 0.8$. $\Omega_m$ and $S_8 = \sigma_8\sqrt{\Omega_m/0.3}$ are
 derived.
@@ -64,7 +64,7 @@ cell's count moves only that cell's halos.
 
 ### The tSZ signal
 
-Each halo gets a central Compton-y and an angular size from the paper's scaling relation,
+Each halo gets a central Compton-y and an angular size from the scaling relation of Zubeldia et al. (2025),
 
 $$
 \bar y_0 = 10^{A_\mathrm{SZ}}\, E(z)^2 \left[\frac{h_{70}\,(1-b)\,M_{500}}{3\times 10^{14}\,M_\odot}\right]^{\alpha_\mathrm{SZ}} h_{70}^{-1/2},
@@ -109,7 +109,7 @@ where $\rho_{ij}$ is 1 on the diagonal, 0.9 between the two bands of an optics t
 ### The finder and the data vector
 
 The matched filter, its masking pass and confirmation are on [the next page](finder.md). Both inferences
-use the paper's 21 numbers: the counts of confirmed detections in bins of $q$ and $z$,
+use the 21 numbers of Zubeldia et al. (2025): the counts of confirmed detections in bins of $q$ and $z$,
 
 $$
 N_{ab} = \#\{\text{detections}: q_a < q < q_{a+1},\ z_b < z < z_{b+1}\},\qquad
@@ -169,6 +169,11 @@ For our survey, $\sigma_{y_0}$ is computed analytically for our own filter and t
 (`catalogue.analytic_sigma_y0_forecast`); it agrees with what the finder measures on maps without
 clusters to 0.1–0.8%. The model leaves out three things the finder meets on real skies, the subject of the
 next page.
+
+We call this the **uncalibrated catalogue model**: the observation model of Zubeldia et al. (2025) with a
+noise table for the instrument and the CMB only, as used in forecasts; we recompute the table for our
+filter and noise. Its code name is `published` (`survey.catalogue_model("published")`,
+`mapsim catalogues --model published`). [Calibration](calibration.md) builds calibrated versions of it.
 
 | | Map level | Catalogue level |
 |---|---|---|

@@ -36,7 +36,7 @@ jax.config.update("jax_enable_x64", True)
 from classy_szlite.sim import tile, priors
 
 t0 = time.time()
-o = tile.stages()          # the first tile of the first mock of the published 'truth' set
+o = tile.stages()          # the first tile of the first mock of the 'truth' set
 print(f"{time.time() - t0:.0f} s")""",
     """md:## The maps
 
@@ -86,7 +86,7 @@ plt.plot(th, o["sigma_first"] / o["sigma_model"], label="first pass")
 plt.plot(th, o["sigma_final"] / o["sigma_model"], label="after masking")
 plt.axhline(1, color="gray", ls=":")
 plt.xscale("log"); plt.xlabel("filter size θ [arcmin]"); plt.ylabel("σ finder / σ instrument + CMB"); plt.legend()
-print("after masking, at 2': ", round(float(o["sigma_final"][7] / o["sigma_model"][7]), 3))""",
+print("after masking, at 2.7': ", round(float(o["sigma_final"][7] / o["sigma_model"][7]), 3))""",
     """md:The first-pass curve peaks on 2–8′ scales, the size of typical clusters, whose power the noise estimate
 includes. After masking, the curve drops to 4–8% above 1: the confusion noise of the faint clusters that stay
 unmasked. On a single tile the numbers fluctuate by about a per cent from tile to tile.""",
@@ -109,8 +109,8 @@ Finder page measures both effects on 3.6 million halos.""",
 CATALOGUES = [
     """md:# Catalogue models
 
-The catalogue-level model of Zubeldia et al. (2025) for the 41-tile survey (10% of the sky), as published and
-calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.""",
+A catalogue-level model in the form of Zubeldia et al. (2025) for the 41-tile survey (10% of the sky):
+uncalibrated (code name `published`), and calibrated on map-level simulations. Runs on a laptop CPU in a few minutes.""",
     """import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -125,18 +125,18 @@ th = priors.to_theta(priors.fiducial())
 print(f"f_sky = {cfg.f_sky:.4f}")""",
     """md:## The noise table
 
-The published model's $q$ is $\\bar y_0 / \\sigma_{y_0}(\\theta_{500})$, with $\\sigma_{y_0}$ the matched
+The uncalibrated model's $q$ is $\\bar y_0 / \\sigma_{y_0}(\\theta_{500})$, with $\\sigma_{y_0}$ the matched
 filter's noise for the instrument and the CMB: here computed analytically for our filter and the 2019 SO
-forecast noise. The paper's own table (for its filter and 40% of the sky) is shown for comparison.""",
+forecast noise. The table of Zubeldia et al. (2025), for their filter and 40% of the sky, is shown for comparison.""",
     """import jax.numpy as jnp
 paper_sz, _ = ct.paper_tables()
 tt = np.geomspace(0.5, 15, 50)
 plt.figure(figsize=(5, 3.2))
 plt.loglog(tt, np.asarray(ct.noise_sigma(sz, jnp.asarray(tt))), label="our filter, forecast noise")
-plt.loglog(tt, np.asarray(ct.noise_sigma(paper_sz, jnp.asarray(tt))), "--", label="the paper's table")
+plt.loglog(tt, np.asarray(ct.noise_sigma(paper_sz, jnp.asarray(tt))), "--", label="Zubeldia et al. (2025) table")
 plt.xlabel("θ500 [arcmin]"); plt.ylabel("σ_y0"); plt.legend()""",
     """md:The two tables belong to different filters and surveys: ours is computed for our filter and the 2019
-forecast noise, the paper's for its own set-up. Both fall with the cluster's size, because a larger template
+forecast noise, that of Zubeldia et al. (2025) for theirs. Both fall with the cluster's size, because a larger template
 collects more signal against the same noise.""",
     """md:## Expected counts and simulations
 
@@ -159,7 +159,7 @@ scatter around the expectation by their Poisson and noise fluctuations.""",
 A calibration replaces the instrument-plus-CMB noise by the finder's own noise and, per redshift bin, draws
 $q_\\mathrm{obs} = \\sqrt{(s q)^2 + k} + w\\,\\mathcal N(0,1)$, with a loss rate $f$. Here the values measured on 20
 map-level mocks at the true parameters (the table on the Calibration page), with the finder's noise 7.6% above
-the analytic one at 2′ (and the measured ratio at each filter size).""",
+the analytic one at 2.7′ (and the measured ratio at each filter size).""",
     """# the finder's noise over the analytic one at the filter's 15 sizes (0.5' to 15'), mean over 41 tiles x 5 mocks
 ratio = np.array([1.059, 1.062, 1.064, 1.067, 1.070, 1.073, 1.075, 1.076, 1.076, 1.074, 1.070, 1.064, 1.056, 1.047, 1.038])
 sz_cal = sz._replace(lnsig=sz.lnsig + np.log(ratio)[None])
@@ -173,20 +173,20 @@ plt.imshow(r, cmap="RdBu", vmin=0.8, vmax=1.2, origin="lower")
 for i in range(4):
     for j in range(5):
         plt.text(j, i, f"{r[i, j]:.2f}", ha="center", va="center", fontsize=8)
-plt.xlabel("redshift bin"); plt.ylabel("q bin"); plt.title("calibrated / published expected counts", fontsize=9); plt.colorbar()
-print(f"selected: published {float(en):.0f}, calibrated {float(en_cal):.0f}")""",
+plt.xlabel("redshift bin"); plt.ylabel("q bin"); plt.title("calibrated / uncalibrated expected counts", fontsize=9); plt.colorbar()
+print(f"selected: uncalibrated {float(en):.0f}, calibrated {float(en_cal):.0f}")""",
     """md:Calibrated, the model expects 10–25% fewer bright clusters (red cells in the upper rows), because the
 finder's noise is higher than the instrument's, and slightly more faint ones at high redshift, because of the
-search lift. These are the differences the map-level mocks show against the published model (the Finder
-page). The calibrated model reproduces them at the true parameters, but only there.""",
+search lift. These are the differences the map-level mocks show against the uncalibrated model at goal-depth
+forecast noise (the Finder page). The calibrated model reproduces them at the true parameters, but only there.""",
 ]
 
 POSTERIOR = [
     """md:# A posterior, and how to check it
 
-Neural posterior estimation on a small set of catalogue-level simulations (the published model, 10% of the
+Neural posterior estimation on a small set of catalogue-level simulations (the uncalibrated model, 10% of the
 sky), its posterior for one mock, and its coverage. Needs the `sbi` extra. Runs on a laptop in about 10 min;
-the published runs use 10,000 simulations and five networks.""",
+the runs on the Results page use 10,000 simulations and one to five networks.""",
     """import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -219,7 +219,7 @@ print(f"2,000 training catalogues in {time.time() - t0:.0f} s")""",
     """post, info = npe.train(th_train, x_train, box="map", seed=11)
 info""",
     """md:Training stops when the validation loss has not improved for 50 epochs. With 2,000 simulations it takes
-a minute or two on a laptop; the published runs use 10,000.""",
+a minute or two on a laptop; the runs on the Results page use 10,000.""",
     """md:## One mock
 
 A catalogue at the true parameters, and the posterior of the four parameters the counts constrain.""",
@@ -233,7 +233,7 @@ for j, a in enumerate(ax):
     a.set_xlabel(priors.LABELS[j])
 plt.tight_layout()""",
     """md:The dotted lines mark the true values. With 2,000 training simulations and one mock, the posteriors should
-contain the truth, but expect them to be wider and less regular than those of the published runs.""",
+contain the truth, but expect them to be wider and less regular than those of the runs on the Results page.""",
     """md:## Coverage
 
 On 100 prior draws: the fraction whose true value lies in each central credible interval. A calibrated
@@ -250,8 +250,9 @@ for j in range(4):
     plt.plot(np.r_[0, npe.LEVELS, 1], np.r_[0, cov[:, j], 1], label=priors.LABELS[j])
 plt.xlabel("credible level"); plt.ylabel("coverage"); plt.legend()""",
     """md:Here the test data come from the same catalogue model as the training set, so the curves should follow
-the diagonal within the scatter of 100 draws: the network is calibrated for its own model. The bias test on the
-Results page applies such networks to map-level skies instead, where they are not.""",
+the diagonal within the scatter of 100 draws: the network has correct coverage for its own model. The bias test on the
+Results page applies such networks to our map-level skies at goal-depth forecast noise instead, where they
+are not ([Scope](../results.md#scope)).""",
 ]
 
 for name, cells in (("one_tile", ONE_TILE), ("catalogue_models", CATALOGUES), ("posterior", POSTERIOR)):

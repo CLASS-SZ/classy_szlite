@@ -1,13 +1,13 @@
 """The figures of the cluster-count pages (docs/clusters/figures/*.png) and the numbers of their tables
-(docs/clusters/figures/numbers.json), from the pipeline's outputs (public forecast-noise runs).
+(docs/clusters/figures/numbers.json), from the pipeline's outputs (runs with the 2019 SO forecast noise).
 
     python docs/clusters/make_figures.py RESULTS_DIR
 
-RESULTS_DIR holds the published runs' files in this layout (the research scripts' output folders):
+RESULTS_DIR holds the files of the runs on these pages in this layout (the research scripts' output folders):
 
     maps_npe_forecast/          truth.npz, npe_t1.json, npe_t1_samples.npz, npe_e{0-4}_applied_{mocks,held}.npz
     maps_npe_forecast_t168/     npe_map_e{11-15}_applied_{mocks,held}.npz
-    catalogue_npe/forecast41/   truth.npz, npe_t2.json, npe_t2_samples.npz           (published model)
+    catalogue_npe/forecast41/   truth.npz, npe_t2.json, npe_t2_samples.npz           (uncalibrated model)
     catalogue_npe/calibf41/     npe_t2cal*                                          (calibrated at one point)
     catalogue_npe/calibtf41/    npe_t2calt*                                         (calibrated, linear in theta)
     catalogue_npe/calibcf41/    truth.npz, npe_t2calc*                              (calibrated, noise level)
@@ -25,6 +25,7 @@ import sys
 
 import numpy as np
 import matplotlib
+import matplotlib.ticker
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -33,14 +34,25 @@ from scipy.ndimage import gaussian_filter, gaussian_filter1d  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIG = os.path.join(HERE, "figures")
 C = dict(map="#2a78d6", published="#eb6834", point="#1baf7a", noise="#6250d6", theta="#52514e", ink="#14171c")
-LABEL = dict(map="map level", published="catalogue, as published", point="catalogue, calibrated at one point",
-             theta="catalogue, calibrated (linear in θ)", noise="catalogue, calibrated (noise level)")
-P4 = ["σ8", "ω_c", "A_SZ", "α_SZ"]
-NAMES10 = ["σ8", "ω_c", "A_SZ", "α_SZ", "h", "ω_b", "n_s", "σ_SZ", "β_lens", "σ_lens"]
+LABEL = dict(map="map level", published="catalogue, uncalibrated", point="catalogue, calibrated at one point",
+             theta=r"catalogue, calibrated (linear in $\theta$)", noise="catalogue, calibrated through the noise level")
+P4 = [r"$\sigma_8$", r"$\omega_\mathrm{c}$", r"$A_\mathrm{SZ}$", r"$\alpha_\mathrm{SZ}$"]
+NAMES10 = P4 + [r"$h$", r"$\omega_\mathrm{b}$", r"$n_\mathrm{s}$", r"$\sigma_\mathrm{SZ}$", r"$\beta_\mathrm{lens}$",
+                r"$\sigma_\mathrm{lens}$"]
+# numbers.json keys of the thirds (kept as they were) and their mathtext labels
+THIRDS = (("ω_c", r"$\omega_\mathrm{c}$"), ("A_SZ", r"$A_\mathrm{SZ}$"), ("α_SZ", r"$\alpha_\mathrm{SZ}$"))
+WIDTHS = "bias  [posterior widths]"
 plt.rcParams.update({"figure.dpi": 220, "savefig.dpi": 220, "font.size": 10, "axes.spines.top": False,
                      "axes.spines.right": False, "axes.grid": True, "grid.color": "#e6e8ec", "grid.linewidth": 0.6,
                      "legend.frameon": False, "savefig.bbox": "tight", "savefig.facecolor": "white"})
 NUM = {}
+
+
+def plain_log_ticks(axis, ticks):
+    """Explicit major ticks with plain labels on a log axis, and no minor labels."""
+    axis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
+    axis.set_major_formatter(matplotlib.ticker.FixedFormatter([f"{t:g}" for t in ticks]))
+    axis.set_minor_formatter(matplotlib.ticker.NullFormatter())
 
 
 def save(fig, name):
@@ -82,7 +94,7 @@ def fig_tile():
     o = tile.stages(log=lambda *a: None)
     down = lambda a: a.reshape(600, 2, 600, 2).mean((1, 3))
     o = dict(o, y=o["y"] * 1e5)
-    panels = [("y", "Compton-y × 10⁵ (painted halos)", "magma", 0, float(np.quantile(o["y"], 0.9995))),
+    panels = [("y", r"Compton-$y$ $\times 10^5$ (painted haloes)", "magma", 0, float(np.quantile(o["y"], 0.9995))),
               ("tsz145", "145 GHz: tSZ [μK]", "RdBu_r", -200, 200), ("cmb145", "145 GHz: CMB [μK]", "RdBu_r", -200, 200),
               ("noise145", "145 GHz: noise [μK]", "RdBu_r", -200, 200), ("m145", "145 GHz: sum [μK]", "RdBu_r", -200, 200),
               ("q_first", "S/N, first pass", "viridis", -3, 8), ("mask", "masking-pass discs", "gray", 0, 1),
@@ -91,11 +103,12 @@ def fig_tile():
     for a, (k, t, cm, lo, hi) in zip(ax.ravel(), panels):
         im = a.imshow(down(o[k]), cmap=cm, vmin=lo, vmax=hi, origin="lower", extent=[0, 10, 0, 10])
         a.set_title(t, fontsize=9); a.set_xticks([]); a.set_yticks([]); a.grid(False)
-        if k not in ("mask",):
-            fig.colorbar(im, ax=a, fraction=0.046, pad=0.02).ax.tick_params(labelsize=7)
-    fig.suptitle("One 10° × 10° tile at the true parameters, 2019 forecast noise (goal)", fontsize=10)
+        cb = fig.colorbar(im, ax=a, fraction=0.046, pad=0.02); cb.ax.tick_params(labelsize=7)
+        if k == "mask":
+            cb.ax.set_visible(False)                  # keeps the panel the same size as the others
+    fig.suptitle(r"One 10° $\times$ 10° tile at the true parameters, 2019 forecast noise (goal)", fontsize=10, y=0.95)
     save(fig, "tile_stages.png")
-    # zoom with detections and halos
+    # zoom with detections and haloes
     p, h = o["peaks"], o["halos"]
     S = 240
     best, b0 = -1, (0, 0)
@@ -117,13 +130,13 @@ def fig_tile():
               edgecolors="#ffd166", lw=1.2, label="detection, confirmed")
     a.scatter((p["x"][pm & ~p["confirmed"]] - x0) * s, (p["y"][pm & ~p["confirmed"]] - y0) * s, marker="s", s=40, facecolors="none",
               edgecolors="#ff5c8a", lw=1.2, label="detection, no halo within 1.5′")
-    a.plot([], [], ls="--", color="gray", lw=0.8, label="halo with model q > 2 (radius θ500)")
+    a.plot([], [], ls="--", color="gray", lw=0.8, label=r"halo with model $q > 2$ (radius $\theta_{500}$)")
     a.set_xlabel("degrees"); a.set_ylabel("degrees")
     a.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, fontsize=7.5)
-    a.set_title("S/N after masking, 2° zoom: detections and halos", fontsize=9)
+    a.set_title("S/N after masking, 2° zoom: detections and haloes", fontsize=9)
     save(fig, "tile_zoom.png")
     NUM["tile"] = dict(halos=int(len(h["z"])), detections5=int(np.sum(p["confirmed"] & (p["q"] > 5))),
-                       noise_ratio_2arcmin=float(o["sigma_final"][7] / o["sigma_model"][7]),
+                       noise_ratio_u=float(o["sigma_final"][7] / o["sigma_model"][7]),
                        noise_ratio_first=float(o["sigma_first"][7] / o["sigma_model"][7]))
     return o
 
@@ -139,8 +152,8 @@ def fig_noise(R, o):
     a.plot(th, o["sigma_first"] / o["sigma_model"], color=C["published"], lw=1.8, ls="--", label="first pass, before masking (one tile)")
     a.axhline(1, color="gray", ls=":", lw=1.2, label="instrument + CMB only (catalogue model)")
     a.set_xscale("log"); a.set_xticks([0.5, 1, 2, 4, 8, 15]); a.set_xticklabels(["0.5′", "1′", "2′", "4′", "8′", "15′"])
-    a.set_xlabel("filter size θ"); a.set_ylabel("σ_finder / σ_instrument+CMB"); a.set_ylim(0.97, 1.34)
-    a.legend(fontsize=8.5, loc="upper left")
+    a.set_xlabel(r"filter size $\theta$"); a.set_ylabel(r"$\sigma_\mathrm{finder}/\sigma_\mathrm{instrument+CMB}$"); a.set_ylim(0.97, 1.34)
+    a.legend(fontsize=8.5, loc="center", bbox_to_anchor=(0.5, 0.47))     # between the two curves
     save(fig, "finder_noise.png")
     NUM["noise"] = dict(ratio_mean=ratio_fid.mean(0).round(3).tolist())
 
@@ -151,12 +164,12 @@ def fig_grid(R):
     u = g["sigma"][:, :, 7].mean(1) / g["sigma"][0, :, 7].mean()
     P = g["theta"]
     fig, ax = plt.subplots(1, 2, figsize=(10.5, 3.8))
-    for a, (c, lab) in zip(ax, ((1, "search lift k"), (2, "scatter w"))):
+    for a, (c, lab) in zip(ax, ((1, r"search lift $k$"), (2, r"scatter $w$"))):
         sc = a.scatter(u, g["rows"][:, 1, c], c=P[:, 2], cmap="cividis", s=36, edgecolors="k", linewidths=0.3)
         a.scatter(u[0], g["rows"][0, 1, c], s=140, facecolors="none", edgecolors="#d03b3b", lw=1.5, label="the true parameters")
-        a.set_xlabel("finder noise at 2′, relative to the true parameters"); a.set_ylabel(lab + "  (0.31 < z < 0.61)")
+        a.set_xlabel("finder noise at 2.7′ relative to the true parameters"); a.set_ylabel(lab + r"  ($0.31 < z < 0.61$)")
         a.legend(fontsize=8.5, loc="upper right" if c == 1 else "upper left")
-    cb = fig.colorbar(sc, ax=ax, fraction=0.025, pad=0.02); cb.set_label("A_SZ of the point")
+    cb = fig.colorbar(sc, ax=ax, fraction=0.025, pad=0.02); cb.set_label(r"$A_\mathrm{SZ}$ of the point")
     save(fig, "calibration_grid.png")
     NUM["grid"] = dict(noise_range=[float(u.min()), float(u.max())], k_range=[float(g["rows"][:, 1, 1].min()), float(g["rows"][:, 1, 1].max())],
                        w_range=[float(g["rows"][:, 1, 2].min()), float(g["rows"][:, 1, 2].max())])
@@ -185,18 +198,19 @@ def fig_relation(R):
     ok = np.isfinite(rows[:, 4])
     a.fill_between(rows[ok, 0], rows[ok, 3], rows[ok, 5], color=C["map"], alpha=0.25, lw=0)
     a.plot(rows[ok, 0], rows[ok, 4], color=C["map"], lw=2, label="finder: median and 16–84%")
-    a.plot([3, 50], [3, 50], color=C["published"], ls="--", label="catalogue model: q_obs = q")
+    a.plot([3, 50], [3, 50], color=C["published"], ls="--", label=r"catalogue model: $q_\mathrm{obs} = q$")
     a.set_xscale("log"); a.set_yscale("log"); a.set_xlim(3, 50); a.set_ylim(3, 50)
-    a.set_xlabel("catalogue model's q of the halo"); a.set_ylabel("finder's q (detected)"); a.legend(fontsize=8)
-    a.set_title("Observed q against the model's q, halo by halo", fontsize=9)
+    plain_log_ticks(a.xaxis, [3, 4, 6, 10, 20, 40]); plain_log_ticks(a.yaxis, [3, 4, 6, 10, 20, 40])
+    a.set_xlabel(r"catalogue model's $q$ of the halo"); a.set_ylabel(r"finder's $q_\mathrm{obs}$ (detected)"); a.legend(fontsize=8)
+    a.set_title(r"Observed $q_\mathrm{obs}$ against the model's $q$, halo by halo", fontsize=9)
     a = ax[1]
     qs = np.geomspace(1.5, 12, 100)
-    a.plot(qs, norm.cdf(qs - 5), color=C["published"], lw=1.8, label="catalogue model Φ(q − 5)")
+    a.plot(qs, norm.cdf(qs - 5), color=C["published"], lw=1.8, label=r"catalogue model $\Phi(q - 5)$")
     m = rows[:, 0] < 12
     a.scatter(rows[m, 0], rows[m, 2], color=C["map"], s=18, zorder=3, label="finder on maps")
-    a.set_xscale("log"); a.set_xticks([2, 3, 5, 8, 12]); a.set_xticklabels(["2", "3", "5", "8", "12"])
-    a.set_xlabel("catalogue model's q of the halo"); a.set_ylabel("P(detected with q > 5)"); a.legend(fontsize=8)
-    a.set_title("Chance of a detection above q = 5", fontsize=9)
+    a.set_xscale("log"); plain_log_ticks(a.xaxis, [2, 3, 4, 6, 8, 12])
+    a.set_xlabel(r"catalogue model's $q$ of the halo"); a.set_ylabel(r"$P$(detected with $q_\mathrm{obs} > 5$)"); a.legend(fontsize=8)
+    a.set_title(r"Chance of a detection above $q_\mathrm{obs} = 5$", fontsize=9)
     save(fig, "finder_relation.png")
 
 
@@ -204,7 +218,10 @@ def fig_counts(R):
     m = np.load(os.path.join(R, "maps_npe_forecast", "truth.npz"))["x"][:, :20]
     out = {}
     fig, ax = plt.subplots(1, 2, figsize=(9.4, 3.0))
-    for a, (name, d, title) in zip(ax, [("published", "forecast41", "as published"), ("noise", "calibcf41", "calibrated (noise level)")]):
+    from classy_szlite.sim.summaries import Q_EDGES, Z_EDGES     # the data vector's bin edges
+    zlab = [f"{e:.2f}" for e in Z_EDGES]
+    qlab = [f"{e:.1f}".removesuffix(".0") for e in Q_EDGES]
+    for a, (name, d, title) in zip(ax, [("published", "forecast41", "uncalibrated"), ("noise", "calibcf41", "calibrated through the noise level")]):
         c = np.load(os.path.join(R, "catalogue_npe", d, "truth.npz"))["x"][:, :20]
         r = (m.mean(0) / c.mean(0)).reshape(4, 5)
         out[name] = r.round(3).tolist()
@@ -212,10 +229,10 @@ def fig_counts(R):
         for i in range(4):
             for j in range(5):
                 a.text(j, i, f"{r[i, j]:.2f}", ha="center", va="center", fontsize=8)
-        a.set_xticks(range(5)); a.set_xticklabels(["0.0–0.3", "0.3–0.6", "0.6–0.9", "0.9–1.2", "1.2–1.5"], fontsize=7)
-        a.set_yticks(range(4)); a.set_yticklabels(["5–8.4", "8.4–14", "14–24", "24–40"], fontsize=7)
-        a.set_xlabel("redshift"); a.set_ylabel("q"); a.grid(False)
-        a.set_title(f"map-level mocks / catalogue model {title}", fontsize=9)
+        a.set_xticks(np.arange(6) - 0.5); a.set_xticklabels(zlab, fontsize=8)      # ticks on the bin edges
+        a.set_yticks(np.arange(5) - 0.5); a.set_yticklabels(qlab, fontsize=8)
+        a.set_xlabel(r"redshift $z$"); a.set_ylabel(r"$q_\mathrm{obs}$"); a.grid(False)
+        a.set_title(f"map-level mocks / catalogue model\n{title}", fontsize=9)
     fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
     save(fig, "counts_ratio.png")
     NUM["counts"] = out
@@ -244,8 +261,8 @@ def fig_bias(R):
         a.axhline(0, color="gray", ls=":", lw=1)
         a.set_xticks(range(4)); a.set_xticklabels(P4); a.set_title(title, fontsize=9)
         a.set_ylim(-9, 3.5)
-    ax[0].set_ylabel("(posterior mean − truth) / posterior σ")
-    ax[1].legend(fontsize=7.5, loc="lower left")
+    ax[0].set_ylabel(WIDTHS)
+    ax[0].legend(fontsize=7.5, loc="lower left")         # the left panel has room below the points
     save(fig, "bias.png")
     NUM["bias"] = res
 
@@ -275,7 +292,7 @@ def fig_coverage(R):
                     a.plot(np.r_[0, LEV, 1], np.r_[0, cc[k][:, jj], 1], color=C[k], lw=2, ls="--" if k == "theta" else "-", label=LABEL[k])
             a.set_title(f"{P4[jj]}, {sky}", fontsize=9.5)
             if row == 1:
-                a.set_xlabel("credible level")
+                a.set_xlabel(r"credible level $\gamma$")
         ax[row, 0].set_ylabel("fraction of skies covered")
     h, l = ax[0, 0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=4, fontsize=8.5, bbox_to_anchor=(0.5, -0.04))
@@ -287,16 +304,18 @@ def fig_coverage(R):
         s = summary(os.path.join(R, sets[k]))
         b = (s["mu"] - s["theta"]) / s["sd"]
         th[k] = {}
-        for jj, nm in ((1, "ω_c"), (2, "A_SZ"), (3, "α_SZ")):
+        for jj, (nm, _) in enumerate(THIRDS, 1):
             e = np.quantile(s["theta"][:, jj], [0, 1 / 3, 2 / 3, 1])
             th[k][nm] = [float(b[(s["theta"][:, jj] >= lo) & (s["theta"][:, jj] <= hi), 0].mean()) for lo, hi in zip(e[:-1], e[1:])]
     fig, ax = plt.subplots(1, 3, figsize=(9.6, 2.8), sharey=True)
-    for a, nm in zip(ax, ("ω_c", "A_SZ", "α_SZ")):
+    for a, (nm, tex) in zip(ax, THIRDS):
         for off, k in ((-0.1, "point"), (0.1, "noise")):
             a.plot(np.arange(3) + off, th[k][nm], "o", color=C[k], label=LABEL[k])
         a.axhline(0, color="gray", ls=":", lw=1); a.set_xticks(range(3)); a.set_xticklabels(["low", "middle", "high"])
-        a.set_title(f"thirds of the true {nm}", fontsize=9)
-    ax[0].set_ylabel("σ8 bias (posterior σ)"); ax[-1].legend(fontsize=7)
+        a.set_title(f"thirds of the true {tex}", fontsize=9)
+    ax[0].set_ylabel(r"$\sigma_8$ " + WIDTHS)
+    h, l = ax[0].get_legend_handles_labels()
+    fig.legend(h, l, loc="upper center", ncol=2, fontsize=8.5, bbox_to_anchor=(0.5, 0.0))
     save(fig, "bias_thirds.png")
     NUM["thirds"] = th
 
@@ -312,7 +331,7 @@ def fig_ensemble(R):
     b, e = bias(ensemble(files))
     a.errorbar(np.arange(4) + 0.24, b[:4], yerr=e[:4], fmt="D", ms=6, color=C["ink"], label="ensemble of the five")
     a.axhline(0, color="gray", ls=":", lw=1.2)
-    a.set_xticks(range(4)); a.set_xticklabels(P4); a.set_ylabel("bias (posterior σ)"); a.legend(fontsize=8.5)
+    a.set_xticks(range(4)); a.set_xticklabels(P4); a.set_ylabel(WIDTHS); a.legend(fontsize=8.5, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2)
     save(fig, "ensemble.png")
 
 
@@ -325,7 +344,7 @@ def corner(post, name, truth=None, rng=None):
         return np.c_[s[:, 0], om, s[:, 2], s[:, 3]]
     post = {k: four(v) for k, v in post.items()}
     truth = truth or [0.811, (0.121 + 0.0222 + nu) / 0.674 ** 2, -4.3054, 1.1233]
-    lab = ["σ8", "Ω_m", "A_SZ", "α_SZ"]
+    lab = [P4[0], r"$\Omega_\mathrm{m}$", P4[2], P4[3]]
     if rng is None:                                   # every posterior's 0.2-99.8% range and the truth, padded
         rng = []
         for i in range(4):

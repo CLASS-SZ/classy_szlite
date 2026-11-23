@@ -1,6 +1,7 @@
 # Calibration
 
-Can the catalogue model be fixed by calibrating it on map-level simulations? This page builds three
+Can the uncalibrated catalogue model be brought into line with the finder by calibrating it on map-level
+simulations? This page builds three
 calibrated versions, each a file that `survey.catalogue_model` reads (`mapsim calibrate`).
 
 ## The calibrated observation model
@@ -14,7 +15,7 @@ q_\mathrm{obs} = \begin{cases} \text{lost} & \text{with probability } f_b,\\
 \sqrt{(s_b\,q)^2 + k_b} + w_b\,\mathcal N(0,1) & \text{otherwise.} \end{cases}
 $$
 
-The published model is $s = 1$, $k = 0$, $w = 1$, $f = 0$ with $\sigma_{y_0}$ in place of
+The uncalibrated model is $s = 1$, $k = 0$, $w = 1$, $f = 0$ with $\sigma_{y_0}$ in place of
 $\sigma_\mathrm{finder}$.
 
 ## Fitting it: a censored likelihood
@@ -60,8 +61,8 @@ over the flat box (5 mocks each), keeping the halo tables for later refits.
   ![The calibration at 25 points of the prior](figures/calibration_grid.png)
   <figcaption>The calibration at the 25 points (the true parameters, circled, and a Latin hypercube of 24 over
   the flat prior), in the redshift bin 0.31–0.61: the search lift k (left) and the scatter w (right), each
-  fitted on 5 map-level mocks, against the finder's noise at 2′ relative to its value at the true parameters.
-  Colour: the point's A_SZ.</figcaption>
+  fitted on 5 map-level mocks, against the finder's noise at 2.7′ (the eighth of the 15 filter sizes)
+  relative to its value at the true parameters. Colour: the point's A_SZ.</figcaption>
 </figure>
 
 The finder's noise moves by −5% to +13% across the prior: more tSZ on the sky (higher $A_\mathrm{SZ}$,
@@ -69,7 +70,7 @@ yellow, or higher $\omega_c$ and $\sigma_8$) means more confusion noise. As the 
 falls from 2.4 to 0.2 and the scatter grows from 0.98 to 1.10: a noisier map makes each faint cluster's own
 fluctuations matter less, and the confusion adds scatter. Both follow the noise level more closely than any
 single parameter; points with very different $A_\mathrm{SZ}$ lie on the same curve. A calibration made at the
-circled point is wrong everywhere else. Two ways to interpolate:
+circled point does not follow these changes. Two ways to interpolate:
 
 **Linear in the parameters** (`calibrated-theta`, `fit_theta`). With $\boldsymbol x = (\boldsymbol\theta -
 \boldsymbol\theta_\mathrm{fid})/\Delta\boldsymbol\theta$ over $(\sigma_8, \omega_c, A_\mathrm{SZ},
@@ -81,7 +82,9 @@ $$
 $$
 
 **Through the finder's noise level** (`calibrated-noise`, `fit_noise_level`). Every part of the calibration
-follows one number closely, the noise level $u = \ln[\sigma_\mathrm{finder}(2';\boldsymbol\theta)/\sigma_\mathrm{finder}(2';\boldsymbol\theta_\mathrm{fid})]$:
+follows one number closely, the noise level
+$u = \ln[\sigma_\mathrm{finder}(2.7';\boldsymbol\theta)/\sigma_\mathrm{finder}(2.7';\boldsymbol\theta_\mathrm{fid})]$,
+at the eighth of the 15 filter sizes (2.74′):
 
 $$
 u(\boldsymbol\theta) = \sum_m a_m\,\phi_m(\boldsymbol x),\ \ \phi \in \{1, x_i, x_i x_j\};\qquad

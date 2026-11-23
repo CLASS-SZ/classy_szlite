@@ -107,7 +107,7 @@ Fitted over all halos with $q > 2$ (the censored likelihood of [Calibration](cal
 | the catalogue model's $q$ (instrument + CMB noise) | 0.921 | 1.39 | 1.09 | 1.0% |
 | the finder's own noise | 0.990 | 1.37 | 1.09 | 1.0% |
 | the finder's own noise, isolated halos | 0.982 | 2.04 | 0.95 | 0.04% |
-| the catalogue model as published | 1 | 0 | 1 | 0 |
+| the uncalibrated catalogue model | 1 | 0 | 1 | 0 |
 
 Against the finder's own noise the scale is 0.99, so the 8% drop is almost all confusion noise.
 
@@ -116,12 +116,12 @@ Against the finder's own noise the scale is 0.99, so the 8% drop is almost all c
 <figure markdown="span">
   ![Mocks over each catalogue model's prediction](figures/counts_ratio.png)
   <figcaption>The 20 counts of the data vector: mean of 100 map-level mocks at the true parameters divided by
-  the mean of 100 catalogue-level simulations of the same survey, for the published model (left) and the
+  the mean of 100 catalogue-level simulations of the same survey, for the uncalibrated model (left) and the
   model calibrated through the noise level (right). Rows: bins of q; columns: bins of redshift. Blue: the
   mocks have more clusters; red: fewer.</figcaption>
 </figure>
 
-At the true parameters, the map-level mocks have 9–25% fewer clusters above $q = 8.4$ than the published
-catalogue model predicts, and up to 7% more faint ones at high redshift. Calibrated through the noise
-level, the model comes within 0–4% in most bins, but the brightest bin still differs by up to 7%; what
-remains is the subject of [Calibration](calibration.md#what-a-per-cluster-model-cannot-carry).
+At the true parameters and goal-depth forecast noise, the map-level mocks have 9–25% fewer clusters
+above $q = 8.4$ than the uncalibrated catalogue model predicts, and up to 7% more faint ones at high redshift. Calibrated
+through the noise level, the model comes within 0–4% in most bins, but the brightest bin still differs by up
+to 7%; what remains is the subject of [Calibration](calibration.md#what-a-per-cluster-model-cannot-carry).

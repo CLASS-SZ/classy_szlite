@@ -10,8 +10,8 @@ classy-szlite-get-data                   # the CosmoPower emulator weights, abou
 For a GPU, install the CUDA build of jax (`pip install "jax[cuda12]"`). Everything else is computed
 locally the first time and cached: the profile and paint tables (about 1 min on a laptop) in
 `$CLASSY_SZLITE_CACHE` (default `~/.cache/classy_szlite`). All inputs are public: the CMB comes from the
-package's emulator, the noise from the 2019 SO forecast, and the paper's noise tables ship with the
-package (from cosmocnc, MIT).
+package's emulator, the noise from the 2019 SO forecast, and the noise tables of Zubeldia et al. (2025) ship
+with the package (from cosmocnc, MIT).
 
 ## The `mapsim` command
 
@@ -25,10 +25,10 @@ package (from cosmocnc, MIT).
 | train and apply a posterior | `mapsim train --out OUT --data maps\|M --seed 11` | `OUT/npe/{data}_t41/seed11*.npz/json` |
 | compare every posterior | `mapsim compare --out OUT` | `OUT/compare_t41.json` |
 
-Catalogue models `M`: `published`, `calibrated-point`, `calibrated-noise`, `calibrated-theta` (and `paper`,
-the paper's own tables at 40% of the sky). Sets: `truth` (100 simulations at the true parameters, the
-mocks), `heldout` (500 prior draws, for coverage), `train` (10,000 prior draws). `--tiles 168` gives the
-40.7%-sky survey; its first 41 tiles are the 41-tile survey's skies.
+Catalogue models `M`: `published` (the [uncalibrated model](forward-models.md#the-catalogue-model)), `calibrated-point`, `calibrated-noise`,
+`calibrated-theta` (and `paper`, the noise tables of Zubeldia et al. (2025) for their filter and 40% of the sky). Sets: `truth` (100 simulations at
+the true parameters, the mocks), `heldout` (500 prior draws, for coverage), `train` (10,000 prior draws).
+`--tiles 168` gives the 40.7%-sky survey; its first 41 tiles are the 41-tile survey's skies.
 
 Every step writes as it goes and resumes where it stopped. `mapsim train` applies the posterior to the
 map-level mocks (`mocks`), the map-level prior draws (`prior`) and its own model's prior draws (`own`), and
@@ -73,6 +73,5 @@ laptop CPU takes a few minutes.
 
 ## Research scripts
 
-`benchmarks/mapsim/` keeps the scripts that produced the published runs, including one-off checks; they
-read data paths of the original cluster set-up and are kept as a record. The pipeline above reproduces
-their public-noise results.
+`benchmarks/mapsim/` keeps the research scripts behind the runs on these pages, including one-off checks;
+the pipeline above reproduces their results.
