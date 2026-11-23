@@ -1,0 +1,237 @@
+\section{The finder against the catalogue model}\label{sec:finder}
+
+In this section we measure, halo by halo, how the signal-to-noise assigned by the finder differs from that of
+the catalogue model, and how the difference propagates into the counts. The catalogue model of
+equation~(\ref{eq:catalogue}) gives each halo a signal-to-noise $\qtrue = y_0/\sigma_{y_0}(\theta_{500})$,
+where $y_0 = \bar y_0\,e^{\ssz g}$ is the central Compton-$y$ of the halo (including its log-normal scatter),
+$\theta_{500}$ its angular size and $\sigma_{y_0}(\theta)$ the noise of the matched filter at size $\theta$ for
+the instrument and the CMB alone. In this model the measured value scatters around $\qtrue$ with unit Gaussian
+scatter, and a cluster is selected if $\qobs > 5$. The catalogue model leaves out three effects of the
+finder: confusion noise from the tSZ signal of all other haloes, the search lift caused by the finder's own
+search over positions and sizes, and neighbours; and it assumes Gaussian scatter, which the finder's errors
+break through an upward tail. We build calibrated catalogue models from these measurements in
+Section~\ref{sec:calibration}, where we also return to the upward tail.
+
+\subsection{Halo tables}\label{sec:finder_tables}
+
+To compare the two, we rerun 20 map-level mocks of the 41-tile survey at the true parameters and record
+three numbers for every halo above $5\times10^{13}\,\msun$, 3.6 million haloes in all:
+\begin{enumerate}
+\item the catalogue model's $\qtrue$ of equation~(\ref{eq:catalogue});
+\item the same signal divided by the finder's own noise,
+\begin{equation}
+q_\mathrm{f} = \frac{y_0}{\sfinder(\theta_{500}\mid\bm\theta)},
+\label{eq:q_finder_noise}
+\end{equation}
+where $\sfinder(\theta_j\mid\bm\theta)$ is the noise $\sigma_\theta$ of equation~(\ref{eq:sigtheta}) that the finder
+estimates from the maps after its masking pass at filter size $\theta_j$, interpolated to the size of the halo;
+\item $\qobs$, the signal-to-noise of the finder's confirmed peak matched to the halo, if there is one.
+\end{enumerate}
+Each peak is matched to the halo that confirms it, namely the halo above $5\times10^{13}\,\msun$ with the
+largest $y_0$ within $1.5\arcmin$. Since the filter itself agrees with \textsc{SZiFi} and with the analytic
+$\sigma_{y_0}$ on maps without clusters (Section~\ref{sec:sims:catalogue}), the differences reported below
+arise from the clusters on the sky rather than from the filter.
+
+\subsection{Confusion noise}\label{sec:finder_noise}
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/finder_noise.png}
+\caption{Ratio of the finder's noise $\sfinder$ to the noise of the instrument and the CMB alone (the
+catalogue model's $\sigma_{y_0}$) as a function of the filter size $\theta$, at each of the filter's 15 sizes
+from $0.5\arcmin$ to $15\arcmin$, at the true parameters with the forecast noise. The dashed orange curve is
+the first pass, before masking, on one tile. The solid blue curve is the mean over the 41 tiles of the survey
+(5 mocks each) after the masking pass, with the 5--95 per cent range over tiles shown as a light band, which is
+narrower than the line at most sizes. The dotted grey line marks a ratio of one, as assumed by the catalogue
+model.}
+\label{fig:noise}
+\end{figure}
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/finder_relation.png}
+\caption{The finder's signal-to-noise compared with the catalogue model's, halo by halo, at the true
+parameters. Left: the finder's $\qobs$ against the catalogue model's $\qtrue$ of the same halo, for haloes
+detected with $\qobs > 4$, both on logarithmic axes. The grey dots are 2500 haloes drawn at random from the
+detected haloes of the 5 mocks at the true point of the calibration grid (Section~\ref{sec:calib-grid}),
+whereas the fits of Table~\ref{tab:finderfit} use 20 mocks. The blue line and band show the median and the
+16--84 per cent range of $\qobs$ in bins of $\qtrue$, and the dashed orange line the catalogue model's mean,
+$\qobs = \qtrue$, on which a perfect catalogue model would place the median. Right: the fraction of haloes
+detected and confirmed with $\qobs > 5$ as a function of the catalogue model's $\qtrue$ (blue dots), compared
+with the catalogue model's prediction $\Phi(\qtrue - 5)$ (orange line), where $\Phi$ is the standard normal
+distribution function.}
+\label{fig:relation}
+\end{figure*}
+
+The catalogue model assumes that the signal-to-noise of a cluster is set by the instrument and the CMB. The
+finder, however, estimates its noise from the maps, in annuli of multipole $\ell$, and these maps also contain
+the tSZ signal of every other halo, so that its noise is higher than the catalogue model's at every filter
+size (Fig.~\ref{fig:noise}). In the
+finder's first pass on one tile (dashed curve), the power of the bright clusters themselves raises the noise by 20--30 per cent. The rise is strongest at sizes of 2--$8\arcmin$, the size of typical clusters, with a ratio of 1.30 at
+$2.7\arcmin$. After the masking pass, which removes the bright clusters, the ratio drops to the solid curve, but
+not to one, because the tSZ signal of the many haloes too faint to be masked remains. Averaged over the 41
+tiles, this confusion noise lies 4--8 per cent above the catalogue model's noise at every size, with ratios of
+1.06 at $0.5\arcmin$, 1.08 at 2.7--$3.5\arcmin$ and 1.04 at $15\arcmin$. This noise lowers the $q$ of every
+cluster by the same amount. The band over tiles is narrow because, with the forecast noise, all tiles have
+the same noise spectrum, so that the remaining spread comes from the tSZ signal. Since haloes below
+$10^{13}\,\msun$ or above $z = 3$ are not painted (Section~\ref{sec:sims:maps}), this is a lower bound on the
+confusion noise, although we have not computed the share of the tSZ power that these haloes would contribute.
+
+\subsection{Search lift and neighbours}\label{sec:finder_relation}
+
+We then compare, in Fig.~\ref{fig:relation}, the finder's $\qobs$ with the catalogue model's $\qtrue$ for the
+same haloes. Above $\qtrue \approx 6$, we find that the median in the left panel lies about 8 per cent below the diagonal,
+which is the confusion noise of Fig.~\ref{fig:noise}. The scatter around the median is close to the unit
+scatter assumed by the model, though a little wider. Below $\qtrue \approx 6$ the median flattens, partly
+through selection, since only haloes with $\qobs > 4$ are plotted, and partly through the search lift
+described below. In the right panel, which shows the selection directly, the detection fraction of the
+finder for faint haloes, with $\qtrue$ below 4, is close to the model's $\Phi(\qtrue - 5)$ on this scale. Between
+$\qtrue \approx 4$ and 8, however, the finder detects fewer haloes because of its higher noise. Above $\qtrue \approx 8$, the fraction levels off just below one, since about 1 per cent of haloes lose their match
+(Table~\ref{tab:finderfit}). These differences change the counts near the threshold, where most clusters
+lie.
+
+Besides the confusion noise, two effects shape these curves. The first, the search lift, arises because the
+finder takes the maximum of $q$ over pixels and over its 15 sizes, and so picks up the upward noise
+fluctuations near each faint cluster. This raises the expected $\qobs$ of faint clusters while leaving bright
+ones almost unchanged, and it acts like $q \to \sqrt{q^2 + k}$, with a lift $k$ of order 1 at the true
+parameters (Table~\ref{tab:finderfit}). This form is the same as that of the optimisation bias of SZ detection
+significances described by \citet{Vanderlinde2010}, whose value of $k = 3$ counts two degrees of freedom in
+position and one in size for a continuous search. Our search is instead discrete, over pixels of
+$0.5\arcmin$ and 15 sizes, and a peak needs to exceed only its four neighbouring pixels. We therefore expect it to gain less than a continuous search, although we have not derived $k$ for it. The second effect, that of
+neighbours, arises because nearby clusters add signal and noise to the peak of a cluster and so widen the
+scatter. In addition, since a peak is confirmed by only one halo, a halo can lose its detection to a heavier neighbour within
+$1.5\arcmin$, in which case it is not matched.
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{figures/tile_zoom.png}
+\caption{A $2\degr \times 2\degr$ zoom of the tile of Fig.~\ref{fig:tile} at the true parameters. The colour
+shows the finder's signal-to-noise after the masking pass, at the best of its 15 sizes, from $-3$ (dark) to
+10 (yellow). Squares mark the kept peaks with $q > 4$, in yellow when confirmed by a halo above
+$5\times10^{13}\,\msun$ within $1.5\arcmin$ and in pink otherwise. Dashed white circles of radius
+$\theta_{500}$ mark the haloes above $5\times10^{13}\,\msun$ whose catalogue-model $\qtrue$ exceeds 2. Axes
+are in degrees.}
+\label{fig:zoom}
+\end{figure}
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/counts_ratio.png}
+\caption{The 20 counts of the data vector at the true parameters, given as the mean of 100 map-level mocks of
+the 41-tile survey divided by the mean of 100 catalogue-level simulations of the same survey, for the
+uncalibrated catalogue model (left) and the noise-level calibration (Section~\ref{sec:calib-noise}; right).
+Rows are bins of $q$ (edges 5, 8.4, 14.1, 23.8, 40) and columns bins of redshift (edges 0.01, 0.31, 0.61,
+0.90, 1.20, 1.50). The ratio is printed in each cell and shown in colour from 0.8 to 1.2, in blue where the
+mocks have more clusters than the model predicts and in red where they have fewer. A ratio of one (white)
+means that the catalogue model predicts the map-level mocks exactly.}
+\label{fig:counts}
+\end{figure*}
+
+\subsection{Fitting the finder's response}\label{sec:finder_fit}
+
+To measure these effects, we fit the $\qobs$ of each halo with
+\begin{equation}
+\qobs =
+\begin{cases}
+\text{lost} & \text{with probability } f,\\
+\sqrt{(s\,q)^2 + k} + w\,\epsilon & \text{otherwise},
+\end{cases}
+\label{eq:qobs_fit}
+\end{equation}
+where $q$ is a reference signal-to-noise (either $\qtrue$ or $q_\mathrm{f}$), $\epsilon$ a standard normal
+variable, $s$ a scale, $k$ the search lift, $w$ the scatter and $f$ the fraction of haloes lost. Each of the
+four parameters is meant to capture mainly one effect. The scale $s$ absorbs any change in $q$ that the
+reference noise does not carry, the lift $k$ describes the search, raising faint haloes most and leaving
+bright ones nearly unchanged, and the scatter $w$ allows for the extra spread caused by neighbours. The loss
+rate $f$ is the probability that a halo loses its peak to a heavier neighbour or that its peak is merged into
+a brighter one. Because the four are fitted together and are partly degenerate, however, their values are
+effective ones rather than clean measurements of each effect. The catalogue model of
+equation~(\ref{eq:catalogue}) corresponds to $s = 1$, $k = 0$, $w = 1$ and $f = 0$, with $q = \qtrue$.
+
+Because many haloes are not detected, we fit with a censored likelihood. We count a halo as detected if it is
+matched to a kept and confirmed peak with $\qobs > 4$, the finder's threshold, and otherwise treat it as
+censored, knowing only that it was not detected. Over all haloes with reference $q > 2$ we then maximise
+\begin{equation}
+\begin{split}
+\ln\mathcal{L}(s,k,w,f) ={}& \sum_{\text{detected}} \left[\ln(1-f) + \ln\frac{1}{w}\,\phi\!\left(\frac{\qobs - \mu}{w}\right)\right]\\
+&+ \sum_{\text{not detected}} \ln\!\left[f + (1-f)\,\Phi\!\left(\frac{4 - \mu}{w}\right)\right],
+\end{split}
+\label{eq:censored}
+\end{equation}
+where $\mu = \sqrt{(s\,q)^2 + k}$ is the mean of $\qobs$ for a halo that is not lost, and $\phi$ and $\Phi$ are
+the standard normal density and distribution function. Here the first sum is the log-probability density of each
+measured $\qobs$, and the second is the log-probability that a halo is not detected, either because it was lost
+or because its $\qobs$ fell below 4. We maximise $\ln\mathcal{L}$ with the Nelder--Mead method
+\citep{NelderMead1965}, as implemented in SciPy \citep{Virtanen2020}.
+
+This censored form matters because many haloes with $q > 2$ are not detected. A fit to the detected ones alone would keep the upward fluctuations near the threshold while dropping the downward ones, and would thus
+be biased. The loss term $f$ is needed for a similar reason, since a bright halo that loses its match to a heavier
+neighbour has no peak. Without $f$, the likelihood reads such a halo as a fluctuation many units below its
+mean, and a few such haloes suffice to inflate the fitted scatter. On synthetic data in which 1~per cent of the
+haloes are lost at random, leaving $f$ out moves the fitted $k$ from 1.9 to $-3.2$ and $w$ from 1.0 to 2.0.
+With $f$ in the model, in contrast, these haloes are absorbed by the loss rate and leave $k$ and $w$
+unaffected.
+
+\begin{table}
+\centering
+\caption{Fits of equation~(\ref{eq:qobs_fit}) with the censored likelihood~(\ref{eq:censored}) to the
+finder's $\qobs$, halo by halo, on all haloes with reference $q > 2$ in 20 map-level mocks of the 41-tile
+survey at the true parameters (3.6 million haloes above $5\times10^{13}\,\msun$). The reference $q$ is either
+the catalogue model's $\qtrue$ (equation~\ref{eq:catalogue}) or the same signal divided by the finder's own
+noise, $q_\mathrm{f}$ (equation~\ref{eq:q_finder_noise}). Isolated haloes have no other halo with
+$\qtrue > 1$ within $3\arcmin$. The last row gives the uncalibrated catalogue model.}
+\label{tab:finderfit}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Reference $q$ & $s$ & $k$ & $w$ & $f$ \\
+\midrule
+$\qtrue$ (instrument + CMB noise) & 0.921 & 1.39 & 1.09 & 1.0\% \\
+$q_\mathrm{f}$ (finder's own noise) & 0.990 & 1.37 & 1.09 & 1.0\% \\
+$q_\mathrm{f}$, isolated haloes & 0.982 & 2.04 & 0.95 & 0.04\% \\
+Uncalibrated model & 1 & 0 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fits in Table~\ref{tab:finderfit} show that the 8 per cent drop in $q$ is almost entirely due to
+confusion noise, since the scale is $s = 0.921$ against the catalogue model's $\qtrue$ but 0.990 against the
+finder's own noise. Consequently, a catalogue model that takes its noise from the maps, rather than from the
+instrument and the CMB alone, removes most of this offset (Section~\ref{sec:calib-point}). Against the finder's own
+noise, the search lift is $k = 1.37$ over all haloes and 2.04 for isolated haloes. In addition, the scatter
+falls from $w = 1.09$ over all haloes to 0.95 for isolated ones, and the fraction lost from 1.0 to 0.04 per cent. Neighbours therefore account for both the wider scatter and nearly all the losses. The larger $k$ of
+isolated haloes reflects the degeneracy between the parameters, although we have not computed the errors of
+these fits or the correlations between $s$, $k$ and $w$. Near the threshold, a larger lift and a wider
+scatter both raise the detection rate, so that over all haloes the wider scatter does part of the work that
+the lift does for isolated ones. Losses are highest at low redshift, at 2.9 per cent for $z < 0.31$, where clusters
+are large and overlap. None of the three effects is included in the uncalibrated model (last row).
+
+\subsection{A closer look at one tile}\label{sec:finder_zoom}
+
+We can see these effects directly on a small patch of sky in Fig.~\ref{fig:zoom}. Most bright spots carry a
+yellow square inside a circle, which marks a cluster that the finder detects and confirms. Many circles,
+however, have no square, because they mark haloes with $\qtrue$ between 2 and about 5 that the finder misses
+or finds below its threshold, as the catalogue model also expects. Conversely, a few yellow squares have no
+circle, for example near $(0.52\degr, 0.91\degr)$ and $(1.72\degr, 0\degr)$, because the halo that confirms
+them has $\qtrue < 2$. These peaks are mostly noise or blends that a massive but faint halo within
+$1.5\arcmin$ confirms by chance. Since the tile of Fig.~\ref{fig:tile} holds 4292 haloes above
+$5\times10^{13}\,\msun$, a random position has such a halo within $1.5\arcmin$ with a probability of about 8
+per cent. The catalogue model has no such chance confirmations, although we have not measured how many of them
+enter the counts above $q = 5$. A pink square, in turn, is a detection with no massive halo within
+$1.5\arcmin$, and is either a noise peak or a blend of haloes below the confirmation mass. Finally, the squares
+sit at the pixel and size at which $q$ peaks, often slightly off the centre of the halo, which illustrates the
+search over positions and sizes that gives rise to the search lift.
+
+\subsection{Consequence for the counts}\label{sec:finder_counts}
+
+We now turn to the counts that enter the inference, which Fig.~\ref{fig:counts} shows cell by cell for the 20
+entries of the data vector. For the uncalibrated model (left panel), the mocks at goal-depth noise contain
+9--25 per cent fewer clusters above $q = 8.4$ than the model predicts, with ratios of 0.75--0.91. This deficit
+is due to the confusion noise, which lowers every $q$ by about 8 per cent and, since the counts fall steeply
+with $q$, leaves fewer clusters in each bright bin. In the lowest bin, $5 < q < 8.4$, the ratio instead runs
+from 0.95 at low redshift to 1.07 at high redshift, because the search lift and the wider scatter push faint
+clusters over the threshold and partly offset the confusion noise. Chance confirmations of noise peaks
+(Section~\ref{sec:finder_zoom}) may also contribute. These ratios hold at
+goal-depth noise, and we discuss other noise levels in Section~\ref{sec:discussion:scope}. A posterior built on
+the uncalibrated model reads the missing bright clusters as a change in the cosmological and tSZ--mass
+relation parameters (Section~\ref{sec:results}). Finally, the right panel shows the noise-level calibration, which we
+build and discuss in Section~\ref{sec:calibration}.

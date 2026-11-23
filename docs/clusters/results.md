@@ -168,7 +168,10 @@ realistic those skies are. A real-data analysis would need more:
   real data.
 - **Noise.** The noise is Gaussian with one power spectrum per tile. Real maps have scan stripes, depth
   varying across the footprint and patchy atmosphere.
-- **Foregrounds.** No CIB or radio sources, which matter most at high frequency.
+- **Foregrounds.** No CIB or radio sources. Both sit on clusters: radio galaxies fill in part of the
+  decrement at low frequency, and the CIB adds emission at high frequency. A spectrally constrained filter
+  removes most of the CIB's effect at some cost in signal-to-noise ([The finder](finder.md#how-it-differs-from-szifi));
+  in a map-level simulator that paints the CIB, its effect would instead be part of the forward model.
 - **Confirmation.** Detections are matched to simulated halos with exact redshifts; real catalogues rely
   on optical follow-up, with its own completeness, redshift errors and false matches.
 - **Geometry.** Periodic flat tiles, no masks or survey edges.

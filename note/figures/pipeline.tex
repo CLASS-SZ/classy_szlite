@@ -1,0 +1,83 @@
+% Pipeline diagram: map-level path (top), catalogue path (bottom; the
+% uncalibrated catalogue model), and what
+% the catalogue path leaves out (middle). Only the tikzpicture; wrap it in a
+% figure* in the text. Fits the two-column text width (about 17 cm).
+\begin{tikzpicture}[
+    font=\footnotesize,
+    >={Stealth[length=1.7mm,width=1.4mm]},
+    box/.style={draw, rounded corners=2pt, align=flush center, line width=0.6pt,
+                inner sep=2pt},
+    mapbox/.style={box, draw=mapcol, fill=mapcol!10, text width=20mm,
+                   minimum height=15mm},
+    catbox/.style={box, draw=catcol, fill=catcol!12, minimum height=9mm},
+    inbox/.style={box, draw=black!50, fill=black!4, text width=20mm},
+    note/.style={draw=notecol, fill=notecol!20, rounded corners=2pt,
+                 align=flush center, inner sep=2pt, line width=0.5pt,
+                 text width=20mm, minimum height=12mm},
+    maparr/.style={->, draw=mapcol!80!black, line width=0.7pt},
+    catarr/.style={->, draw=catcol!80!black, line width=0.7pt},
+    inarr/.style={draw=black!55, line width=0.7pt},
+  ]
+  \definecolor{mapcol}{RGB}{72,108,150}
+  \definecolor{catcol}{RGB}{104,140,96}
+  \definecolor{notecol}{RGB}{214,160,48}
+
+  % ---- inputs --------------------------------------------------------------
+  \node[inbox, minimum height=9mm, anchor=north west] (theta) at (0,1.3)
+    {Parameters $\boldsymbol{\theta}$};
+  \node[inbox, below=4mm of theta] (halos)
+    {Haloes: Poisson\\ in $(z,M)$,\\ Tinker et al.\\ (2008)};
+  \draw[inarr, ->] (theta) -- (halos);
+  \path (theta.east) ++(3mm,0) coordinate (bus);
+
+  % ---- map-level path (top row) ------------------------------------------
+  \node[mapbox, anchor=west] (paint) at ([xshift=3mm]bus |- 0,1.8)
+    {Paint tSZ\\ ($0.25\arcmin$ grid)};
+  \node[mapbox, right=2.5mm of paint] (maps)
+    {Six frequency maps: tSZ\,+\,lensed CMB\,+\,noise};
+  \node[mapbox, right=2.5mm of maps]  (mf)    {Matched filter:\\ 6 channels,\\ 15 sizes};
+  \node[mapbox, right=2.5mm of mf]    (mask)  {Mask, then\\ filter again};
+  \node[mapbox, right=2.5mm of mask]  (peaks) {Peaks, merge,\\ confirm};
+  \node[mapbox, right=2.5mm of peaks] (summ)  {21 numbers:\\ $N_{ab}$ and $\hat p$};
+  \foreach \a/\b in {paint/maps, maps/mf, mf/mask, mask/peaks, peaks/summ}
+    \draw[maparr] (\a) -- (\b);
+
+  % ---- catalogue path (bottom row) ----------------------------------------
+  \coordinate (low) at (0,-1.65);
+  \node[catbox, fit=(paint.west |- low) (maps.east |- low), inner sep=0pt] (mean)
+    {Instrument\,+\,CMB noise table\\ $q_\mathrm{true}=y_0/\sigma_{y_0}(\theta_{500})$};
+  \node[catbox, fit=(mask.west |- low) (peaks.east |- low), inner sep=0pt] (scat)
+    {Unit Gaussian scatter\\ $q_\mathrm{obs}=q_\mathrm{true}+\mathcal{N}(0,1)$};
+  \node[catbox, fit=(summ.west |- low) (summ.east |- low), inner sep=0pt] (csumm)
+    {21 numbers:\\ $N_{ab}$ and $\hat p$};
+  \draw[catarr] (mean) -- (scat);
+  \draw[catarr] (scat) -- (csumm);
+
+  % ---- inputs feed both paths ------------------------------------------------
+  \draw[inarr] (theta.east) -- (theta.east -| bus);
+  \draw[inarr] (halos.east) -- (halos.east -| bus);
+  \draw[inarr] (bus |- paint) -- (bus |- low);
+  \draw[maparr] (bus |- paint) -- (paint.west);
+  \draw[catarr] (bus |- low) -- (mean.west);
+
+  % ---- neural posterior, between the two summaries ---------------------------
+  \coordinate (mid) at ($(summ.south)!0.5!(csumm.north)$);
+  \node[box, draw=black!50, fill=black!4, text width=20mm, minimum height=9mm]
+    (post) at (mid) {Neural posterior};
+  \draw[maparr] (summ) -- (post);
+  \draw[catarr] (csumm) -- (post);
+
+  % ---- what the catalogue path leaves out (middle band) --------------------
+  % three effects of the finder, plus the upward tail of its errors
+  \node[align=flush center, text width=20mm, text=notecol!50!black,
+        font=\footnotesize\itshape] at (paint |- mid)
+    {Left out of the\\ catalogue path:};
+  \node[note] (n1) at (maps |- mid)
+    {\textbf{Confusion noise}\\ $\sigma$ up 4--8\%};
+  \node[note] (n2) at (mf |- mid)
+    {\textbf{Search lift}\\ $q\to\sqrt{q^2+k}$};
+  \node[note] (n3) at (mask |- mid)
+    {\textbf{Neighbours}\\ scatter, losses};
+  \node[note] (n4) at (peaks |- mid)
+    {\textbf{Upward tail}\\ non-Gaussian errors};
+\end{tikzpicture}

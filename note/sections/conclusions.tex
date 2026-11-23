@@ -1,0 +1,59 @@
+\section{Conclusions}\label{sec:conclusions}
+
+In this work, we have performed simulation-based inference of tSZ cluster counts with a forward model that
+runs the cluster finder on simulated multi-frequency maps, for an SO-like survey with the goal-depth
+forecast noise of \citet{SO2019}. We have compared it, on the same simulated skies, with catalogue-level
+models, adopting the 21-number summary and the form of the catalogue model of \citet{Zubeldia2025},
+together with their prior with narrower flat ranges. Our main results are as
+follows.
+
+\begin{enumerate}
+\item Map-level simulation-based inference of tSZ cluster counts works at the scale of an SO survey on our
+simulated skies. To our knowledge, it is the first inference of cluster counts in which every training
+simulation runs the cluster finder on simulated multi-frequency maps. At 40.7 per cent of the sky, the
+map-level posterior is within 0.11 widths of the truth, with biases of $-0.11\pm0.08$, $+0.10\pm0.04$,
+$-0.05\pm0.06$ and $+0.03\pm0.06$ widths in $\sigma_8$, $\omc$, $\asz$ and $\alsz$, respectively
+(Table~\ref{tab:bias}). Its 90 and 50 per cent intervals contain the truth for 0.88--0.91 and 0.46--0.51
+of 500 prior skies, respectively (Table~\ref{tab:coverage}). At 10 per cent of the sky, it is
+within 0.12 widths of the truth, with a 90 per cent coverage of 0.86--0.90 and slightly too narrow $\alsz$
+intervals. These results are robust to the training seed (Appendix~\ref{app:robust}), and we discuss the
+offset of $+0.10\pm0.04$ widths in $\omc$ in Section~\ref{sec:discussion:omegac}.
+\item Map-level inference is affordable. On one GPU, a survey simulation takes 0.42\,s at 10 per cent
+of the sky and 1.6\,s at 40.7 per cent, and a training set of 10\,000 surveys takes 70\,min and 4.6\,h,
+respectively. At 40.7 per cent of the sky, the whole comparison, with four posteriors of one to five
+networks each, takes about 6 GPU hours and 4 CPU hours (Table~\ref{tab:cost}).
+\item A catalogue model calibrated on the maps has to carry three effects of the finder, namely confusion
+noise, the search lift and neighbours, as well as the upward tail of its errors
+(Section~\ref{sec:finder}). After its masking pass, the finder's noise is 4--8 per cent above that of the
+instrument and the CMB, because the maps also contain the tSZ signal of faint haloes. In addition, the
+finder's search over positions and sizes raises the $q$ of faint clusters, giving a search lift of
+$k=1.37$ in equation~(\ref{eq:qobs_fit}) against the finder's own noise. Neighbours widen the scatter
+($w=1.09$) and cause nearly all of the lost matches, which amount to 1.0 per cent of the haloes. Finally,
+the finder's errors are not Gaussian but have an upward tail (Section~\ref{sec:finder_tail}).
+\item The one-point calibration, made on 20 mocks at the true parameters with the finder's own noise, also
+fits the search lift, the scatter and the losses. At the true parameters, it is within about 0.2 widths of
+the truth in $\sigma_8$, $\omc$ and $\asz$, with $\alsz$ 0.50 widths high at 10 per cent of the sky and
+0.52 at 40.7 per cent. Since the halo-by-halo scale factor is 0.990 against the finder's own noise but
+0.921 against the noise of the instrument and the CMB, most of the offset is due to the noise
+(Section~\ref{sec:finder_fit}). Across the prior, however, the intervals of this model are too narrow or
+off-centre. Its 90 per cent intervals contain the true $\sigma_8$ for 0.65 of the skies at 10 per cent of
+the sky and for 0.59 at 40.7 per cent (Table~\ref{tab:coverage}).
+\item The noise-level calibration, made at 25 points of the prior through the finder's noise level, gives
+$\sigma_8$, $\omc$ and $\asz$ with close to correct coverage, 0.86--0.90 at 90 per cent. The slope $\alsz$,
+however, stays 0.62 widths high at 10 per cent of the sky and 0.67 at 40.7 per cent, with 90 per cent
+coverage of 0.78 and 0.74, respectively. We attribute this to the upward tail of the finder's errors,
+which grows with the tSZ signal on the sky and which a Gaussian scatter cannot carry.
+\item As a reference, the uncalibrated catalogue model, with a noise table for the instrument and the CMB
+only, as in forecasts, is biased on our map-level skies by up to 8.3 widths at 40.7 per cent of the sky
+and 5.3 at 10 per cent (Table~\ref{tab:bias}). At these two sizes it places $\sigma_8$ high by 2.85 and
+1.86 widths and $\alsz$ low by 8.30 and 5.28 widths, respectively. At the true parameters, the map-level mocks have 9--25 per
+cent fewer clusters above $q=8.4$ than this model predicts (Fig.~\ref{fig:counts}). This bias shows the
+size of the finder's effects at goal depth with a flat prior on $\alsz$. We expect it to be smaller at higher noise and with informative priors on the tSZ--mass relation, although we have not tested these
+cases (Section~\ref{sec:discussion:scope}).
+\end{enumerate}
+
+The finder's response should therefore be forward-modelled in an SO cluster-count analysis, at map level or
+through a calibration that follows the parameters and is validated against map-level simulations. Before
+the simulator used here is applied to data, however, it needs to be extended beyond its present
+simplifications, namely the absence of halo clustering and foregrounds, Gaussian stationary noise and an
+idealised confirmation (Section~\ref{sec:discussion:limits}).

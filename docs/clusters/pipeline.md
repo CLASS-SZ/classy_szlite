@@ -10,8 +10,9 @@ classy-szlite-get-data                   # the CosmoPower emulator weights, abou
 For a GPU, install the CUDA build of jax (`pip install "jax[cuda12]"`). Everything else is computed
 locally the first time and cached: the profile and paint tables (about 1 min on a laptop) in
 `$CLASSY_SZLITE_CACHE` (default `~/.cache/classy_szlite`). All inputs are public: the CMB comes from the
-package's emulator, the noise from the 2019 SO forecast, and the noise tables of Zubeldia et al. (2025) ship
-with the package (from cosmocnc, MIT).
+package's emulator (the runs on these pages used a CAMB spectrum instead, through `MAPSIM_CMB_TABLE`; the two
+agree to 0.4% for $\ell \le 3000$), and the instrument and lensing noise from the 2019 SO forecast. The noise
+tables of Zubeldia et al. (2025) ship with the package (from cosmocnc, MIT) for the `paper` model only.
 
 ## The `mapsim` command
 

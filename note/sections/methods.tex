@@ -1,0 +1,483 @@
+% =====================================================================
+\section{Simulations}\label{sec:sims}
+% =====================================================================
+
+In this section we describe the two forward models of the same survey that we compare. Both start from the same parameters and the same haloes and end in the same 21 numbers. As in
+\citet{Zubeldia2025}, these are the cluster counts in bins of signal-to-noise and redshift and the mean
+CMB-lensing signal-to-noise of the detected clusters. They differ in how a halo becomes a detection
+(Fig.~\ref{fig:pipeline}). The map-level simulator paints every halo into six frequency maps, adds the
+lensed CMB and the instrument noise, and runs a cluster finder on the maps. In contrast, the
+catalogue-level model replaces the maps and the finder by a noise table and a Gaussian scatter. In
+Section~\ref{sec:calibration} we then calibrate the catalogue path on map-level mocks, replacing the noise
+table by the finder's noise and the unit scatter by equation~(\ref{eq:qobs_fit}).
+
+\begin{figure*}
+\centering
+\input{figures/pipeline}
+\caption{The two forward models. Both draw the same haloes from the parameters $\bm\theta$ and end in the
+same data vector of 21 numbers, made of the counts $N_{ab}$ in bins $a$ of signal-to-noise $q$ and $b$ of
+redshift $z$ and of the mean CMB-lensing signal-to-noise $\hat p$ of the detections. In the upper path,
+the map-level simulator paints the tSZ signal of every halo, builds six frequency maps with the lensed CMB
+and the instrument noise, and runs a matched-filter cluster finder with a masking pass, merging and
+confirmation. In the lower path, the uncalibrated catalogue model computes the signal-to-noise of each halo
+from a noise table for the instrument and the CMB, and adds unit Gaussian scatter. The middle row shows
+what the catalogue path leaves out: three effects of the finder (confusion noise, the search lift and
+neighbours), studied in Section~\ref{sec:finder}, and the upward tail by which the finder's errors depart
+from Gaussian scatter (Section~\ref{sec:finder_tail}). A neural posterior is trained on the output of each
+path.}
+\label{fig:pipeline}
+\end{figure*}
+
+% ---------------------------------------------------------------------
+\subsection{Survey, parameters and prior}\label{sec:sims:survey}
+% ---------------------------------------------------------------------
+
+We model the survey as a set of flat, periodic tiles of $10\degr\times10\degr$, each with $1200\times1200$
+pixels of $0.5\arcmin$, and consider two survey sizes: 41 tiles, covering $f_\mathrm{sky}=0.0994$ (10 per
+cent of the sky), and 168 tiles, covering $16\,800\,\mathrm{deg}^2$ ($f_\mathrm{sky}=0.407$). Because they
+use the same random seeds, the first 41 tiles of the larger survey are the skies of the smaller one. Each
+tile is observed in the six channels of the Large Aperture Telescope of the Simons Observatory
+\citep[SO;][]{SO2019}.
+
+We vary ten parameters, listed in Table~\ref{tab:prior}, of which four have flat priors, namely the
+amplitude of matter fluctuations $\sigma_8$, the cold dark matter density $\omc=\Omega_\mathrm{c} h^2$, and
+the log-amplitude $\asz$ (a base-10 logarithm) and slope $\alsz$ of the tSZ--mass relation. The other six
+have Gaussian priors: the Hubble parameter $h$, the baryon density $\omb$, the spectral index
+$n_\mathrm{s}$, the log-normal scatter $\ssz$ of the tSZ signal at fixed mass, the lensing-mass bias
+$\blens$ and the log-normal scatter $\slens$ of the lensing signal-to-noise. We adopt the prior of
+\citet{Zubeldia2025} with narrower flat ranges, so that the simulations at the heaviest corner of the prior
+stay affordable, with about 130\,000 haloes per tile there against 73\,000 at the true values. We fix the
+hydrostatic mass bias at $1-b_\mathrm{HSE}=0.8$ and derive the matter density $\Omm$ and
+$S_8=\sigma_8\sqrt{\Omm/0.3}$. All mock data sets in this paper are simulated at the true values of
+Table~\ref{tab:prior}.
+
+\begin{table}
+\centering
+\caption{The ten parameters, their priors and the true values of the mocks. U($a$, $b$) denotes a flat
+prior between $a$ and $b$, and N($\mu$, $\sigma$) a Gaussian prior with mean $\mu$ and standard deviation
+$\sigma$, truncated at zero where marked $>0$.}
+\label{tab:prior}
+\small
+\begin{tabular}{lll}
+\toprule
+Parameter & Prior & True value \\
+\midrule
+$\sigma_8$                         & U(0.770, 0.852)          & 0.811 \\
+$\omc=\Omega_\mathrm{c} h^2$       & U(0.0804, 0.169)         & 0.121 \\
+$\asz$                             & U($-4.53$, $-4.08$)      & $-4.3054$ \\
+$\alsz$                            & U(1.00, 1.24)            & 1.1233 \\
+$h$                                & N(0.674, 0.01)           & 0.674 \\
+$\omb$                             & N(0.0222, 0.00015)       & 0.0222 \\
+$n_\mathrm{s}$                     & N(0.96, 0.0042)          & 0.96 \\
+$\ssz$                             & N(0.173, 0.05), $>0$     & 0.173 \\
+$\blens$                           & N(0.92, 0.01)            & 0.92 \\
+$\slens$                           & N(0.22, 0.05), $>0$      & 0.22 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------------------
+\subsection{The map-level simulator}\label{sec:sims:maps}
+% ---------------------------------------------------------------------
+
+\subsubsection{Haloes}
+
+We draw the haloes in cells of redshift and mass, with $0.01<z<3$ in 300 bins and $10^{13}$ to
+$10^{16}\,\msun$ in 150 logarithmic bins. The number of haloes in cell $i$ is Poisson-distributed with mean
+\begin{equation}
+\lambda_i = \Omega_\mathrm{tile}\int_i \mathrm{d}z\,\mathrm{d}\ln M_{500}\,
+\frac{\mathrm{d}V}{\mathrm{d}z\,\mathrm{d}\Omega}\,
+\frac{\mathrm{d}n}{\mathrm{d}\ln M_{500}}(M_{500},z),
+\label{eq:lambda}
+\end{equation}
+where $\Omega_\mathrm{tile}$ is the solid angle of the tile, $\mathrm{d}V/\mathrm{d}z\,\mathrm{d}\Omega$ the
+comoving volume element, and $\mathrm{d}n/\mathrm{d}\ln M_{500}$ the mass function of \citet{Tinker2008}
+for $M_{500}$, the mass within the radius $R_{500}$ that encloses 500 times the critical density. Within a
+cell, the density is bilinear between the cell corners, and each halo is drawn exactly from it. We place
+the haloes at uniform random positions on the tile and therefore neglect halo clustering. Since the random
+numbers of each halo are seeded by its cell and its index in the cell, a change in the count of one cell
+moves only the haloes of that cell. At the true parameters, a tile holds about 73\,000 haloes.
+
+We compute the distances, the growth of structure and the matter power spectrum that enter
+equation~(\ref{eq:lambda}) with \classyszlite{}, a JAX \citep{Bradbury2018} package from the
+\textsc{class\_sz} project \citep{Bolliet2023} that uses CosmoPower emulators \citep{SpurioMancini2022}.
+
+\subsubsection{The tSZ signal}
+
+Following \citet{Zubeldia2025}, we assign each halo a central Compton-$y$ parameter and an angular size
+through the scaling relations
+\begin{equation}
+\begin{split}
+\bar y_0 &= 10^{\asz}\,E(z)^2\left[\frac{h_{70}\,(1-b_\mathrm{HSE})\,M_{500}}{3\times10^{14}\,\msun}\right]^{\alsz}
+h_{70}^{-1/2},\\
+y_0 &= \bar y_0\,e^{\ssz g},
+\end{split}
+\label{eq:y0}
+\end{equation}
+\begin{equation}
+\theta_{500} = 6.997\arcmin\,h_{70}^{-2/3}
+\left[\frac{(1-b_\mathrm{HSE})\,M_{500}}{3\times10^{14}\,\msun}\right]^{1/3}
+E(z)^{-2/3}\,\frac{500\,\mathrm{Mpc}}{D_A(z)}.
+\label{eq:theta500}
+\end{equation}
+Here $E(z)=H(z)/H_0$, $h_{70}=h/0.7$, $D_A(z)$ is the angular diameter distance, and $g\sim\mathcal N(0,1)$
+is an independent standard normal variate for each halo. For the pressure profile we take the generalised
+NFW profile of \citet{Arnaud2010}, truncated at $5R_{500}$, projected along the line of sight and
+normalised to 1 at the centre. With $T(u)$ the Fourier transform of this projected shape, the $y$ map of a
+tile is
+\begin{equation}
+y(\bm\ell) = \sum_h y_{0,h}\,\theta_{500,h}^2\,T(\ell\,\theta_{500,h})\,
+e^{-i\bm\ell\cdot\bm n_h},
+\label{eq:ymap}
+\end{equation}
+where the sum runs over all haloes $h$ of the tile and $\bm n_h$ is the position of halo $h$. We paint the
+map on a $0.25\arcmin$ grid and band-limit it to the $0.5\arcmin$ grid of the tile, synthesising haloes
+larger than $6\arcmin$ directly in Fourier space.
+
+\subsubsection{Six frequency maps}
+
+The map in channel $\nu$ is
+\begin{equation}
+X_\nu(\bm\ell) = f_\nu\,B_\nu(\ell)\,y(\bm\ell) + B_\nu(\ell)\,T_\mathrm{CMB}(\bm\ell) + n_\nu(\bm\ell),
+\label{eq:freqmap}
+\end{equation}
+where $f_\nu=f(\nu)$ is the tSZ spectrum at the frequency $\nu$ of the channel,
+\begin{equation}
+f(\nu) = T_\mathrm{CMB}\left[x_\nu\coth\frac{x_\nu}{2}-4\right],\qquad
+x_\nu=\frac{h_\mathrm{P}\nu}{k_\mathrm{B}T_\mathrm{CMB}}.
+\label{eq:fnu}
+\end{equation}
+Here $h_\mathrm{P}$ and $k_\mathrm{B}$ are the Planck and Boltzmann constants, and $T_\mathrm{CMB}$ is the
+mean CMB temperature (in $f$) or its fluctuation field (in equation~\ref{eq:freqmap}). The beams
+$B_\nu(\ell)$ are Gaussian, with the widths listed in Table~\ref{tab:instrument}. For the lensed CMB we
+draw a Gaussian random field with the lensed temperature power spectrum computed with \textsc{camb}
+\citep{Lewis2000} at the Planck 2018 parameters \citep{Planck2020VI}, which we keep fixed across the prior.
+This spectrum agrees with that of the \classyszlite{} CMB emulator to 0.4 per cent for $\ell\le3000$.
+
+We take the noise $n_\nu$ to be Gaussian, with the $6\times6$ covariance of the 2019 SO forecast at goal
+depth \citep{SO2019},
+\begin{equation}
+N_{\nu\nu'}(\ell) = \delta_{\nu\nu'}\,N^\mathrm{white}_\nu
++ \rho_{\nu\nu'}\sqrt{N^\mathrm{red}_\nu N^\mathrm{red}_{\nu'}}\left(\frac{\ell}{1000}\right)^{-3.5}.
+\label{eq:noise}
+\end{equation}
+Here the first term is the white noise of Table~\ref{tab:instrument}, and the second is the atmospheric (red)
+noise, with the amplitudes $N^\mathrm{red}_\nu$ of the forecast and a correlation $\rho_{\nu\nu'}$ that is
+1 on the diagonal, 0.9 between the two channels of one optics tube \citep{SO2019}, and 0 otherwise, with
+the same power spectrum on every tile.
+
+\begin{table}
+\centering
+\caption{The six channels of the simulated survey, with their frequency, the full width at half maximum of
+the Gaussian beam and the white-noise level at the goal depth of the 2019 SO forecast \citep{SO2019}.}
+\label{tab:instrument}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+\toprule
+Frequency [GHz]                         & 27  & 39  & 93  & 145 & 225 & 280 \\
+\midrule
+Beam FWHM [arcmin]                      & 7.4 & 5.1 & 2.2 & 1.4 & 1.0 & 0.9 \\
+White noise [$\mu$K\,arcmin]            & 52  & 27  & 5.8 & 6.3 & 15  & 37  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{The cluster finder}
+
+For the cluster finder we use a multi-frequency matched filter \citep{Herranz2002,Melin2006}. We follow
+the conventions of \textsc{SZiFi} \citep{Zubeldia2023a,Zubeldia2023} for the peak criteria, the masking
+pass and the binning of the covariance, but the implementation is our own and is written in JAX, so that
+it runs on a GPU inside the simulator. Here
+we give its definition, and we study its output in Section~\ref{sec:finder}. Let $\bm a(\ell)$ be the
+vector with components $a_\nu(\ell)=f_\nu B_\nu(\ell)$, the spectral and beam response of a cluster in
+channel $\nu$. We write $C(\ell)$ for the $6\times6$ covariance of everything in the maps that is not the
+cluster, which the finder estimates from the maps themselves in annuli of $\ell$. For a template of size $\theta$,
+$\tau_\theta(\ell)=\theta^2T(\ell\theta)$, the filter estimates the central $y$ of a cluster centred on
+every pixel $\bm n$,
+\begin{equation}
+\hat y_0(\bm n;\theta) = \sigma_\theta^2\int\frac{\mathrm{d}^2\ell}{(2\pi)^2}\,
+\tau_\theta(\ell)\,\bm a(\ell)^{\!\top}C(\ell)^{-1}\bm X(\bm\ell)\,e^{i\bm\ell\cdot\bm n},
+\label{eq:mmf}
+\end{equation}
+with the noise
+\begin{equation}
+\sigma_\theta^{-2} = \int\frac{\mathrm{d}^2\ell}{(2\pi)^2}\,
+\tau_\theta(\ell)^2\,\bm a(\ell)^{\!\top}C(\ell)^{-1}\bm a(\ell),
+\label{eq:sigtheta}
+\end{equation}
+and the signal-to-noise
+\begin{equation}
+q(\bm n;\theta_j) = \frac{\hat y_0(\bm n;\theta_j)}{\sigma_{\theta_j}},
+\label{eq:q}
+\end{equation}
+evaluated at 15 sizes $\theta_j$, spaced logarithmically from $0.5\arcmin$ to $15\arcmin$, of which the
+eighth is $2.7\arcmin$. Here $\bm X(\bm\ell)$ is the vector of the six maps of
+equation~(\ref{eq:freqmap}). We write $\sfinder(\theta_j\mid\bm\theta)$ for the noise $\sigma_{\theta_j}$
+that the finder measures on maps simulated at the parameters $\bm\theta$.
+
+A peak is a maximum of $q$ in position and size with $q>4$, that is, a value above those of its four
+neighbouring pixels and of its neighbouring sizes. As in \textsc{SZiFi}, the finder then makes a masking
+pass, because in the first pass the covariance $C(\ell)$ includes the clusters' own signal, which raises
+$\sigma_\theta$ and lowers $q$. Each peak with $q>4$ is therefore covered by a disc of radius $3\theta_j$,
+where $\theta_j$ is the size at which it peaks. Since masking mixes Fourier modes, the large-scale power of
+the CMB and of the atmospheric noise would leak to small scales at the edges of the discs. To avoid this, we first whiten the maps with the first-pass covariance, an
+estimator that differs from the inpainting used in \textsc{SZiFi}. We then estimate the covariance again
+outside the discs and run the filter once more, this time dropping any peak closer than $1.5\arcmin$ to a
+higher one. To emulate optical confirmation and redshift measurement, we confirm a remaining peak if a halo
+above $5\times10^{13}\,\msun$ lies within $1.5\arcmin$ of it, and give the detection the redshift of that
+halo, or of the one with the largest $y_0$ if several qualify.
+
+\subsubsection{The data vector and the CMB-lensing observable}
+
+Following \citet{Zubeldia2025}, we compress each simulated catalogue into a data vector of 21 numbers, the
+first 20 of which are the counts of confirmed detections in four bins of $q$ and five bins of redshift,
+\begin{equation}
+N_{ab} = \#\{\text{detections}: q_a<q<q_{a+1},\ z_b<z<z_{b+1}\},
+\label{eq:counts}
+\end{equation}
+with edges $q_a\in\{5, 8.4, 14.1, 23.8, 40\}$ and $z_b\in\{0.01, 0.31, 0.61, 0.90, 1.20, 1.50\}$. The last
+entry is the mean CMB-lensing signal-to-noise $\hat p$ of all confirmed detections with $q>5$. To compute
+it, we give the halo of each such detection a lensing mass $M_\mathrm{lens}=\blens M_{500}$ with an NFW
+profile \citep{NFW1997} of concentration $c_\mathrm{NFW}=3$, truncated at $5R_{500}$, so that the mean
+lensing signal-to-noise of the halo is
+\begin{equation}
+\begin{split}
+\bar p &= \frac{\kappa(r_\mathrm{s})}{\sigma_\kappa(\theta_{500,\mathrm{lens}})},\\
+\kappa(r_\mathrm{s}) &= 4\pi\frac{G}{c^2}\,S\,\rho_0\,r_\mathrm{s}\,D_A(z)\left[1-\frac{\chi(z)}{\chi_*}\right].
+\end{split}
+\label{eq:pbar}
+\end{equation}
+Here $\kappa(r_\mathrm{s})$ is the convergence at the scale radius $r_\mathrm{s}$, $\rho_0$ is the
+characteristic density of the NFW profile, and $\Sigma(r_\mathrm{s})=S\rho_0r_\mathrm{s}$ is the projected
+density of the truncated profile at $r_\mathrm{s}$, with $S\simeq0.663$ for $c_\mathrm{NFW}=3$ and a
+truncation at $5R_{500}$. The comoving distance to the halo is $\chi(z)$, and $\chi_*$ is that to the
+last-scattering surface. For the noise $\sigma_\kappa(\theta_{500,\mathrm{lens}})$ we compute the
+matched-filter noise of this amplitude for the truncated NFW profile, as in \citet{ZubeldiaChallinor2019},
+from the public SO CMB-lensing noise curves at goal depth (version 3.1.1, with the tSZ deprojected;
+\citealt{SO2019}), and evaluate it at the angular size of the lensing mass. At baseline depth, our table
+agrees with that of \citet{Zubeldia2025} to 0.3 per cent. The observed lensing signal-to-noise of each detection is then
+\begin{equation}
+p = \bar p\,e^{\slens g'} + \mathcal N(0,1),
+\label{eq:p}
+\end{equation}
+with $g'\sim\mathcal N(0,1)$, and $\hat p$ is the mean of $p$ over the detections. Because $p$ is drawn from
+the detected halo in the same way in both forward models, the two differ only in which haloes are detected
+and with what $q$.
+
+\subsubsection{One tile, stage by stage}
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/tile_stages.png}
+\caption{One $10\degr\times10\degr$ tile at the true parameters, with the forecast noise at goal depth.
+Top row, from left: the painted Compton-$y$ map ($\times10^5$, colour scale 0 to about 3), followed by the
+three parts of the 145\,GHz map on a common scale of $\pm200\,\mu$K, namely the tSZ signal, the lensed CMB
+and the noise. Bottom row, from left: the sum of the three parts at 145\,GHz; the finder's signal-to-noise
+$q$ in the first pass, taking the best of its 15 sizes at each pixel (colour scale $-3$ to 8); the discs of
+the masking pass (black); and $q$ after the masking pass, on the same scale. Maps are shown at half
+resolution.}
+\label{fig:tile}
+\end{figure*}
+
+Fig.~\ref{fig:tile} follows one tile through the simulator, panel by panel. The $y$ map holds every halo above $10^{13}\,\msun$, most of which are too faint to see,
+and its bright dots are the few hundred massive clusters. At 145\,GHz, where the tSZ spectrum gives
+$-2.7$\,K per unit $y$, the tSZ signal is a decrement of up to about $100\,\mu$K in the cores of the
+brightest clusters, which is small compared with the CMB fluctuations of $\pm200\,\mu$K on degree scales.
+The noise panel is smooth because the atmospheric part of the noise dominates on the largest scales. No
+cluster is visible by eye in the summed map, which is why the finder needs all six channels together with
+the known shape and spectrum of the signal.
+
+The two signal-to-noise panels show why the masking pass matters. In the first pass, the finder estimates
+its noise from maps that contain the clusters, so that the power of the brightest clusters raises the
+noise and lowers every $q$. The masking panel shows the discs of radius $3\theta_j$ around each peak with
+$q>4$, the large discs belonging to bright, nearby clusters. Once the noise is estimated without them, the
+noise at $2.7\arcmin$ on this tile falls from 1.30 to 1.08 times that of the instrument and the CMB. Every $q$ therefore rises by about 20 per cent, although at the resolution of the figure the two panels look alike.
+After both passes, the finder keeps 324 of the 4292 haloes above $5\times10^{13}\,\msun$ on this tile as
+confirmed detections with $q>5$.
+
+% ---------------------------------------------------------------------
+\subsection{The catalogue-level model}\label{sec:sims:catalogue}
+% ---------------------------------------------------------------------
+
+The catalogue-level model takes the form of the observation model of \citet{Zubeldia2025}. It keeps the
+haloes above $5\times10^{13}\,\msun$, drawn from the same mass function, and replaces the maps and the
+finder by a noise table $\sigma_{y_0}(\theta)$, the noise of the matched filter for the instrument and the
+CMB alone. The signal-to-noise of a halo and its observed value are then
+\begin{equation}
+\qtrue = \frac{\bar y_0(M_{500},z)}{\sigma_{y_0}(\theta_{500})}\,e^{\ssz g},\qquad
+\qobs = \qtrue + \mathcal N(0,1),
+\label{eq:catalogue}
+\end{equation}
+with $\bar y_0$ and $\theta_{500}$ from equations~(\ref{eq:y0}) and (\ref{eq:theta500}). A halo is
+selected if $\qobs>5$, its redshift is known exactly, and its lensing signal-to-noise is drawn from
+equation~(\ref{eq:p}).
+
+We call this model, that is, the observation model of \citet{Zubeldia2025} with a noise table for the
+instrument and the CMB only, as used in forecasts, the uncalibrated catalogue model, or the uncalibrated
+model for short. Its form is theirs, whereas its noise inputs are ours, since we recompute the table for our
+filter and noise. Specifically, we compute $\sigma_{y_0}(\theta)$ analytically from equation~(\ref{eq:sigtheta}), taking
+$C(\ell)$ to be the sum of the forecast noise of equation~(\ref{eq:noise}) and the beam-convolved CMB. For the lensing noise, it uses the same table $\sigma_\kappa$ as the map-level simulator.
+
+Two checks from our validation runs support the finder and this noise table. Before masking, the median ratio of the $q$ of \textsc{SZiFi} to that of our filter is within 0.1 per cent of unity on the same maps, for detections with $q>6$, with a scatter of about 0.2 in $q$. On maps without clusters, the analytic $\sigma_{y_0}$ agrees with the noise that the
+finder measures to 0.1--0.8 per cent.
+
+The two forward models therefore share the instrument, the CMB, the haloes and the scaling relations. The
+catalogue model leaves out three effects of the finder: confusion noise, the search lift and neighbours;
+and it assumes Gaussian scatter, which the finder's errors break through an upward tail. Confusion noise is
+the tSZ signal of all the other haloes, which adds to the finder's noise. The search lift arises because
+the finder searches over positions and sizes, whereas the catalogue model knows both. Neighbours matter
+because clusters are not detected independently, so that a nearby cluster widens the scatter of $q$ and
+can capture the detection of a cluster. We measure these three effects in Section~\ref{sec:finder}, and in
+Section~\ref{sec:calibration} we build calibrated versions of equation~(\ref{eq:catalogue}) from map-level
+simulations, ending with the upward tail (Section~\ref{sec:finder_tail}).
+
+% ---------------------------------------------------------------------
+\subsection{Implementation and cost}\label{sec:sims:cost}
+% ---------------------------------------------------------------------
+
+We have implemented both forward models in \classyszlite{}, and because the simulator is compiled with
+JAX, one call simulates a whole survey on a GPU. The scripts that produced every result of this paper,
+from the map-level and catalogue-level simulation sets to the calibrations, the training of the posteriors
+and their comparison, are part of the package. All inputs are public: the CMB spectrum is computed with
+\textsc{camb}, and the instrument and lensing noise come from the 2019 SO forecast.
+
+We list the time taken by each step in Table~\ref{tab:cost}, as measured on one NVIDIA RTX PRO 6000
+Blackwell GPU (96\,GB) and on CPU nodes with AMD EPYC `Rome' processors (16 cores). On the GPU, one survey
+simulation of 10 per cent of the sky takes 0.42\,s, so that the 10\,000 simulations of a training set take
+70\,min. At 40.7 per cent of the sky, one survey takes 1.6\,s and a training set 4.6\,h. In total, the
+whole comparison (four posteriors, one to five networks each) costs about 2 GPU hours and 1 CPU hour at 10
+per cent of the sky, and about 6 GPU hours and 4 CPU hours at 40.7 per cent.
+
+\begin{table}
+\centering
+\caption{Time taken by each step, for the surveys of 41 tiles (10 per cent of the sky) and 168 tiles (40.7
+per cent). A training set consists of 10\,000 prior draws. The GPU and CPU are those described in the
+text, and the laptop is an Apple M1 Pro (10 cores, 16\,GB). Compilation adds 1--3\,min to the first call of
+a map-level step. $^a$On the laptop, one tile takes 48\,s through all stages the first time, of which 28\,s
+are spent building the painting tables, which are then cached, and a few seconds after that; it uses
+3.4\,GB of memory. $^b$5 mocks at each of the 25 points of the prior, including the fits; 15\,min with
+cells in cluster size (the size-split calibration). $^c$With 2 to 16 threads. $^d$The five networks share
+the 16 cores, so each trains more slowly than it would alone.}
+\label{tab:cost}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Step & Hardware & 41 tiles & 168 tiles \\
+\midrule
+One survey, map level           & GPU       & 0.42\,s       & 1.6\,s \\
+One survey, map level           & laptop    & a few min$^a$ & -- \\
+100 mocks, map level            & GPU       & 2\,min        & 3\,min \\
+500 prior draws, map level      & GPU       & 6.5\,min      & 15\,min \\
+Training set, map level         & GPU       & 70\,min       & 4.6\,h \\
+Calibration grid, 25 points     & GPU       & 7\,min$^b$    & -- \\
+One survey, catalogue level     & GPU       & 0.01\,s       & -- \\
+Training set, catalogue level   & GPU       & 1.3--1.5\,min & 2\,min \\
+Training one network            & CPU       & 2--8\,min$^c$ & 2--8\,min$^c$ \\
+Five networks in parallel       & CPU       & 20\,min$^d$   & -- \\
+Whole comparison                & GPU, CPU  & 2\,h, 1\,h    & 6\,h, 4\,h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Inference and validation}\label{sec:inference}
+% =====================================================================
+
+% ---------------------------------------------------------------------
+\subsection{Neural posterior estimation}\label{sec:inference:npe}
+% ---------------------------------------------------------------------
+
+Each forward model provides pairs $(\bm\theta_n,\bm x_n)$, with $\bm\theta_n$ drawn from the prior of
+Table~\ref{tab:prior} and $\bm x_n$ the data vector of 21 numbers of Section~\ref{sec:sims}. From these
+pairs, neural posterior estimation \citep{Papamakarios2016,Alsing2019,Cranmer2020} fits a conditional
+density $\hat p_\phi(\bm\theta\mid\bm x)$, with network weights $\phi$, by maximising
+\begin{equation}
+\phi^\star = \arg\max_\phi\sum_n \ln \hat p_\phi(\bm\theta_n\mid\bm x_n).
+\label{eq:npe}
+\end{equation}
+With enough simulations and a sufficiently flexible density, $\hat p_{\phi^\star}(\bm\theta\mid\bm x)$
+converges to the posterior $p(\bm\theta\mid\bm x)$ of the model that generated the simulations. This
+means that a posterior is correct only for data that its model describes. When a posterior trained on
+catalogue-level simulations is applied to map-level data, it therefore answers the question posed by the catalogue model. The checks of Section~\ref{sec:inference:checks} measure how far that answer lies
+from the truth.
+
+As in \citet{Zubeldia2025}, we use the NPE implementation (NPE-C; \citealt{Greenberg2019}) of the
+\textsc{sbi} package \citep[version 0.27;][]{Tejero2020}, run in one round so that its loss is the
+objective of equation~(\ref{eq:npe}). The density $\hat p_\phi$ is a masked autoregressive flow
+\citep{Papamakarios2017} of the default size of \textsc{sbi}. We train each network on 10\,000
+simulations with a learning rate of $5\times10^{-4}$, and stop the training after 50 epochs without
+improvement of the validation loss. Although the network returns all ten parameters, we report only
+$\sigma_8$, $\omc$, $\asz$ and $\alsz$, together with the derived $\Omm$ and $S_8$.
+
+For each survey size, we simulate three sets with each forward model: 10\,000 prior draws for training,
+100 mocks at the true parameters, and 500 further prior draws. The map-level mocks and prior draws serve as
+the test data of every posterior, whichever model it was trained on, so that all posteriors are compared on
+the same skies. In addition, we apply each posterior to 500 prior draws of its own model, which checks the
+training itself. At both survey sizes we train posteriors on map-level simulations, on the one-point and
+noise-level calibrations (Section~\ref{sec:calibration}, Table~\ref{tab:models}) and, as a reference, on
+the uncalibrated model (Section~\ref{sec:sims:catalogue}). The linear and size-split calibrations, in
+contrast, are trained at 10 per cent of the sky only. We test the linear calibration by its coverage and by
+its $\sigma_8$ bias averaged over the prior (Section~\ref{sec:results}), and the size-split calibration
+only in Section~\ref{sec:calib-size}.
+
+% ---------------------------------------------------------------------
+\subsection{Checks}\label{sec:inference:checks}
+% ---------------------------------------------------------------------
+
+All our checks use simulations with known true parameters $\bm\theta^\star$. For each data vector we draw
+4000 samples from the posterior and compute, for each parameter $\theta$, the posterior mean
+$\mathrm E[\theta\mid\bm x]$, the posterior standard deviation $\mathrm{sd}[\theta\mid\bm x]$, and the
+rank $r$ of the truth, defined as the fraction of samples below $\theta^\star$.
+
+\paragraph*{Bias.} On the $M=100$ mocks at the true parameters, we define the bias of a parameter as the
+mean offset of the posterior mean from the truth, in posterior widths,
+\begin{equation}
+\mathcal B = \frac{1}{M}\sum_{t=1}^{M}\frac{\mathrm E[\theta\mid\bm x_t]-\theta^\star}{\mathrm{sd}[\theta\mid\bm x_t]}.
+\label{eq:bias}
+\end{equation}
+Its error is the standard deviation of the summand divided by $\sqrt{M}$. A posterior centred on the truth
+has $\mathcal B\approx0$, and with 100 mocks biases down to about 0.1--0.2 widths are resolved. The bias,
+however, tests a posterior at only one point of the prior.
+
+\paragraph*{Coverage.} To test the posterior over the whole prior, we use the $N_\mathrm{draw}=500$ prior
+draws and define the coverage at credible level $\gamma$ as the fraction of draws whose true value lies in
+the central credible interval of level $\gamma$,
+\begin{equation}
+\cov(\gamma) = \frac{1}{N_\mathrm{draw}}\sum_{n=1}^{N_\mathrm{draw}}
+\mathbf 1\!\left[\,\left|r_n-\tfrac12\right|<\tfrac{\gamma}{2}\right],
+\label{eq:coverage}
+\end{equation}
+where $r_n$ is the rank of the truth for draw $n$, and $\mathbf 1[\cdot]$ equals 1 when its argument is
+true and 0 otherwise. A posterior with correct coverage has $\cov(\gamma)=\gamma$ at every level, whereas
+below the diagonal, where $\cov(\gamma)<\gamma$, the intervals are too narrow or off-centre. We quote
+$\cov(0.5)$ and $\cov(0.9)$, and in Appendix~\ref{app:robust} we define and apply TARP \citep{Lemos2023},
+a test of the joint posterior in all ten parameters.
+
+% ---------------------------------------------------------------------
+\subsection{Ensembles}\label{sec:inference:ensembles}
+% ---------------------------------------------------------------------
+
+Networks trained on the same simulations with different random seeds give slightly different posteriors.
+From one seed to the next, the posterior mean of a single network moves by about 0.1 widths, which is
+comparable to the error of the bias from 100 mocks. Where we train several networks, we combine them into
+an equal mixture. For networks $l=1,\dots,L$ with posterior means $\mu_l$, standard deviations $s_l$ and
+ranks $r_l$ of the truth, the mixture has
+\begin{equation}
+\begin{split}
+\bar\mu &= \frac1L\sum_l\mu_l,\qquad \bar r = \frac1L\sum_l r_l,\\
+\bar s^2 &= \frac1L\sum_l s_l^2 + \frac1L\sum_l\left(\mu_l-\bar\mu\right)^2.
+\end{split}
+\label{eq:ensemble}
+\end{equation}
+Its variance is thus the mean of the variances plus the variance of the means, and its mean rank is exact
+because every network contributes the same number of samples. We then obtain the bias and coverage of the ensemble from equations~(\ref{eq:bias}) and (\ref{eq:coverage})
+with $\bar\mu$, $\bar s$ and $\bar r$.
+
+The number of networks differs between posteriors. At 10 per cent of the sky, the map-level posterior is an
+ensemble of five networks, whereas the uncalibrated model and each calibration have one network. At 40.7
+per cent, the map-level posterior and the noise-level calibration have five networks each and the
+uncalibrated model has four, because the fifth training run did not finish within its time limit. For the
+one-point calibration we use five networks for the bias and one for the coverage. We show the effect of the
+ensemble on the map-level posterior in Appendix~\ref{app:robust}.

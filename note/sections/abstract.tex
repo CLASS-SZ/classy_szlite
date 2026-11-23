@@ -1,0 +1,17 @@
+\begin{abstract}
+We present simulation-based inference of thermal Sunyaev--Zel'dovich (tSZ) cluster counts in which every
+training simulation runs the cluster finder on simulated multi-frequency maps, to our knowledge the first
+of its kind. Our simulator paints haloes into six Simons Observatory (SO) frequency maps with the cosmic
+microwave background (CMB) and goal-depth noise, and runs a matched-filter finder. On one GPU, a survey of
+40.7 per cent of the sky takes 1.6\,s and a training set of 10\,000 surveys 4.6\,h. At this sky fraction, the
+posterior is within 0.11 widths (posterior standard deviations) of the truth, and its 90 per cent
+intervals contain the truth for 0.88--0.91 of 500 prior skies. On the same skies, we compare it with
+catalogue models calibrated on map-level mocks, which have to carry the finder's confusion noise (4--8 per
+cent), search over positions and sizes, neighbours and upward error tail. A model calibrated at the
+true parameters is within 0.2 widths at that point in $\sigma_8$, the cold dark matter density and the
+tSZ--mass log-amplitude, but too narrow or off-centre across the prior. Calibrated at 25 points across
+the prior, it has close to correct coverage for these three but leaves the slope of the relation
+0.6--0.7 widths high, which we attribute to the tail. As a reference, the uncalibrated model, with a noise
+table for the instrument and the CMB only, is biased by up to 8.3 widths on our skies, showing the size of
+the finder's effects at goal depth.
+\end{abstract}

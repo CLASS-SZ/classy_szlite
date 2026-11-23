@@ -1,0 +1,246 @@
+\section{Calibrating the catalogue model on maps}\label{sec:calibration}
+
+In this section we ask how well a per-cluster calibration, with the finder's noise and a Gaussian scatter fitted on map-level mocks, reproduces
+the finder, and what it misses. As we showed in Section~\ref{sec:finder}, the catalogue model leaves out three
+effects of the finder: confusion noise, the search lift and neighbours; and it assumes Gaussian scatter, which
+the finder's errors break through an upward tail. We build four calibrated models, the last of them only as a
+check, and list them in Table~\ref{tab:models} together with the uncalibrated catalogue model and the
+map-level posterior. Here we state what each calibrated model is and why it has that form. In Section~\ref{sec:results} we then test them with the same network architecture and on the same map-level skies as
+the other inferences.
+
+\begin{table*}
+\centering
+\small
+\caption{The forward models compared in this paper, namely the five catalogue models and the map-level
+simulator. The catalogue models differ only in their observation step, and each posterior built on them is
+trained on 10\,000 catalogue-level simulations. Here $\tilde{\bm\theta}$ denotes the four parameters with flat
+priors, scaled to the prior box (equation~\ref{eq:calib-x}), and $u$ the finder's noise level
+(equation~\ref{eq:calib-u}).}
+\label{tab:models}
+\begin{tabular}{@{}lp{0.42\textwidth}ll@{}}
+\toprule
+Name & What is fitted & Where & Map-level simulations \\
+\midrule
+Uncalibrated catalogue model & nothing; $\sigma_{y_0}$ for the instrument and the CMB only, computed for our filter and noise & -- & none \\
+One-point calibration & $s_b$, $k_b$, $w_b$, $f_b$; $\sfinder$ of each tile & true parameters & 20 mocks \\
+Linear calibration & $s_b$, $k_b$, $w_b$, $f_b$ and $\ln\sfinder$, linear in $\tilde{\bm\theta}$ & 25 points & 125 mocks \\
+Noise-level calibration & $u$ quadratic in $\tilde{\bm\theta}$; $\ln\sfinder$ linear and $s_b$, $k_b$,
+$w_b$, $f_b$ quadratic in $u$ & 25 points & the same 125 \\
+Size-split calibration & as the noise-level calibration, in cells of $z$ and $\theta_{500}$; a check only & 25 points & the same 125 \\
+Map-level posterior & nothing; trained on map-level simulations & over the prior & 10\,000 per survey size \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{The calibrated observation model}\label{sec:calib-model}
+
+In the calibrated models we keep the haloes of the catalogue model, all haloes above
+$5\times10^{13}\,\msun$, together with their central Compton-$y$ amplitudes $y_0$, which include the
+log-normal scatter $\ssz$ of the tSZ--mass relation (Section~\ref{sec:sims}), and change two things. First,
+we divide $y_0$ by the finder's own noise instead of the noise of the instrument and the CMB, so that the
+reference signal-to-noise of a halo is $q_\mathrm{f}$ of equation~(\ref{eq:q_finder_noise}). We measure
+$\sfinder(\theta_j\mid\bm\theta)$ on the maps of each tile after the masking pass and interpolate it in
+size to the $\theta_{500}$ of the halo. Second, we replace the unit Gaussian scatter by
+equation~(\ref{eq:qobs_fit}) with per-bin parameters, giving a halo in redshift bin $b$ a scale $s_b$, a search
+lift $k_b$, a scatter $w_b$ and a loss rate $f_b$. As in the uncalibrated model, a halo that is not lost enters
+the data vector if $\qobs > 5$. The redshift bins are the five of the data vector, with upper edges 0.31,
+0.61, 0.90, 1.20 and 1.50, together with a sixth bin for all haloes above $z = 1.5$. The uncalibrated model is
+then the special case $s_b=1$, $k_b=0$, $w_b=1$, $f_b=0$, with $\sigma_{y_0}$ in place of $\sfinder$.
+
+We fit these parameters in each redshift bin with the censored likelihood of equation~(\ref{eq:censored}),
+applied to tables of haloes from map-level mocks (Section~\ref{sec:finder_fit}). Each table holds, for every
+halo above $5\times10^{13}\,\msun$, its $q_\mathrm{f}$ and, if the finder has a kept and confirmed peak matched
+to the halo, the $\qobs$ of that peak.
+
+\subsection{The one-point calibration}\label{sec:calib-point}
+
+\begin{table}
+\centering
+\caption{The one-point calibration, given by equation~(\ref{eq:qobs_fit}) with per-bin parameters and fitted
+with the censored likelihood~(\ref{eq:censored}) on 20 map-level mocks of the 41-tile survey at the true
+parameters. In each redshift bin the table lists the scale $s$, the search lift $k$, the scatter $w$ and the
+loss rate $f$. The uncalibrated model has $s=1$, $k=0$, $w=1$ and $f=0$.}
+\label{tab:calib}
+\begin{tabular}{lcccc}
+\toprule
+Redshift & $s$ & $k$ & $w$ & $f$ \\
+\midrule
+0.01--0.31 & 0.991 & 1.32 & 1.035 & 2.9\% \\
+0.31--0.61 & 0.989 & 1.51 & 1.043 & 1.3\% \\
+0.61--0.90 & 0.988 & 1.50 & 1.079 & 0.6\% \\
+0.90--1.20 & 0.991 & 1.29 & 1.132 & 0.3\% \\
+1.20--1.50 & 0.990 & 1.07 & 1.177 & 0.2\% \\
+$>1.50$    & 1.002 & 0.07 & 1.317 & 0.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We fit the one-point calibration once, on 20 map-level mocks of the 41-tile survey at the true parameters
+$\bm\theta_\mathrm{fid}$, and take its finder noise to be $\sfinder(\theta_j\mid\bm\theta_\mathrm{fid})$ as
+measured on each tile of these mocks. The fitted parameters in Table~\ref{tab:calib} show that, once $q$ is
+defined with the finder's own noise, the drop in $q$ found in Section~\ref{sec:finder} is accounted for, since
+the scale is within about 1~per cent of unity in every bin. The search lift lies between 1.07 and 1.51 below
+$z = 1.5$ and is close to zero above, whereas the scatter grows with redshift, from 1.035 to 1.317, as
+clusters become more compact. Losses are largest at low redshift, at 2.9~per cent below $z = 0.31$, where
+clusters are large and overlap.
+
+Since the finder's noise, lift, scatter and losses all depend on the total tSZ signal on the sky, and hence
+on the parameters, a calibration made at one point need not hold elsewhere in the prior, which we test in
+Section~\ref{sec:results:thirds}.
+
+\subsection{Calibration across the prior}\label{sec:calib-grid}
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/calibration_grid.png}
+\caption{The calibration at 25 points of the prior, namely the true parameters (circled in red) and a Latin
+hypercube of 24 points over the flat prior box. Each point is fitted with the censored
+likelihood~(\ref{eq:censored}) on five map-level mocks, in the redshift bin $0.31 < z < 0.61$. The left panel
+shows the search lift $k$ and the right panel the scatter $w$, both against the finder's noise at a filter size
+of $2.7\arcmin$ (the eighth of the 15 sizes) divided by its value at the true parameters. The colour gives the
+value of $\asz$ at each point, from dark blue (low) to yellow (high).}
+\label{fig:grid}
+\end{figure*}
+
+To follow these changes, we repeat the calibration at 25 points, namely the true parameters and a Latin
+hypercube \citep{McKay1979} of 24 points over the flat prior box of Table~\ref{tab:prior}, which spans
+$\sigma_8$, $\omc$, $\asz$ and $\alsz$. We hold the six parameters with Gaussian priors at their true values.
+At each point we run five map-level mocks with their own random seeds, measure $\sfinder$ at all 15 filter
+sizes, and fit $s$, $k$, $w$ and $f$ in each redshift bin. Of the fixed parameters, $\ssz$ and $h$ change the
+amount of tSZ signal on the sky, although we have not measured how much they move the finder's noise. Since
+the 500 prior draws of the coverage test vary them, part of the residual error of the calibrations may come
+from this choice.
+
+Across the prior, the fitted search lift and scatter follow the finder's noise level
+(Fig.~\ref{fig:grid}), which at $2.7\arcmin$ varies by $-5$ to $+13$~per cent. The noisiest points are those with more tSZ signal on the sky, from a higher $\asz$
+(yellow) or a higher $\omc$ and $\sigma_8$, and hence with more confusion noise. As the noise rises, the
+search lift falls from 2.4 to 0.2 and the scatter grows from 0.98 to 1.10, and in some other redshift bins $k$
+goes down to $-0.5$. Since a maximum over positions and sizes cannot lower $q$, a negative $k$ shows that the
+fitted parameters are effective ones, traded against $s$ and $w$, and we therefore allow negative values.
+
+A calibration made at the true parameters thus does not hold across the prior. In this bin it has
+$k = 1.51$ and $w = 1.04$ (Table~\ref{tab:calib}), whereas the 25 points span $k$ from 2.4 to 0.2 and $w$
+from 0.98 to 1.10. In addition, points with very different $\asz$ (colours) lie close to one curve in $k$,
+while in $w$ they scatter a little around it. As the leave-one-out errors below show, the noise level also
+predicts $k$ better than a linear function of the parameters does. We use the grid in two ways, first
+through the parameters and then through the noise level.
+
+\subsubsection{The linear calibration}\label{sec:calib-linear}
+
+The simplest calibration across the prior makes the finder's noise and the parameters of the observation
+model linear in the four parameters with flat priors. To this end, we scale the four flat-prior
+components of $\bm\theta$, $(\sigma_8, \omc, \asz, \alsz)$, to the prior box and collect them in the vector
+$\tilde{\bm{\theta}}$, with components
+\begin{equation}
+\tilde\theta_m = \frac{\theta_m - \theta_{m,\mathrm{fid}}}{\Delta\theta_m},
+\label{eq:calib-x}
+\end{equation}
+where $\bm{\theta}_\mathrm{fid}$ denotes the true parameters and $\Delta\theta_m$ the width of the flat prior of
+parameter $m$. We then write
+\begin{equation}
+\ln\sfinder(\theta_j \mid \bm{\theta}) = \ln\sfinder(\theta_j \mid \bm{\theta}_\mathrm{fid}) + d_j + \bm{g}_j\cdot\tilde{\bm{\theta}},
+\label{eq:calib-theta-sigma}
+\end{equation}
+\begin{equation}
+\pi_b(\bm{\theta}) = \pi_{b,0} + \bm{\pi}_b\cdot\tilde{\bm{\theta}},\qquad \pi \in \{s, k, w, f\}.
+\label{eq:calib-theta-c}
+\end{equation}
+Here $\sfinder(\theta_j \mid \bm{\theta}_\mathrm{fid})$ is the noise of each tile at filter size $\theta_j$ at
+the true parameters, the offset $d_j$ and the gradient $\bm{g}_j$ shift all tiles together, and the symbol
+$\pi_b$ stands for each of $s_b$, $k_b$, $w_b$ and $f_b$. We fit the coefficients $d_j$, $\bm{g}_j$,
+$\pi_{b,0}$ and $\bm{\pi}_b$ by least squares to the 25 points, separately for each filter size $j$, redshift
+bin $b$ and parameter $\pi$.
+
+\subsubsection{The noise-level calibration}\label{sec:calib-noise}
+
+The trend in Fig.~\ref{fig:grid} suggests a better variable. The noise-level calibration therefore passes
+everything through a single number, the finder's noise level
+\begin{equation}
+u(\bm{\theta}) = \ln\frac{\sfinder(2.7\arcmin \mid \bm{\theta})}{\sfinder(2.7\arcmin \mid \bm{\theta}_\mathrm{fid})},
+\label{eq:calib-u}
+\end{equation}
+which is the logarithm of the tile-averaged noise at the filter size of $2.7\arcmin$ (the eighth of the 15
+sizes) relative to its value at the true parameters. We write $u$ as a quadratic function of the scaled
+parameters $\tilde{\bm{\theta}}$ of equation~(\ref{eq:calib-x}), the noise at every filter size as linear in
+$u$, and each parameter of the observation model as quadratic in $u$,
+\begin{equation}
+u(\bm{\theta}) = a_0 + \sum_m a_m\,\tilde\theta_m + \sum_{m\le n} a_{mn}\,\tilde\theta_m \tilde\theta_n,
+\label{eq:calib-u-fit}
+\end{equation}
+\begin{equation}
+\ln\sfinder(\theta_j \mid \bm{\theta}) = \ln\sfinder(\theta_j \mid \bm{\theta}_\mathrm{fid}) + d_j + e_j\,u(\bm{\theta}),
+\label{eq:calib-noise-sigma}
+\end{equation}
+\begin{equation}
+\pi_b(\bm{\theta}) = \pi_{b,0} + \pi_{b,1}\,u(\bm{\theta}) + \pi_{b,2}\,u(\bm{\theta})^2,\qquad \pi \in \{s, k, w, f\}.
+\label{eq:calib-noise-c}
+\end{equation}
+Since the indices $m$ and $n$ run over the four parameters, $u$ has 15 coefficients $a$, and we fit all
+coefficients by least squares to the 25 points. Only $u$ depends on the parameters directly, and every other
+quantity depends on them through $u$.
+
+We judge the two interpolations by their leave-one-out errors, predicting each of the 25 points from a fit to
+the other 24. The noise level $u$ is predicted to 2.0~per cent when it is linear in the parameters and to
+0.5~per cent when it is quadratic. Given $u$, the noise at the other 14 filter sizes is predicted to
+0.2~per cent or better. The search lift $k$ is predicted to 0.14--0.34 per redshift bin by the linear
+calibration and to 0.09--0.26 through the noise level. Since the noise-level calibration is the more accurate
+of the two, we use it as our main calibrated model. Building the 25-point grid takes about 7\,min on one GPU,
+including the fits (Table~\ref{tab:cost}).
+
+At the true parameters, the noise-level calibration reproduces the counts of the map-level mocks to within 3
+per cent in every bin below $q = 23.8$, as the right panel of Fig.~\ref{fig:counts} shows for the 20 counts of
+the data vector. The ratios are 0.99--1.00 in the lowest $q$ bin and 1.01--1.03 in the next two. The confusion
+noise, which left the mocks with 9--25 per cent fewer bright clusters than the uncalibrated model, is thus
+accounted for. In the brightest bin, $23.8 < q < 40$, the two still differ by up to 7 per cent, the mocks having
+7 per cent more clusters than the model at $z < 0.31$ and 6 per cent fewer at $1.2 < z < 1.5$. Because this
+bin holds the fewest clusters and we have not computed the errors of these ratios, part of these differences may be noise. Part may also come from the shape of the finder's errors, which the calibration does not carry
+(Section~\ref{sec:finder_tail}).
+
+\subsection{The size-split calibration}\label{sec:calib-size}
+
+The calibrations described so far depend on redshift only, although clusters at the same redshift but with
+different angular sizes may meet the finder differently. Table~\ref{tab:calib} shows the largest losses
+where clusters are large and overlap, and the largest scatter where they are compact. As a check,
+the size-split calibration therefore divides each redshift bin into four cells of $\theta_{500}$, with edges at
+$1\arcmin$, $2\arcmin$ and $4\arcmin$. It fits $s$, $k$, $w$ and $f$ in each cell through the noise level,
+using equations~(\ref{eq:calib-noise-sigma}) and~(\ref{eq:calib-noise-c}). A cell with too few haloes above
+$q = 2$ at a grid point takes the values of the whole redshift bin at that point. With this split, the grid takes about
+15\,min on one GPU. On 10 per cent of the sky, with one network, the size split leaves $\alsz$ as it was. Its
+bias on 100 mocks at the true parameters is $+0.63$ widths, against $+0.62$ for the noise-level
+calibration, and its coverage over the prior is $\cov(0.9) = 0.76$, against 0.78. We therefore keep the
+noise-level calibration, which depends on redshift only, as our main calibrated model, and show no separate
+results for the size split.
+
+\begin{figure*}
+\centering
+\includegraphics[width=\textwidth]{figures/bias.png}
+\caption{Bias $\mathcal{B}$ of four posteriors at the true parameters, at 10 per cent (left; 41 tiles) and
+40.7 per cent of the sky (right; 168 tiles), defined as the mean over 100 map-level mocks of (posterior mean
+$-$ truth)/(posterior width), for $\sigma_8$, $\omc$, $\asz$ and $\alsz$. The posteriors are the map-level
+posterior (blue), the one-point calibration (green), the noise-level calibration (violet) and, as a
+reference, the uncalibrated catalogue model (orange). At 10 per cent of the sky each catalogue-level posterior
+is one network and the map-level posterior is five, whereas at 40.7 per cent the uncalibrated model is four
+networks and the others five. The error bars are the errors of the mean over the 100 mocks and are mostly
+smaller than the symbols. The dotted line marks zero bias, and a posterior at $\pm1$ is offset by one width on
+average. The numbers are given in Table~\ref{tab:bias}.}
+\label{fig:bias}
+\end{figure*}
+
+\subsection{What the calibration misses: an upward tail}\label{sec:finder_tail}
+
+We attribute the high $\alsz$ left by the one-point and noise-level calibrations
+(Section~\ref{sec:results:bias}), which the size split does not change (Section~\ref{sec:calib-size}), to the
+shape of the finder's errors. For bright clusters, with $q > 10$, the standardised residual
+$\hat\epsilon = (\qobs - \mu)/w$, with $\mu = \sqrt{(s q)^2 + k}$, exceeds $+2.5$ for 1.2--1.7 per cent of the
+clusters, against 0.62 per cent for a Gaussian. The excess arises because the signal of other haloes falls onto a
+cluster by chance and the tSZ signal only ever adds, and it is larger where the total tSZ signal on the sky
+is higher. In addition, the skewness of the residuals is $+1.1$ on average and grows with $\omc$ and $\asz$,
+the parameters that set the amount of tSZ signal from faint clusters. A Gaussian scatter $w$ cannot carry such
+an upward tail, which puts more clusters into the bright bins than the calibrated model predicts. In the two
+middle bins of $q$, the mocks hold 1--3 per cent more clusters than the noise-level calibration, whereas the
+two agree to within 1 per cent in the lowest bin (Fig.~\ref{fig:counts}). Since a steeper tSZ--mass relation
+raises the bright counts relative to the faint ones, we expect a posterior trained on the calibrated model to
+read this excess as a higher $\alsz$. We have not tested this attribution directly, for example with a
+catalogue model that draws the residuals from their measured distribution. Other causes are possible, namely the binning in redshift only, the interpolation error of $k$ and the parameters held fixed in the grid.
+On the real sky, halo clustering, which our simulator neglects, may also change the tail
+(Section~\ref{sec:discussion:limits}).

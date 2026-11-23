@@ -1,0 +1,727 @@
+% Bibliography for "Cluster counts from maps".
+% Every entry was checked against OpenAlex (title, authors, venue, volume, pages, year, DOI) and against
+% its arXiv abstract page (title and eprint number) on 2026-11-23. Notes per key: ../notes/references.md.
+% Journal macros (\mnras, \apj, \apjs, \aap, \jcap, \prd) are defined by mnras.cls.
+
+% ---------------------------------------------------------------------------------------------------
+% Cluster counts, surveys and the forward model
+% ---------------------------------------------------------------------------------------------------
+
+@article{Zubeldia2025,
+  author        = {Zubeldia, {\'I}{\~n}igo and Bolliet, Boris and Challinor, Anthony and Handley, Will},
+  title         = {Extracting cosmological information from the abundance of galaxy clusters with
+                   simulation-based inference},
+  journal       = {\prd},
+  volume        = {112},
+  number        = {8},
+  pages         = {083536},
+  year          = {2025},
+  doi           = {10.1103/drn7-ggqk},
+  eprint        = {2504.10230},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{SO2019,
+  author        = {{The Simons Observatory Collaboration} and Ade, Peter and Aguirre, James and
+                   Ahmed, Zeeshan and Aiola, Simone and Ali, Aamir and others},
+  title         = {The {Simons Observatory}: science goals and forecasts},
+  journal       = {\jcap},
+  volume        = {2019},
+  number        = {02},
+  pages         = {056},
+  year          = {2019},
+  doi           = {10.1088/1475-7516/2019/02/056},
+  eprint        = {1808.07445},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Tinker2008,
+  author        = {Tinker, Jeremy and Kravtsov, Andrey V. and Klypin, Anatoly and Abazajian, Kevork and
+                   Warren, Michael and Yepes, Gustavo and Gottl{\"o}ber, Stefan and Holz, Daniel E.},
+  title         = {Toward a halo mass function for precision cosmology: the limits of universality},
+  journal       = {\apj},
+  volume        = {688},
+  number        = {2},
+  pages         = {709--728},
+  year          = {2008},
+  doi           = {10.1086/591439},
+  eprint        = {0803.2706},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph}
+}
+
+@article{Arnaud2010,
+  author        = {Arnaud, M. and Pratt, G. W. and Piffaretti, R. and B{\"o}hringer, H. and
+                   Croston, J. H. and Pointecouteau, E.},
+  title         = {The universal galaxy cluster pressure profile from a representative sample of nearby
+                   systems ({REXCESS}) and the {$Y_{\rm SZ}$--$M_{500}$} relation},
+  journal       = {\aap},
+  volume        = {517},
+  pages         = {A92},
+  year          = {2010},
+  doi           = {10.1051/0004-6361/200913416},
+  eprint        = {0910.1234},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% Matched filters and cluster finding
+% ---------------------------------------------------------------------------------------------------
+
+@article{Melin2006,
+  author        = {Melin, J.-B. and Bartlett, J. G. and Delabrouille, J.},
+  title         = {Catalog extraction in {SZ} cluster surveys: a matched filter approach},
+  journal       = {\aap},
+  volume        = {459},
+  number        = {2},
+  pages         = {341--352},
+  year          = {2006},
+  doi           = {10.1051/0004-6361:20065034},
+  eprint        = {astro-ph/0602424},
+  archivePrefix = {arXiv}
+}
+
+@article{Herranz2002,
+  author        = {Herranz, D. and Sanz, J. L. and Hobson, M. P. and Barreiro, R. B. and Diego, J. M. and
+                   Mart{\'\i}nez-Gonz{\'a}lez, E. and Lasenby, A. N.},
+  title         = {Filtering techniques for the detection of {Sunyaev--Zel'dovich} clusters in
+                   multifrequency maps},
+  journal       = {\mnras},
+  volume        = {336},
+  number        = {4},
+  pages         = {1057--1068},
+  year          = {2002},
+  doi           = {10.1046/j.1365-8711.2002.05704.x},
+  eprint        = {astro-ph/0203486},
+  archivePrefix = {arXiv}
+}
+
+@article{Zubeldia2023,
+  author        = {Zubeldia, {\'I}{\~n}igo and Chluba, Jens and Battye, Richard},
+  title         = {Mitigating the impact of the {CIB} on galaxy cluster {SZ} detection with spectrally
+                   constrained matched filters},
+  journal       = {\mnras},
+  volume        = {522},
+  number        = {4},
+  pages         = {5123--5141},
+  year          = {2023},
+  doi           = {10.1093/mnras/stad1318},
+  eprint        = {2212.07410},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Vanderlinde2010,
+  author        = {Vanderlinde, K. and Crawford, T. M. and de Haan, T. and Dudley, J. P. and
+                   Shaw, L. D. and others},
+  title         = {Galaxy clusters selected with the {Sunyaev--Zel'dovich} effect from 2008
+                   {South Pole Telescope} observations},
+  journal       = {\apj},
+  volume        = {722},
+  number        = {2},
+  pages         = {1180--1196},
+  year          = {2010},
+  doi           = {10.1088/0004-637X/722/2/1180},
+  eprint        = {1003.0003},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% Likelihood codes and emulators
+% ---------------------------------------------------------------------------------------------------
+
+@article{ZubeldiaBolliet2024,
+  author        = {Zubeldia, {\'I}{\~n}igo and Bolliet, Boris},
+  title         = {cosmocnc: a fast, flexible, and accurate framework for galaxy cluster number count
+                   likelihood computation},
+  journal       = {\jcap},
+  volume        = {2024},
+  number        = {11},
+  pages         = {018},
+  year          = {2024},
+  doi           = {10.1088/1475-7516/2024/11/018},
+  eprint        = {2403.09589},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Bolliet2023,
+  author        = {Bolliet, Boris and Kusiak, Aleksandra and McCarthy, Fiona and Sabyr, Alina and
+                   Surrao, Kristen and others},
+  title         = {class\_sz {I}: overview},
+  journal       = {EPJ Web of Conferences},
+  volume        = {293},
+  pages         = {00008},
+  year          = {2024},
+  doi           = {10.1051/epjconf/202429300008},
+  eprint        = {2310.18482},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{SpurioMancini2022,
+  author        = {Spurio Mancini, Alessio and Piras, Davide and Alsing, Justin and Joachimi, Benjamin and
+                   Hobson, Michael P.},
+  title         = {{CosmoPower}: emulating cosmological power spectra for accelerated {Bayesian}
+                   inference from next-generation surveys},
+  journal       = {\mnras},
+  volume        = {511},
+  number        = {2},
+  pages         = {1771--1788},
+  year          = {2022},
+  doi           = {10.1093/mnras/stac064},
+  eprint        = {2106.03846},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% SZ cluster catalogues and cosmology
+% ---------------------------------------------------------------------------------------------------
+
+@article{Planck2016XXIV,
+  author        = {{Planck Collaboration} and Ade, P. A. R. and Aghanim, N. and Arnaud, M. and
+                   Ashdown, M. and Aumont, J. and others},
+  title         = {{Planck} 2015 results. {XXIV}. {Cosmology} from {Sunyaev--Zeldovich} cluster counts},
+  journal       = {\aap},
+  volume        = {594},
+  pages         = {A24},
+  year          = {2016},
+  doi           = {10.1051/0004-6361/201525833},
+  eprint        = {1502.01597},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Planck2016XXVII,
+  author        = {{Planck Collaboration} and Ade, P. A. R. and Aghanim, N. and Arnaud, M. and
+                   Ashdown, M. and Aumont, J. and others},
+  title         = {{Planck} 2015 results. {XXVII}. {The} second {Planck} catalogue of
+                   {Sunyaev--Zeldovich} sources},
+  journal       = {\aap},
+  volume        = {594},
+  pages         = {A27},
+  year          = {2016},
+  doi           = {10.1051/0004-6361/201525823},
+  eprint        = {1502.01598},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Bocquet2019,
+  author        = {Bocquet, S. and Dietrich, J. P. and Schrabback, T. and Bleem, L. E. and
+                   Klein, M. and others},
+  title         = {Cluster cosmology constraints from the 2500 deg$^2$ {SPT-SZ} survey: inclusion of weak
+                   gravitational lensing data from {Magellan} and the {Hubble Space Telescope}},
+  journal       = {\apj},
+  volume        = {878},
+  number        = {1},
+  pages         = {55},
+  year          = {2019},
+  doi           = {10.3847/1538-4357/ab1f10},
+  eprint        = {1812.01679},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Bocquet2024,
+  author        = {Bocquet, S. and Grandis, S. and Bleem, L. E. and Klein, M. and Mohr, J. J. and others},
+  title         = {{SPT} clusters with {DES} and {HST} weak lensing. {II}. {Cosmological} constraints from
+                   the abundance of massive halos},
+  journal       = {\prd},
+  volume        = {110},
+  number        = {8},
+  pages         = {083510},
+  year          = {2024},
+  doi           = {10.1103/PhysRevD.110.083510},
+  eprint        = {2401.02075},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Hilton2021,
+  author        = {Hilton, M. and Sif{\'o}n, C. and Naess, S. and Madhavacheril, M. and Oguri, M. and
+                   others},
+  title         = {The {Atacama Cosmology Telescope}: a catalog of $>$4000 {Sunyaev--Zel'dovich} galaxy
+                   clusters},
+  journal       = {\apjs},
+  volume        = {253},
+  number        = {1},
+  pages         = {3},
+  year          = {2021},
+  doi           = {10.3847/1538-4365/abd023},
+  eprint        = {2009.11043},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% Simulation-based inference
+% ---------------------------------------------------------------------------------------------------
+
+@article{Alsing2019,
+  author        = {Alsing, Justin and Charnock, Tom and Feeney, Stephen and Wandelt, Benjamin},
+  title         = {Fast likelihood-free cosmology with neural density estimators and active learning},
+  journal       = {\mnras},
+  volume        = {488},
+  number        = {3},
+  pages         = {4440--4458},
+  year          = {2019},
+  doi           = {10.1093/mnras/stz1960},
+  eprint        = {1903.00007},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Cranmer2020,
+  author        = {Cranmer, Kyle and Brehmer, Johann and Louppe, Gilles},
+  title         = {The frontier of simulation-based inference},
+  journal       = {Proceedings of the National Academy of Sciences},
+  volume        = {117},
+  number        = {48},
+  pages         = {30055--30062},
+  year          = {2020},
+  doi           = {10.1073/pnas.1912789117},
+  eprint        = {1911.01429},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+@inproceedings{Papamakarios2016,
+  author        = {Papamakarios, George and Murray, Iain},
+  title         = {Fast $\epsilon$-free inference of simulation models with {Bayesian} conditional density
+                   estimation},
+  booktitle     = {Advances in Neural Information Processing Systems},
+  volume        = {29},
+  year          = {2016},
+  eprint        = {1605.06376},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+@inproceedings{Papamakarios2017,
+  author        = {Papamakarios, George and Pavlakou, Theo and Murray, Iain},
+  title         = {Masked autoregressive flow for density estimation},
+  booktitle     = {Advances in Neural Information Processing Systems},
+  volume        = {30},
+  year          = {2017},
+  eprint        = {1705.07057},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+@inproceedings{Greenberg2019,
+  author        = {Greenberg, David S. and Nonnenmacher, Marcel and Macke, Jakob H.},
+  title         = {Automatic posterior transformation for likelihood-free inference},
+  booktitle     = {Proceedings of the 36th International Conference on Machine Learning},
+  series        = {Proceedings of Machine Learning Research},
+  volume        = {97},
+  pages         = {2404--2414},
+  year          = {2019},
+  eprint        = {1905.07488},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@article{Tejero2020,
+  author        = {Tejero-Cantero, Alvaro and Boelts, Jan and Deistler, Michael and Lueckmann, Jan-Matthis
+                   and Durkan, Conor and Gon{\c{c}}alves, Pedro J. and Greenberg, David S. and
+                   Macke, Jakob H.},
+  title         = {sbi: a toolkit for simulation-based inference},
+  journal       = {Journal of Open Source Software},
+  volume        = {5},
+  number        = {52},
+  pages         = {2505},
+  year          = {2020},
+  doi           = {10.21105/joss.02505},
+  eprint        = {2007.09114},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@inproceedings{Lemos2023,
+  author        = {Lemos, Pablo and Coogan, Adam and Hezaveh, Yashar and Perreault-Levasseur, Laurence},
+  title         = {Sampling-based accuracy testing of posterior estimators for general inference},
+  booktitle     = {Proceedings of the 40th International Conference on Machine Learning},
+  series        = {Proceedings of Machine Learning Research},
+  volume        = {202},
+  pages         = {19256--19273},
+  year          = {2023},
+  eprint        = {2302.03026},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% Added from the 'suggested additions' list of ../notes/references.md (metadata from doi.org/Crossref
+% and OpenAlex, 2026-11-23)
+% ---------------------------------------------------------------------------------------------------
+
+@article{Regamey2026,
+  author        = {Regamey, M. and Eckert, D. and Seppi, R. and Hartley, W. and Umetsu, K. and Tam, S. and
+                   Gerolymatou, D.},
+  title         = {Galaxy cluster count cosmology with simulation-based inference},
+  journal       = {\aap},
+  volume        = {708},
+  pages         = {A260},
+  year          = {2026},
+  doi           = {10.1051/0004-6361/202555835},
+  eprint        = {2506.05457},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Melin2005,
+  author        = {Melin, J.-B. and Bartlett, J. G. and Delabrouille, J.},
+  title         = {The selection function of {SZ} cluster surveys},
+  journal       = {\aap},
+  volume        = {429},
+  number        = {2},
+  pages         = {417--426},
+  year          = {2005},
+  doi           = {10.1051/0004-6361:20048093},
+  eprint        = {astro-ph/0409564},
+  archivePrefix = {arXiv}
+}
+
+@article{Bolliet2018,
+  author        = {Bolliet, Boris and Comis, Barbara and Komatsu, Eiichiro and Mac{\'i}as-P{\'e}rez,
+                   Juan Francisco},
+  title         = {Dark energy constraints from the thermal {Sunyaev--Zeldovich} power spectrum},
+  journal       = {\mnras},
+  volume        = {477},
+  number        = {4},
+  pages         = {4957--4967},
+  year          = {2018},
+  doi           = {10.1093/mnras/sty823},
+  eprint        = {1712.00788},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Planck2016XXII,
+  author        = {{Planck Collaboration} and Aghanim, N. and Arnaud, M. and Ashdown, M. and Aumont, J. and
+                   others},
+  title         = {{Planck} 2015 results. {XXII}. {A} map of the thermal {Sunyaev-Zeldovich} effect},
+  journal       = {\aap},
+  volume        = {594},
+  pages         = {A22},
+  year          = {2016},
+  doi           = {10.1051/0004-6361/201525826},
+  eprint        = {1502.01596},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Hill2014,
+  author        = {Hill, J. Colin and Sherwin, Blake D. and Smith, Kendrick M. and Addison, Graeme E. and
+                   Battaglia, Nicholas and others},
+  title         = {The {Atacama Cosmology Telescope}: a measurement of the thermal {Sunyaev-Zel'dovich}
+                   one-point {PDF}},
+  journal       = {arXiv e-prints},
+  year          = {2014},
+  eprint        = {1411.8004},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Jeffrey2021,
+  author        = {Jeffrey, Niall and Alsing, Justin and Lanusse, Fran{\c c}ois},
+  title         = {Likelihood-free inference with neural compression of {DES SV} weak lensing map
+                   statistics},
+  journal       = {\mnras},
+  volume        = {501},
+  number        = {1},
+  pages         = {954--969},
+  year          = {2021},
+  doi           = {10.1093/mnras/staa3594},
+  eprint        = {2009.08459},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Hermans2022,
+  author        = {Hermans, Joeri and Delaunoy, Arnaud and Rozet, Fran{\c c}ois and Wehenkel, Antoine and
+                   Begy, Volodimir and Louppe, Gilles},
+  title         = {A crisis in simulation-based inference? {Beware}, your posterior approximations can be
+                   unfaithful},
+  journal       = {Transactions on Machine Learning Research},
+  year          = {2022},
+  url           = {https://openreview.net/forum?id=LHAbHkt6Aq},
+  eprint        = {2110.06581},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+@article{EmbilVillagra2026,
+  author        = {{Embil Villagra}, Carmen and Bayer, Adrian E. and Coulton, William R. and Sabyr, Alina and
+                   Villaescusa-Navarro, Francisco and Sherwin, Blake D. and Challinor, Anthony D. and
+                   Hill, J. Colin and Battaglia, Nicholas},
+  title         = {Field-level inference under pressure: the information content of the thermal
+                   {Sunyaev-Zel'dovich} field},
+  journal       = {arXiv e-prints},
+  year          = {2026},
+  eprint        = {2610.40617},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+% ---------------------------------------------------------------------------------------------------
+% Added in revision 1 (checked against OpenAlex and Crossref on 2026-11-23; JAX from its README)
+% ---------------------------------------------------------------------------------------------------
+
+@article{SZ1972,
+  author        = {Sunyaev, R. A. and Zel'dovich, {\relax Ya}. B.},
+  title         = {The observations of relic radiation as a test of the nature of {X}-ray radiation from the
+                   clusters of galaxies},
+  journal       = {Comments on Astrophysics and Space Physics},
+  volume        = {4},
+  pages         = {173--178},
+  year          = {1972}
+}
+
+@article{Carlstrom2002,
+  author        = {Carlstrom, John E. and Holder, Gilbert P. and Reese, Erik D.},
+  title         = {Cosmology with the {Sunyaev--Zel'dovich} effect},
+  journal       = {\araa},
+  volume        = {40},
+  pages         = {643--680},
+  year          = {2002},
+  doi           = {10.1146/annurev.astro.40.060401.093803},
+  eprint        = {astro-ph/0208192},
+  archivePrefix = {arXiv}
+}
+
+@article{MelinBartlett2015,
+  author        = {Melin, J.-B. and Bartlett, J. G.},
+  title         = {Measuring cluster masses with {CMB} lensing: a statistical approach},
+  journal       = {\aap},
+  volume        = {578},
+  pages         = {A21},
+  year          = {2015},
+  doi           = {10.1051/0004-6361/201424720},
+  eprint        = {1408.5633},
+  archivePrefix = {arXiv},
+}
+
+@article{Madhavacheril2017,
+  author        = {Madhavacheril, Mathew S. and Battaglia, Nicholas and Miyatake, Hironao},
+  title         = {Fundamental physics from future weak-lensing calibrated {Sunyaev--Zel'dovich} galaxy
+                   cluster counts},
+  journal       = {\prd},
+  volume        = {96},
+  number        = {10},
+  pages         = {103525},
+  year          = {2017},
+  doi           = {10.1103/PhysRevD.96.103525},
+  eprint        = {1708.07502},
+  archivePrefix = {arXiv},
+}
+
+@article{Hasselfield2013,
+  author        = {Hasselfield, Matthew and Hilton, Matt and Marriage, Tobias A. and Addison, Graeme E. and
+                   Barrientos, L. Felipe and others},
+  title         = {The {Atacama Cosmology Telescope}: {Sunyaev--Zel'dovich} selected galaxy clusters at
+                   148 {GHz} from three seasons of data},
+  journal       = {\jcap},
+  volume        = {2013},
+  number        = {07},
+  pages         = {008},
+  year          = {2013},
+  doi           = {10.1088/1475-7516/2013/07/008},
+  eprint        = {1301.0816},
+  archivePrefix = {arXiv},
+}
+
+@misc{Bradbury2018,
+  author        = {Bradbury, James and Frostig, Roy and Hawkins, Peter and Johnson, Matthew James and
+                   Katariya, Yash and Leary, Chris and Maclaurin, Dougal and Necula, George and
+                   Paszke, Adam and Vander{P}las, Jake and Wanderman-{M}ilne, Skye and Zhang, Qiao},
+  title         = {{JAX}: composable transformations of {P}ython+{N}um{P}y programs},
+  url           = {http://github.com/jax-ml/jax},
+  year          = {2018}
+}
+
+@article{Planck2020VI,
+  author        = {{Planck Collaboration} and Aghanim, N. and Akrami, Y. and Ashdown, M. and Aumont, J. and
+                   Baccigalupi, C. and others},
+  title         = {{Planck} 2018 results. {VI}. {Cosmological} parameters},
+  journal       = {\aap},
+  volume        = {641},
+  pages         = {A6},
+  year          = {2020},
+  doi           = {10.1051/0004-6361/201833910},
+  eprint        = {1807.06209},
+  archivePrefix = {arXiv},
+}
+
+@article{NFW1997,
+  author        = {Navarro, Julio F. and Frenk, Carlos S. and White, Simon D. M.},
+  title         = {A universal density profile from hierarchical clustering},
+  journal       = {\apj},
+  volume        = {490},
+  number        = {2},
+  pages         = {493--508},
+  year          = {1997},
+  doi           = {10.1086/304888},
+  eprint        = {astro-ph/9611107},
+  archivePrefix = {arXiv}
+}
+
+@article{NelderMead1965,
+  author        = {Nelder, J. A. and Mead, R.},
+  title         = {A simplex method for function minimization},
+  journal       = {The Computer Journal},
+  volume        = {7},
+  number        = {4},
+  pages         = {308--313},
+  year          = {1965},
+  doi           = {10.1093/comjnl/7.4.308}
+}
+
+@article{McKay1979,
+  author        = {McKay, M. D. and Beckman, R. J. and Conover, W. J.},
+  title         = {A comparison of three methods for selecting values of input variables in the analysis
+                   of output from a computer code},
+  journal       = {Technometrics},
+  volume        = {21},
+  number        = {2},
+  pages         = {239--245},
+  year          = {1979},
+  doi           = {10.1080/00401706.1979.10489755}
+}
+
+@article{Virtanen2020,
+  author        = {Virtanen, Pauli and Gommers, Ralf and Oliphant, Travis E. and Haberland, Matt and
+                   Reddy, Tyler and Cournapeau, David and others},
+  title         = {{SciPy} 1.0: fundamental algorithms for scientific computing in {Python}},
+  journal       = {Nature Methods},
+  volume        = {17},
+  number        = {3},
+  pages         = {261--272},
+  year          = {2020},
+  doi           = {10.1038/s41592-019-0686-2},
+  eprint        = {1907.10121},
+  archivePrefix = {arXiv},
+}
+
+@article{Gupta2017,
+  author        = {Gupta, N. and Saro, A. and Mohr, J. J. and Benson, B. A. and Bocquet, S. and others},
+  title         = {High-frequency cluster radio galaxies: luminosity functions and implications for
+                   {SZE}-selected cluster samples},
+  journal       = {\mnras},
+  volume        = {467},
+  number        = {3},
+  pages         = {3737--3750},
+  year          = {2017},
+  doi           = {10.1093/mnras/stx095},
+  eprint        = {1605.05329},
+  archivePrefix = {arXiv},
+}
+
+@article{Melin2018,
+  author        = {Melin, J.-B. and Bartlett, J. G. and Cai, Z.-Y. and De Zotti, G. and Delabrouille, J. and
+                   Roman, M. and Bonaldi, A.},
+  title         = {Dust in galaxy clusters: modeling at millimeter wavelengths and impact on {Planck}
+                   cluster cosmology},
+  journal       = {\aap},
+  volume        = {617},
+  pages         = {A75},
+  year          = {2018},
+  doi           = {10.1051/0004-6361/201732292},
+  eprint        = {1808.06807},
+  archivePrefix = {arXiv},
+}
+
+@article{Zubeldia2023a,
+  author        = {Zubeldia, {\'I}{\~n}igo and Rotti, Aditya and Chluba, Jens and Battye, Richard},
+  title         = {Galaxy cluster {SZ} detection with unbiased noise estimation: an iterative approach},
+  journal       = {\mnras},
+  volume        = {522},
+  number        = {3},
+  pages         = {4766--4780},
+  year          = {2023},
+  doi           = {10.1093/mnras/stad1320}
+}
+
+@article{ZubeldiaChallinor2019,
+  author        = {Zubeldia, {\'I}{\~n}igo and Challinor, Anthony},
+  title         = {Cosmological constraints from {Planck} galaxy clusters with {CMB} lensing mass bias calibration},
+  journal       = {\mnras},
+  volume        = {489},
+  number        = {1},
+  pages         = {401--419},
+  year          = {2019},
+  doi           = {10.1093/mnras/stz2153},
+  eprint        = {1904.07887},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.CO}
+}
+
+@article{Lewis2000,
+  author        = {Lewis, Antony and Challinor, Anthony and Lasenby, Anthony},
+  title         = {Efficient computation of cosmic microwave background anisotropies in closed
+                   {Friedmann--Robertson--Walker} models},
+  journal       = {\apj},
+  volume        = {538},
+  number        = {2},
+  pages         = {473--476},
+  year          = {2000},
+  doi           = {10.1086/309179}
+}
+
+@article{Hamilton2000,
+  author        = {Hamilton, A. J. S.},
+  title         = {Uncorrelated modes of the non-linear power spectrum},
+  journal       = {\mnras},
+  volume        = {312},
+  number        = {2},
+  pages         = {257--284},
+  year          = {2000},
+  doi           = {10.1046/j.1365-8711.2000.03071.x}
+}
+
+@article{Harris2020,
+  author        = {Harris, Charles R. and others},
+  title         = {Array programming with {NumPy}},
+  journal       = {Nature},
+  volume        = {585},
+  pages         = {357--362},
+  year          = {2020},
+  doi           = {10.1038/s41586-020-2649-2}
+}
+
+@article{Hunter2007,
+  author        = {Hunter, John D.},
+  title         = {Matplotlib: A {2D} graphics environment},
+  journal       = {Computing in Science \& Engineering},
+  volume        = {9},
+  number        = {3},
+  pages         = {90--95},
+  year          = {2007},
+  doi           = {10.1109/MCSE.2007.55}
+}
+
+@inproceedings{Paszke2019,
+  author        = {Paszke, Adam and others},
+  title         = {{PyTorch}: An imperative style, high-performance deep learning library},
+  booktitle     = {Advances in Neural Information Processing Systems 32},
+  year          = {2019},
+  eprint        = {1912.01703},
+  archivePrefix = {arXiv}
+}
+
+@article{Diemer2018,
+  author        = {Diemer, Benedikt},
+  title         = {{COLOSSUS}: A {Python} toolkit for cosmology, large-scale structure, and dark matter haloes},
+  journal       = {\apjs},
+  volume        = {239},
+  number        = {2},
+  pages         = {35},
+  year          = {2018},
+  doi           = {10.3847/1538-4365/aaee8c}
+}
