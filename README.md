@@ -136,4 +136,4 @@ Full docs at **https://class-sz.github.io/classy_szlite/**, including [Cluster c
 
 ## License
 
-MIT.
+MIT, except `classy_szlite/_fftlog.py`, which is adapted from [mcfit](https://github.com/eelregit/mcfit) and distributed under the GNU GPL v3 (see [LICENSE](LICENSE)). Two noise tables in `classy_szlite/sim/data/` come from cosmocnc under the MIT License (see their NOTICE).

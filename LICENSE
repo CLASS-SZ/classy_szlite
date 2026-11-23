@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---------------------------------------------------------------------------
+Exception: classy_szlite/_fftlog.py is adapted from mcfit (https://github.com/eelregit/mcfit,
+Yin Li), which is licensed under the GNU General Public License, version 3. That file is distributed
+under the GNU GPL v3 (https://www.gnu.org/licenses/gpl-3.0.html); see the notice at its top.
+classy_szlite/sim/data/ holds two tables from cosmocnc under the MIT License (see its NOTICE).
