@@ -1,6 +1,6 @@
 # Quick start
 
-The public API is organised around a single :class:`~classy_szlite.CosmoParams`
+The public API is organised around a single [`CosmoParams`](api.md#classy_szlite.params.CosmoParams)
 container (a `NamedTuple`, JAX pytree) and a handful of top-level functions.
 
 ## The cosmology container
@@ -54,7 +54,7 @@ cl_1h, cl_2h = csl.cl_yy(cosmo, profile, ell)
 ## The fast path for MCMC
 
 When sampling **profile parameters at fixed cosmology** (the dominant tSZ
-Cl^yy use case), :func:`~classy_szlite.cl_yy_factory` precomputes the heavy
+Cl^yy use case), [`cl_yy_factory`](api.md#classy_szlite.api.cl_yy_factory) precomputes the heavy
 cosmology + halo-model setup once and returns a closure that takes only
 the profile — typically ~5 ms per call:
 
