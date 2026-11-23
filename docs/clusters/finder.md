@@ -95,10 +95,10 @@ match to a heavier neighbour within 1.5′ (3% at $z < 0.3$).
 
 **Left.** Above $q \approx 6$ the median lies about 8% below the diagonal: the confusion noise of panel 1.
 The scatter around it is close to the unit scatter the model assumes, a little wider (about 1.09) because of
-neighbours. **Right.** For faint halos ($q$ between 3 and 5) the finder detects more than the model's
-$\Phi(q-5)$: its search over positions and sizes picks the upward noise fluctuations near each faint cluster.
-For brighter halos it detects fewer, because of the higher noise. Both effects change the counts near the
-threshold, where most clusters are.
+neighbours. **Right.** For faint halos ($q$ below about 4) the finder's detection fraction is close to the model's
+$\Phi(q-5)$. From $q \approx 4$ to 8 it detects fewer, because of the higher noise. Above $q \approx 8$ the
+fraction levels off just below one, since about 1% of halos lose their match to a neighbour. These
+differences change the counts near the threshold, where most clusters are.
 
 Fitted over all halos with $q > 2$ (the censored likelihood of [Calibration](calibration.md)):
 

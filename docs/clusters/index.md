@@ -1,25 +1,43 @@
 # Cluster counts from maps
 
-`classy_szlite.sim` simulates Simons Observatory (SO) cluster counts at the level of maps: halos, their
-thermal SZ signal, the lensed CMB and the instrument noise in six frequency channels, then the same
-matched-filter cluster finder that would run on the data. Its output is the 21-number summary of
+`classy_szlite.sim` runs simulation-based inference of Simons Observatory (SO) cluster counts with a
+forward model at the level of maps. Each simulation draws halos, adds their thermal SZ signal to the lensed
+CMB and the instrument noise in six frequency channels, then runs the same matched-filter cluster finder
+that would run on the data. Its output is the 21-number summary of
 [Zubeldia et al. (2025)](https://arxiv.org/abs/2504.10230): counts in 4 bins of signal-to-noise $q$ and
-5 of redshift $z$, and the mean CMB-lensing signal $\bar p$ of the clusters with $q > 5$. Neural posterior
-estimation trained on these simulations infers the cosmological and scaling-relation parameters.
+5 of redshift $z$, and the mean CMB-lensing signal-to-noise $\bar p$ of the clusters with $q > 5$. Neural
+posterior estimation trained on these simulations infers the cosmological and scaling-relation parameters.
+To our knowledge, this is the first inference of cluster counts in which every training simulation runs the
+cluster finder on simulated multi-frequency maps.
 
-The same package also simulates a catalogue-level model in the form of the observation model of
-Zubeldia et al. (2025), with a noise table for the
-instrument and the CMB only, so the two can be compared on the same skies.
+The package also simulates catalogue-level models in the form of the observation model of
+Zubeldia et al. (2025), so that they can be compared with map-level inference on the same skies. Such models
+are calibrated on the maps in practice; here we calibrate them on map-level simulations, at one point or
+across the prior ([Calibration](calibration.md)). As a reference we also keep the uncalibrated catalogue
+model: the same model with a noise table for the instrument and the CMB only, as used in forecasts.
 
 ## The result
 
-On map-level mocks at known parameters (100 per survey size), the posterior trained on the uncalibrated
-catalogue model is biased on our skies by up to 5.3 posterior widths at 10% of the sky and 8.3 at 40%.
-This is for our set-up: goal-depth forecast noise, a noise table without the confusion noise, and a flat
-prior on the slope $\alpha_\mathrm{SZ}$ ([Scope](results.md#scope)). Calibrating that model on map-level
-simulations removes most of the bias where it is calibrated, but not across the prior, and the slope
-$\alpha_\mathrm{SZ}$ stays off by about 0.6 widths in every version. The posterior trained on map-level
-simulations is unbiased (within 0.12 widths) and has correct coverage over the whole prior.
+Map-level inference works at SO scale. One survey simulation takes 0.42 s on one GPU at 10% of the sky and
+1.6 s at 40.7%, so a training set of 10,000 surveys takes 70 min and 4.6 h. On 100 map-level mocks at known
+parameters, the map-level posterior is within 0.11 posterior widths of the truth at 40.7% of the sky (0.12
+at 10%). On 500 skies drawn from the prior, its 90% intervals contain the truth for 88–91% of them at 40.7%
+(86–90% at 10%), and its 50% intervals for 46–51% at 40.7% (44–49% at 10%). At each size the map-level posterior
+is an equal mixture of five networks trained with different seeds, and the result is robust to the seed.
+
+A catalogue model calibrated on map-level simulations is the realistic comparison. The calibration has to
+carry what the finder does on the maps: confusion noise (it raises the noise by 4–8%), the search lift, neighbours,
+and an upward tail of its errors ([The finder](finder.md)). Calibrated at one point (the finder's noise,
+lift, scatter and losses fitted at the true parameters), the model is within about 0.2 widths in
+$\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$ there, but $\alpha_\mathrm{SZ}$ is 0.50 widths high (0.52 at
+40.7%), and its intervals are too narrow or off-centre across the prior. Calibrated at 25 points of the prior, through the
+finder's noise level, it has close to correct coverage in $\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$, but the slope
+stays 0.6–0.7 widths high and its intervals too narrow. We attribute this to the upward, tSZ-dependent tail
+of the finder's errors, which a per-cluster Gaussian calibration cannot carry.
+
+For reference, the uncalibrated model is off on our skies by up to 5.3 widths at 10% of the sky and 8.3 at
+40.7%. This shows how large the finder's effects are at goal-depth forecast noise, with a flat prior on the
+slope ([Scope](results.md#scope)); it is not a test of calibrated analyses.
 
 | Posterior (10% of the sky) | $\sigma_8$ | $\omega_c$ | $A_\mathrm{SZ}$ | $\alpha_\mathrm{SZ}$ | 90% coverage of $\sigma_8$ over the prior |
 |---|---|---|---|---|---|
@@ -40,7 +58,7 @@ both survey sizes and the coverage tests.
 | [The finder](finder.md) | The multi-frequency matched filter, its masking pass, confirmation, and how its $q$ differs from the catalogue model's |
 | [Calibration](calibration.md) | Calibrating the catalogue model on map-level simulations: at one point, across the prior, and why it falls short |
 | [Inference](inference.md) | Neural posterior estimation and the checks (bias, coverage, TARP, ensembles) |
-| [Results](results.md) | The bias test at 10% and 40% of the sky |
+| [Results](results.md) | The map-level posterior, the calibrated models and the uncalibrated reference, at 10% and 40.7% of the sky: bias and coverage |
 | [Pipeline](pipeline.md) | The `mapsim` command, its outputs, Slurm templates, and the time and memory each step takes |
 | Tutorials | [One tile](tutorials/one-tile.md), [catalogue models](tutorials/catalogues.md), [a posterior](tutorials/posterior.md): notebooks that run on a laptop |
 
@@ -56,12 +74,12 @@ both survey sizes and the coverage tests.
 | Training a posterior on 10,000 simulations | CPU, 2–16 cores | 2–8 min | < 2 GB |
 
 The whole 10%-sky comparison (four posteriors, one to five networks each) costs about 2 GPU hours and 1 CPU hour;
-the 40% one about 6 GPU hours and 4 CPU hours. [Pipeline](pipeline.md) breaks this down per step.
+the 40.7% one about 6 GPU hours and 4 CPU hours. [Pipeline](pipeline.md) breaks this down per step.
 
 ## Limitations
 
 The simulator places halos at random positions (no spatial clustering), uses Gaussian noise with the
 same power spectrum everywhere on a tile, has no foregrounds (CIB, radio sources), and confirms detections
 by matching them to simulated halos with exact redshifts. These do not affect the comparison between the
-two inferences, which share the same skies, but they would matter for real data. [Results](results.md#limitations)
+inferences, which share the same skies, but they would matter for real data. [Results](results.md#limitations)
 discusses each.

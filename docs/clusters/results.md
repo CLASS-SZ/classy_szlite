@@ -1,15 +1,16 @@
 # Results
 
-The bias test: four posteriors, each trained on 10,000 simulations of its own forward model from the same
-prior, all applied to the same map-level skies. Public 2019 SO forecast noise, goal depth.
+Four posteriors, each trained on 10,000 simulations of its own forward model from the same prior, all
+applied to the same map-level skies. Public 2019 SO forecast noise, goal depth.
 
-- **catalogue, uncalibrated**: the observation model of Zubeldia et al. (2025) with a noise table for the
-  instrument and the CMB only, as used in forecasts, with the table recomputed for our filter and noise
-  ([Forward models](forward-models.md#the-catalogue-model));
-- **calibrated at one point**: its observation calibrated on 20 map-level mocks at the true parameters;
-- **calibrated through the noise level**: calibrated at 25 points of the prior, written through the finder's
-  noise level ([Calibration](calibration.md));
-- **map level**: trained on map-level simulations.
+- **map level**: trained on map-level simulations, in which the finder runs on simulated maps;
+- **calibrated at one point**: the catalogue model, the observation model of Zubeldia et al. (2025)
+  ([Forward models](forward-models.md#the-catalogue-model)), with its observation calibrated on 20 map-level
+  mocks at the true parameters;
+- **calibrated through the noise level**: the same model calibrated at 25 points of the prior, written
+  through the finder's noise level ([Calibration](calibration.md));
+- **catalogue, uncalibrated**: the reference, the same model with a noise table for the instrument and the
+  CMB only, as used in forecasts, with the table recomputed for our filter and noise.
 
 ## Bias at the true parameters
 
@@ -21,11 +22,13 @@ prior, all applied to the same map-level skies. Public 2019 SO forecast noise, g
   is a shift of one posterior width.</figcaption>
 </figure>
 
-On these skies the uncalibrated catalogue model (orange) is far off: $\sigma_8$ high and the slope
-$\alpha_\mathrm{SZ}$ very low, and more so in the larger survey, where its posteriors are narrower
-([Scope](#scope) says what this depends on). Both calibrated models (green, violet)
-are within 0.2 widths for $\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$, but keep $\alpha_\mathrm{SZ}$ about 0.5–0.7
-widths high at both sizes. The map-level posterior (blue) is within 0.12 widths everywhere.
+The map-level posterior (blue) is within 0.12 widths of the truth everywhere. At 40.7% of the sky its
+largest departure is −0.11 ± 0.08 in $\sigma_8$ and its most significant +0.10 ± 0.04 in $\omega_c$.
+Both calibrated models (green, violet) are within about 0.2 widths for $\sigma_8$, $\omega_c$ and
+$A_\mathrm{SZ}$, but keep $\alpha_\mathrm{SZ}$ about 0.5–0.7 widths high at both sizes. The uncalibrated
+reference (orange) is far off on these skies: $\sigma_8$ high and the slope $\alpha_\mathrm{SZ}$ very low,
+and more so in the larger survey, where its posteriors are narrower ([Scope](#scope) says what this
+depends on).
 
 Mean over 100 mocks of (posterior mean − truth) / posterior standard deviation:
 
@@ -43,51 +46,57 @@ Mean over 100 mocks of (posterior mean − truth) / posterior standard deviation
 | calibrated through the noise level (5) | +0.05 ± 0.07 | +0.21 ± 0.04 | −0.03 ± 0.06 | +0.67 ± 0.07 |
 | map level (5) | −0.11 ± 0.08 | +0.10 ± 0.04 | −0.05 ± 0.06 | +0.03 ± 0.06 |
 
-The uncalibrated model's bias grows with the survey by a factor of about 1.5. Its shift hardly changes with the
+The uncalibrated reference's bias grows with the survey by a factor of about 1.5. Its shift hardly changes with the
 area (in $\sigma_8$ +0.0115 at 10% and +0.0103 at 40.7%; in $\alpha_\mathrm{SZ}$ −0.086 and −0.084), while the
 posteriors get 1.3–1.7 times narrower, not 2 as four times the area would suggest. The shifts in $\sigma_8$ and $\Omega_m$
 partly cancel in $S_8$ (−0.30 widths at 10%).
 
-## The posterior at 40% of the sky
+## The posterior at 40.7% of the sky
 
 <figure markdown="span">
   ![Posteriors of one mock at 40.7% of the sky](figures/corner_40.png){ width="680" }
   <figcaption>The posteriors of the first map-level mock of the 168-tile survey (40.7% of the sky), in σ8,
-  Ω_m, A_SZ and α_SZ: trained on the uncalibrated catalogue model (orange, one network), on the model calibrated
-  at one point (green, one network), on the model calibrated through the noise level (violet, five networks
-  pooled) and on map-level simulations (blue, five networks pooled). Contours: 68% and 95%; diagonal: the
+  Ω_m, A_SZ and α_SZ: trained on map-level simulations (blue, five networks pooled), on the catalogue model
+  calibrated at one point (green, one network), on the model calibrated through the noise level (violet, five
+  networks pooled) and, as the reference, on the uncalibrated catalogue model (orange, one network). Contours: 68% and 95%; diagonal: the
   marginals; black: the true values.</figcaption>
 </figure>
 
-This is a survey of SO's size, on our skies at goal-depth forecast noise ([Scope](#scope)). With four times the area, every posterior is 1.3–1.7 times narrower
-than at 10% of the sky, and the uncalibrated catalogue model's errors stand out: on this mock it gives
-$\sigma_8 = 0.823 \pm 0.004$ against a true 0.811 (3.4 widths), $\alpha_\mathrm{SZ} = 1.034 \pm 0.011$ against
-1.123 (8.3 widths), and $\Omega_m$ and $A_\mathrm{SZ}$ low, the degenerate directions that let it explain too few
-bright clusters with a shallower mass slope. The three other posteriors agree with each other and contain the
-truth: $\sigma_8 = 0.812 \pm 0.003$ at map level. On a single mock at the true parameters the calibrated
-models look as good as map-level inference; where they differ is across the prior (next section) and in the
+This is a survey of SO's size, on our skies at goal-depth forecast noise. With four times the area, every
+posterior is 1.3–1.7 times narrower than at 10% of the sky. The map-level posterior contains the truth:
+$\sigma_8 = 0.812 \pm 0.003$ against a true 0.811, and $\alpha_\mathrm{SZ} = 1.120 \pm 0.010$ against 1.123.
+The two calibrated posteriors agree with it. On a single mock at the true parameters the calibrated models
+look as good as map-level inference; where they differ is across the prior (next section) and in the
 systematic $+0.5$–$0.7$ width shift of $\alpha_\mathrm{SZ}$ over 100 mocks (the table above), which one mock
 cannot show.
 
-## Calibration over the prior
+The uncalibrated reference shows how large the finder's effects are at this depth ([Scope](#scope)). On this
+mock it gives $\sigma_8 = 0.823 \pm 0.004$ (3.4 widths from the truth) and
+$\alpha_\mathrm{SZ} = 1.034 \pm 0.011$ (8.3 widths), with $\Omega_m$ and $A_\mathrm{SZ}$ low: the degenerate
+directions that let it explain too few bright clusters with a shallower mass slope.
+
+## Coverage over the prior
 
 <figure markdown="span">
   ![Coverage over the prior](figures/coverage.png)
   <figcaption>Coverage on 500 map-level skies drawn from the prior: the fraction of skies whose true value lies
   in the central credible interval, against the interval's level, for each of the four parameters, at 10%
-  (top) and 40.7% of the sky (bottom). Dotted: the diagonal of a calibrated posterior; below it, the posterior
-  is overconfident. At 10% of the sky the map-level curves are ensembles of five networks and every
+  (top) and 40.7% of the sky (bottom). Dotted: the diagonal, where a posterior has correct coverage; below it, the
+  intervals are too narrow or off-centre. At 10% of the sky the map-level curves are ensembles of five networks and every
   catalogue-model curve is one network; at 40.7% the map-level and noise-level curves are ensembles of five
   networks, the model calibrated at one point is one network, and the uncalibrated model was not run on these
   skies (its posteriors fall outside the prior box).</figcaption>
 </figure>
 
 A single bias at the true parameters can hide a posterior that is wrong elsewhere; coverage over the prior
-tests every part of it. The model calibrated at one point (green) falls well below the diagonal for
-$\sigma_8$ and $\omega_c$, and further at 40.7%: its intervals are too narrow for skies away from its
-calibration point. The calibration that follows the parameters (dashed, violet) brings $\sigma_8$, $\omega_c$
-and $A_\mathrm{SZ}$ onto the diagonal, but not $\alpha_\mathrm{SZ}$. The map-level posterior (blue) follows the
-diagonal for all four at both sizes.
+tests every part of it. The map-level posterior (blue) follows the diagonal for all four parameters at both
+sizes: at 40.7% of the sky its 90% intervals contain the truth for 0.88–0.91 of the skies and its 50%
+intervals for 0.46–0.51. The model calibrated at one point (green) falls well below the diagonal for
+$\sigma_8$ and $\omega_c$, and further at 40.7%: its intervals are too narrow or off-centre for skies away from its
+calibration point (0.65 and 0.59 at 90% for $\sigma_8$). The calibrations that follow the parameters
+(linear, dashed grey, 10% only; through the noise level, violet) bring $\sigma_8$, $\omega_c$ and
+$A_\mathrm{SZ}$ close to the diagonal, but not $\alpha_\mathrm{SZ}$ (0.78 and 0.74 at 90% through the
+noise level).
 
 How often the central interval contains the true value, on 500 map-level skies drawn from the prior:
 
@@ -105,22 +114,26 @@ How often the central interval contains the true value, on 500 map-level skies d
 
 ## What this shows
 
-1. The uncalibrated catalogue model is biased on our map-level skies, by up to 5.3 posterior widths at 10%
-   of the sky and 8.3 at 40%, at goal-depth forecast noise and with a flat prior on the slope
-   ([Scope](#scope)). It leaves out the confusion noise of faint clusters, the finder's search over
-   positions and sizes, and neighbours ([The finder](finder.md)).
-2. Calibrated on map-level mocks at one point, it is nearly right there but miscalibrated across the prior,
-   increasingly so as the survey grows.
-3. Calibrated across the prior through the finder's noise level, it matches map-level inference for
+1. Map-level inference works at SO scale. Its posterior is within 0.12 widths of the truth and has close to
+   correct coverage over the prior at both sizes (its $\alpha_\mathrm{SZ}$ intervals are slightly narrow at
+   10%, 0.86 at 90%), from a training set that takes 70 min (10% of the sky) or 4.6 h (40.7%) on one GPU.
+   There is a possible small offset in $\omega_c$, +0.10 widths at both sizes, whose origin we have not
+   determined (training or mocks).
+2. A catalogue model calibrated on map-level mocks at one point is within about 0.2 widths in $\sigma_8$,
+   $\omega_c$ and $A_\mathrm{SZ}$ there, with $\alpha_\mathrm{SZ}$ about half a width high, but its intervals
+   are too narrow or off-centre across the prior, increasingly so as the survey grows.
+3. Calibrated across the prior through the finder's noise level, it comes close to map-level inference for
    $\sigma_8$, $\omega_c$ and $A_\mathrm{SZ}$, at the cost of map-level simulations at 25 points; the slope
-   $\alpha_\mathrm{SZ}$ stays biased by about 0.6 widths and overconfident, because of an upward,
+   $\alpha_\mathrm{SZ}$ stays 0.6–0.7 widths high and its intervals too narrow, because of an upward,
    tSZ-dependent tail in the finder's errors that a per-cluster model cannot carry.
-4. Map-level inference is unbiased to 0.1 widths and calibrated over the prior at both survey sizes. A
-   possible small offset in $\omega_c$, +0.10 widths at both sizes, is still to be checked.
+4. The uncalibrated reference is off on our map-level skies by up to 5.3 widths at 10% of the sky and 8.3
+   at 40.7%, at goal-depth forecast noise and with a flat prior on the slope ([Scope](#scope)). It leaves
+   out the confusion noise of faint clusters, the finder's search over positions and sizes, and neighbours
+   ([The finder](finder.md)), so it shows how large these effects are.
 
 ## Scope
 
-The bias of the uncalibrated model is measured in one set-up. Three of its choices set the size of the bias.
+The bias of the uncalibrated reference is measured in one set-up. Three of its choices set its size.
 
 - **Noise level.** Every run uses goal-depth forecast noise, the deepest level of the 2019 SO forecast.
   Deeper noise brings more faint clusters close to the noise, so the confusion noise of faint halos and the
@@ -140,9 +153,9 @@ The bias of the uncalibrated model is measured in one set-up. Three of its choic
   example from weak-lensing mass calibration, would restrict this direction, and we expect them to reduce the bias. We have
   not tested this.
 
-So the result is about one model on our skies, not about catalogue-level analyses in general: a catalogue
-model with the noise measured on the maps comes close to unbiased at the true parameters in our tests,
-apart from the slope.
+So this is about one uncalibrated model on our skies, not about catalogue-level analyses in general: a
+catalogue model with the noise measured on the maps comes close to unbiased at the true parameters in our
+tests, apart from the slope.
 
 ## Limitations
 
