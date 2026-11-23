@@ -60,8 +60,8 @@ over the flat box (5 mocks each), keeping the halo tables for later refits.
   ![The calibration at 25 points of the prior](figures/calibration_grid.png)
   <figcaption>The calibration at the 25 points (the true parameters, circled, and a Latin hypercube of 24 over
   the flat prior), in the redshift bin 0.31–0.61: the search lift k (left) and the scatter w (right), each
-  fitted on 5 map-level mocks, against the finder's noise at 2′ relative to its value at the true parameters.
-  Colour: the point's A_SZ.</figcaption>
+  fitted on 5 map-level mocks, against the finder's noise at 2.7′ (the eighth of the 15 filter sizes)
+  relative to its value at the true parameters. Colour: the point's A_SZ.</figcaption>
 </figure>
 
 The finder's noise moves by −5% to +13% across the prior: more tSZ on the sky (higher $A_\mathrm{SZ}$,
@@ -81,7 +81,9 @@ $$
 $$
 
 **Through the finder's noise level** (`calibrated-noise`, `fit_noise_level`). Every part of the calibration
-follows one number closely, the noise level $u = \ln[\sigma_\mathrm{finder}(2';\boldsymbol\theta)/\sigma_\mathrm{finder}(2';\boldsymbol\theta_\mathrm{fid})]$:
+follows one number closely, the noise level
+$u = \ln[\sigma_\mathrm{finder}(2.7';\boldsymbol\theta)/\sigma_\mathrm{finder}(2.7';\boldsymbol\theta_\mathrm{fid})]$,
+at the eighth of the 15 filter sizes (2.74′):
 
 $$
 u(\boldsymbol\theta) = \sum_m a_m\,\phi_m(\boldsymbol x),\ \ \phi \in \{1, x_i, x_i x_j\};\qquad

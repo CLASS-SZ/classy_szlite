@@ -2,7 +2,7 @@
  "tile": {
   "halos": 4292,
   "detections5": 324,
-  "noise_ratio_2arcmin": 1.081622755219822,
+  "noise_ratio_u": 1.081622755219822,
   "noise_ratio_first": 1.2997674789112184
  },
  "noise": {

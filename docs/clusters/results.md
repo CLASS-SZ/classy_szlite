@@ -40,8 +40,9 @@ Mean over 100 mocks of (posterior mean − truth) / posterior standard deviation
 | calibrated through the noise level (5) | +0.05 ± 0.07 | +0.21 ± 0.04 | −0.03 ± 0.06 | +0.67 ± 0.07 |
 | map level (5) | −0.11 ± 0.08 | +0.10 ± 0.04 | −0.05 ± 0.06 | +0.03 ± 0.06 |
 
-The published model's bias grows with the survey by a factor of about 1.5 (posteriors narrow by less than
-2, because the six Gaussian-prior parameters do not narrow). The shifts in $\sigma_8$ and $\Omega_m$
+The published model's bias grows with the survey by a factor of about 1.5. Its shift hardly changes with the
+area (in $\sigma_8$ +0.0115 at 10% and +0.0103 at 40.7%; in $\alpha_\mathrm{SZ}$ −0.086 and −0.084), while the
+posteriors get 1.3–1.7 times narrower, not 2 as four times the area would suggest. The shifts in $\sigma_8$ and $\Omega_m$
 partly cancel in $S_8$ (−0.30 widths at 10%).
 
 ## The posterior at 40% of the sky
@@ -55,9 +56,9 @@ partly cancel in $S_8$ (−0.30 widths at 10%).
   marginals; black: the true values.</figcaption>
 </figure>
 
-This is what a survey of SO's size would see. With four times the area, every posterior is about half as wide
-as at 10% of the sky, and the published catalogue model's errors stand out: on this mock it gives
-$\sigma_8 = 0.823 \pm 0.004$ against a true 0.811 (3.3 widths), $\alpha_\mathrm{SZ} = 1.034 \pm 0.011$ against
+This is what a survey of SO's size would see. With four times the area, every posterior is 1.3–1.7 times narrower
+than at 10% of the sky, and the published catalogue model's errors stand out: on this mock it gives
+$\sigma_8 = 0.823 \pm 0.004$ against a true 0.811 (3.4 widths), $\alpha_\mathrm{SZ} = 1.034 \pm 0.011$ against
 1.123 (8 widths), and $\Omega_m$ and $A_\mathrm{SZ}$ low, the degenerate directions that let it explain too few
 bright clusters with a shallower mass slope. The three other posteriors agree with each other and contain the
 truth: $\sigma_8 = 0.812 \pm 0.003$ at map level. On a single mock at the true parameters the calibrated
@@ -72,9 +73,10 @@ cannot show.
   <figcaption>Coverage on 500 map-level skies drawn from the prior: the fraction of skies whose true value lies
   in the central credible interval, against the interval's level, for each of the four parameters, at 10%
   (top) and 40.7% of the sky (bottom). Dotted: the diagonal of a calibrated posterior; below it, the posterior
-  is overconfident. Map-level and noise-level curves are ensembles of five networks; at 40.7% the model
-  calibrated at one point is one network, and the published model was not run on these skies (its posteriors
-  fall outside the prior box).</figcaption>
+  is overconfident. At 10% of the sky the map-level curves are ensembles of five networks and every
+  catalogue-model curve is one network; at 40.7% the map-level and noise-level curves are ensembles of five
+  networks, the model calibrated at one point is one network, and the published model was not run on these
+  skies (its posteriors fall outside the prior box).</figcaption>
 </figure>
 
 A single bias at the true parameters can hide a posterior that is wrong elsewhere; coverage over the prior
